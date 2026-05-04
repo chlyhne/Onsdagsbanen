@@ -80,7 +80,7 @@ def parse_completed_race_labels_from_result_payload(
     payload: dict[str, object],
     max_race: int | None = None,
 ) -> list[str]:
-    """Extract completed race labels using corrected time availability in regattaresult payload."""
+    """Extract completed race labels using corrected-time or scored/status activity."""
     counts_by_race: dict[int, int] = {}
 
     entries = payload.get("EntryResults")
@@ -104,8 +104,17 @@ def parse_completed_race_labels_from_result_payload(
 
             corrected_ms = race_result.get("CorrectedTimeMs")
             corrected_text = race_result.get("CorrectedTime")
+            race_status_code = _clean_text(race_result.get("RaceStatusCode"))
+            race_points = _parse_number(race_result.get("Points"))
+            race_rank = race_result.get("Rank")
+
             has_corrected = isinstance(corrected_ms, (int, float)) or _parse_time_to_seconds(corrected_text) is not None
-            if has_corrected:
+            has_scoring_activity = (
+                bool(race_status_code)
+                or race_points is not None
+                or isinstance(race_rank, (int, float))
+            )
+            if has_corrected or has_scoring_activity:
                 counts_by_race[race_index] = counts_by_race.get(race_index, 0) + 1
 
     completed = sorted(race_index for race_index, count in counts_by_race.items() if count > 0)
