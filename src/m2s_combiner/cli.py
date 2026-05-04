@@ -156,6 +156,27 @@ def _format_race_labels(race_indices: list[int]) -> str:
     return f"{', '.join(labels[:6])}, ..."
 
 
+def _format_length_value(value: object) -> str:
+    if isinstance(value, float):
+        text = f"{value:.2f}".rstrip("0").rstrip(".")
+        return f"{text} nm"
+    return "ukendt"
+
+
+def _format_start_value(start_seconds: object, start_text: object) -> str:
+    text = str(start_text or "").strip()
+    if text:
+        return text
+    if isinstance(start_seconds, int):
+        hours = (start_seconds // 3600) % 24
+        minutes = (start_seconds % 3600) // 60
+        seconds = start_seconds % 60
+        if seconds:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{hours:02d}:{minutes:02d}"
+    return "ukendt"
+
+
 def _warn_if_group_not_meaningfully_combinable(
     group_label: str,
     class_names: list[str],
@@ -204,6 +225,7 @@ def _warn_if_group_not_meaningfully_combinable(
 
         length_mismatches: list[int] = []
         start_mismatches: list[int] = []
+        race_issues: dict[int, set[str]] = {}
 
         for race_index in common_race_indices:
             left_race = left_meta[race_index]
@@ -214,38 +236,64 @@ def _warn_if_group_not_meaningfully_combinable(
             if isinstance(left_length, float) and isinstance(right_length, float):
                 if abs(left_length - right_length) > 1e-6:
                     length_mismatches.append(race_index)
+                    race_issues.setdefault(race_index, set()).add("length")
 
             left_start_seconds = left_race.get("start_seconds")
             right_start_seconds = right_race.get("start_seconds")
             if isinstance(left_start_seconds, int) and isinstance(right_start_seconds, int):
                 if left_start_seconds != right_start_seconds:
                     start_mismatches.append(race_index)
+                    race_issues.setdefault(race_index, set()).add("start")
             else:
                 left_start_text = str(left_race.get("start_text") or "").strip()
                 right_start_text = str(right_race.get("start_text") or "").strip()
                 if left_start_text and right_start_text and left_start_text != right_start_text:
                     start_mismatches.append(race_index)
+                    race_issues.setdefault(race_index, set()).add("start")
 
         if length_mismatches:
             print(
                 f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different race lengths for "
                 f"{_format_race_labels(length_mismatches)}."
             )
-            for race_index in length_mismatches:
-                race_label = f"R{race_index}"
-                race_warnings.setdefault(race_label, []).append(
-                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde i denne sejlads."
-                )
         if start_mismatches:
             print(
                 f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different start times for "
                 f"{_format_race_labels(start_mismatches)}."
             )
-            for race_index in start_mismatches:
-                race_label = f"R{race_index}"
-                race_warnings.setdefault(race_label, []).append(
-                    f"OBS: '{left_class}' og '{right_class}' har forskellig starttid i denne sejlads."
+        for race_index, issues in race_issues.items():
+            race_label = f"R{race_index}"
+
+            left_race = left_meta.get(race_index, {})
+            right_race = right_meta.get(race_index, {})
+            left_length_text = _format_length_value(left_race.get("length_nm"))
+            right_length_text = _format_length_value(right_race.get("length_nm"))
+            left_start_text = _format_start_value(
+                left_race.get("start_seconds"),
+                left_race.get("start_text"),
+            )
+            right_start_text = _format_start_value(
+                right_race.get("start_seconds"),
+                right_race.get("start_text"),
+            )
+
+            if "length" in issues and "start" in issues:
+                message = (
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde "
+                    f"({left_length_text} vs {right_length_text}) og starttid "
+                    f"({left_start_text} vs {right_start_text}) i denne sejlads."
                 )
+            elif "length" in issues:
+                message = (
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde "
+                    f"({left_length_text} vs {right_length_text}) i denne sejlads."
+                )
+            else:
+                message = (
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig starttid "
+                    f"({left_start_text} vs {right_start_text}) i denne sejlads."
+                )
+            race_warnings.setdefault(race_label, []).append(message)
 
     deduped_warnings: dict[str, list[str]] = {}
     for race_label, messages in race_warnings.items():
