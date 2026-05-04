@@ -40,10 +40,9 @@ def _load_recipients(to_file: str) -> list[str]:
 
 
 def _default_attachments() -> list[Path]:
-    candidates = [Path("Results2026.pdf"), Path("Results.pdf"), Path("Results2025.pdf")]
-    for path in candidates:
-        if path.exists():
-            return [path]
+    attachment = Path("Results2026.pdf")
+    if attachment.exists():
+        return [attachment]
     return []
 
 
@@ -51,12 +50,16 @@ def _load_attachments(attach_values: list[str] | None) -> list[Path]:
     requested = _split_csv_values(attach_values)
     if requested:
         attachments = [Path(value) for value in requested]
+        if len(attachments) != 1:
+            raise ValueError("Only one attachment is allowed, and it must be Results2026.pdf.")
+        if attachments[0].name != "Results2026.pdf":
+            raise ValueError("Only Results2026.pdf can be sent. Remove fallback/custom attachments.")
     else:
         attachments = _default_attachments()
 
     if not attachments:
         raise ValueError(
-            "No attachments found. Pass --attach <file> (repeatable or comma-separated)."
+            "Results2026.pdf not found. Generate it first or pass --attach Results2026.pdf."
         )
 
     missing = [path for path in attachments if not path.exists()]
@@ -230,8 +233,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--attach",
         action="append",
         help=(
-            "Attachment file(s). Repeat or use comma-separated values. "
-            "Defaults to existing Results2025.pdf, Results2026.pdf, Results.pdf."
+            "Attachment path. Only Results2026.pdf is allowed. "
+            "Default is Results2026.pdf in the current folder."
         ),
     )
     parser.add_argument(
