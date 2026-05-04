@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --text: #1b2430;
+  --muted: #526074;
+  --line: #d8dee8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 10% 10%, #eaf2ff 0%, #f6f8fb 45%, #f4f9f4 100%);
+  color: var(--text);
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.hero {
+  margin-bottom: 16px;
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: 2rem;
+}
+
+.hero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.controls {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: #203e65;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.refresh-button {
+  justify-self: start;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.snapshot-button {
+  background: #3a4758;
+}
+
+.status {
+  margin: 0;
+  color: var(--muted);
+}
+
+.group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.group-tab {
+  background: color-mix(in srgb, var(--tab-color) 20%, white);
+  color: #142033;
+  border: 1px solid color-mix(in srgb, var(--tab-color) 45%, white);
+}
+
+.group-tab.active {
+  background: var(--tab-color);
+  color: #ffffff;
+}
+
+.output h2 {
+  margin: 0 0 6px;
+}
+
+.generated {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+}
+
+.results-table thead {
+  color: #ffffff;
+}
+
+.results-table th,
+.results-table td {
+  border: 1px solid #c8d1df;
+  padding: 6px 8px;
+  text-align: center;
+  font-size: 0.92rem;
+}
+
+.results-table td.left {
+  text-align: left;
+}
+
+.results-table td.strong {
+  font-weight: 700;
+}
+
+.results-table td.discarded {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: #8d0000;
+}
+
+@media (max-width: 840px) {
+  .hero h1 {
+    font-size: 1.55rem;
+  }
+
+  .button-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .results-table th,
+  .results-table td {
+    font-size: 0.82rem;
+    padding: 5px 6px;
+  }
+}

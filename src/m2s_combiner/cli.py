@@ -1,0 +1,384 @@
+from __future__ import annotations
+
+import argparse
+from itertools import combinations
+import re
+from pathlib import Path
+
+from .combine import combine_overall_from_races
+from .combine import combine_races
+from .parser import parse_available_race_labels_from_result_payload
+from .parser import parse_completed_race_labels_from_result_payload
+from .parser import parse_discard_after_races_from_result_payload
+from .parser import parse_race_rows_from_result_payload
+from .pdf_report import build_combined_pdf
+from .scraper import fetch_class_results_batch
+
+DEFAULT_EVENT_URL = "https://www.manage2sail.com/da-DK/event/Onsdagsbanen2026#!/"
+DEFAULT_CLASS_GROUPS = [
+    ("Stor Bane", ["Stor bane 1", "Stor bane 2"]),
+    ("Lille Bane", ["Lille bane 1", "Lille bane 2"]),
+]
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Fetch Manage2Sail class results via API, combine standings, and generate a PDF report.",
+    )
+    parser.add_argument("--event-url", default=DEFAULT_EVENT_URL, help="Manage2Sail event root URL.")
+    parser.add_argument(
+        "--class-names",
+        action="append",
+        help=(
+            "Comma-separated class names for one combined group. "
+            "Repeat --class-names for multiple groups."
+        ),
+    )
+    parser.add_argument(
+        "--max-race",
+        type=int,
+        action="append",
+        help=(
+            "Maximum race number cap. Provide once to apply to all groups, "
+            "or provide once per --class-names group in the same order."
+        ),
+    )
+    parser.add_argument(
+        "--output-pdf",
+        default="Results.pdf",
+        help="Output PDF filename.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=".",
+        help="Folder for output PDF files.",
+    )
+    return parser
+
+
+def _group_label_from_class(class_name: str) -> str:
+    label = re.sub(r"\s+\d+$", "", class_name).strip()
+    if not label:
+        return class_name.strip()
+    return " ".join(part.capitalize() for part in label.split())
+
+
+def _class_groups_from_args(args: argparse.Namespace) -> list[tuple[str, list[str]]]:
+    if not args.class_names:
+        return DEFAULT_CLASS_GROUPS
+
+    groups: list[tuple[str, list[str]]] = []
+    for group_index, spec in enumerate(args.class_names, start=1):
+        class_names = [name.strip() for name in str(spec).split(",") if name.strip()]
+        if len(class_names) < 2:
+            raise ValueError(
+                "Each --class-names value must contain at least 2 class names, separated by commas."
+            )
+
+        normalized_labels = {_group_label_from_class(name) for name in class_names}
+        group_label = normalized_labels.pop() if len(normalized_labels) == 1 else f"Group {group_index}"
+        groups.append((group_label, class_names))
+
+    return groups
+
+
+def _roster_from_payload(payload: dict[str, object]) -> set[str]:
+    roster: set[str] = set()
+    entries = payload.get("EntryResults")
+    if not isinstance(entries, list):
+        return roster
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        competitor = str(entry.get("TeamName") or "").strip()
+        if competitor:
+            roster.add(competitor)
+    return roster
+
+
+def _resolve_group_max_races(max_race_values: list[int] | None, group_count: int) -> list[int | None]:
+    values = list(max_race_values or [])
+    if not values:
+        return [None] * group_count
+
+    for value in values:
+        if value < 1:
+            raise ValueError("--max-race must be >= 1.")
+
+    if len(values) == 1:
+        return [values[0]] * group_count
+
+    if len(values) == group_count:
+        return values
+
+    raise ValueError(
+        "Provide --max-race either once (all groups) or once per --class-names group in the same order."
+    )
+
+
+def _race_meta_from_payload(payload: dict[str, object], max_race: int | None) -> dict[int, dict[str, object]]:
+    meta_by_race: dict[int, dict[str, object]] = {}
+    race_infos = payload.get("RaceInfos")
+    if not isinstance(race_infos, list):
+        return meta_by_race
+
+    for item in race_infos:
+        if not isinstance(item, dict):
+            continue
+
+        race_index = item.get("RaceIndex")
+        if not isinstance(race_index, int) or race_index < 1 or (max_race is not None and race_index > max_race):
+            continue
+
+        length_nm_value = item.get("LengthNM")
+        length_nm = float(length_nm_value) if isinstance(length_nm_value, (int, float)) else None
+
+        start_time_value = item.get("StartTime")
+        start_seconds = int(start_time_value) if isinstance(start_time_value, (int, float)) else None
+
+        start_text = str(item.get("StartTimeText") or "").strip()
+        meta_by_race[race_index] = {
+            "length_nm": length_nm,
+            "start_seconds": start_seconds,
+            "start_text": start_text,
+        }
+
+    return meta_by_race
+
+
+def _format_race_labels(race_indices: list[int]) -> str:
+    if not race_indices:
+        return ""
+    labels = [f"R{race_index}" for race_index in race_indices]
+    if len(labels) <= 6:
+        return ", ".join(labels)
+    return f"{', '.join(labels[:6])}, ..."
+
+
+def _warn_if_group_not_meaningfully_combinable(
+    group_label: str,
+    class_names: list[str],
+    payload_by_class: dict[str, dict[str, object]],
+    max_race: int | None,
+) -> None:
+    race_meta_by_class = {
+        class_name: _race_meta_from_payload(payload_by_class[class_name], max_race=max_race)
+        for class_name in class_names
+    }
+
+    race_count_by_class: dict[str, int] = {}
+    for class_name in class_names:
+        race_meta = race_meta_by_class[class_name]
+        if race_meta:
+            race_count_by_class[class_name] = len(race_meta)
+        else:
+            race_count_by_class[class_name] = len(
+                parse_available_race_labels_from_result_payload(
+                    payload_by_class[class_name],
+                    max_race=max_race,
+                )
+            )
+
+    for left_class, right_class in combinations(class_names, 2):
+        left_count = race_count_by_class[left_class]
+        right_count = race_count_by_class[right_class]
+        if left_count != right_count:
+            print(
+                f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different race counts "
+                f"({left_count} vs {right_count})."
+            )
+
+        left_meta = race_meta_by_class[left_class]
+        right_meta = race_meta_by_class[right_class]
+        if not left_meta or not right_meta:
+            continue
+
+        common_race_indices = sorted(set(left_meta).intersection(right_meta))
+        if not common_race_indices:
+            print(
+                f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have no overlapping race indices."
+            )
+            continue
+
+        length_mismatches: list[int] = []
+        start_mismatches: list[int] = []
+
+        for race_index in common_race_indices:
+            left_race = left_meta[race_index]
+            right_race = right_meta[race_index]
+
+            left_length = left_race.get("length_nm")
+            right_length = right_race.get("length_nm")
+            if isinstance(left_length, float) and isinstance(right_length, float):
+                if abs(left_length - right_length) > 1e-6:
+                    length_mismatches.append(race_index)
+
+            left_start_seconds = left_race.get("start_seconds")
+            right_start_seconds = right_race.get("start_seconds")
+            if isinstance(left_start_seconds, int) and isinstance(right_start_seconds, int):
+                if left_start_seconds != right_start_seconds:
+                    start_mismatches.append(race_index)
+            else:
+                left_start_text = str(left_race.get("start_text") or "").strip()
+                right_start_text = str(right_race.get("start_text") or "").strip()
+                if left_start_text and right_start_text and left_start_text != right_start_text:
+                    start_mismatches.append(race_index)
+
+        if length_mismatches:
+            print(
+                f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different race lengths for "
+                f"{_format_race_labels(length_mismatches)}."
+            )
+        if start_mismatches:
+            print(
+                f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different start times for "
+                f"{_format_race_labels(start_mismatches)}."
+            )
+
+
+def run(args: argparse.Namespace) -> int:
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pdf_sections: list[dict[str, object]] = []
+    source_descriptions: list[str] = []
+
+    class_groups = _class_groups_from_args(args)
+    group_max_races = _resolve_group_max_races(args.max_race, len(class_groups))
+    all_class_names = [name for _, class_names in class_groups for name in class_names]
+    unique_class_names = [name for name in dict.fromkeys(all_class_names) if name]
+
+    class_payloads = fetch_class_results_batch(
+        args.event_url,
+        class_names=unique_class_names,
+        timeout_ms=90000,
+        max_workers=max(4, len(unique_class_names)),
+    )
+
+    for (group_label, class_names), requested_max_race in zip(class_groups, group_max_races):
+        if len(class_names) < 2:
+            raise ValueError(f"Group '{group_label}' must contain at least 2 classes.")
+
+        payload_by_class: dict[str, dict[str, object]] = {}
+        for class_name in class_names:
+            payload = class_payloads.get(class_name)
+            if payload is None:
+                raise ValueError(f"No payload fetched for class '{class_name}'.")
+            payload_by_class[class_name] = payload
+
+        available_races_by_class = {
+            class_name: parse_available_race_labels_from_result_payload(payload_by_class[class_name], max_race=None)
+            for class_name in class_names
+        }
+
+        aligned_races_all = sorted(
+            set.intersection(*(set(available_races_by_class[class_name]) for class_name in class_names)),
+            key=lambda label: int(label[1:]),
+        )
+
+        if not aligned_races_all:
+            print(f"[{group_label}] No aligned race labels found; skipping group.")
+            continue
+
+        group_max_available = max(int(label[1:]) for label in aligned_races_all)
+        if requested_max_race is not None and requested_max_race > group_max_available:
+            raise ValueError(
+                f"[{group_label}] --max-race {requested_max_race} exceeds this group's maximum available race {group_max_available}."
+            )
+
+        effective_max_race = requested_max_race if requested_max_race is not None else group_max_available
+
+        _warn_if_group_not_meaningfully_combinable(
+            group_label=group_label,
+            class_names=class_names,
+            payload_by_class=payload_by_class,
+            max_race=effective_max_race,
+        )
+
+        aligned_races = [label for label in aligned_races_all if int(label[1:]) <= effective_max_race]
+
+        completed_common = set.intersection(
+            *(set(parse_completed_race_labels_from_result_payload(payload_by_class[class_name], max_race=effective_max_race)) for class_name in class_names)
+        )
+        selected_races = [label for label in aligned_races if label in completed_common]
+
+        if not selected_races:
+            print(f"[{group_label}] No completed aligned races found; skipping group.")
+            continue
+
+        print(f"[{group_label}] Aligned race labels: {', '.join(selected_races)}")
+
+        parsed_races_by_class = {
+            class_name: parse_race_rows_from_result_payload(
+                payload_by_class[class_name],
+                class_name,
+                selected_races,
+            )
+            for class_name in class_names
+        }
+
+        completed_races: list[str] = []
+        group_races = []
+        for race_label in selected_races:
+            if not all(race_label in parsed_races_by_class[class_name] for class_name in class_names):
+                continue
+            completed_races.append(race_label)
+            for class_name in class_names:
+                group_races.append(parsed_races_by_class[class_name][race_label])
+
+        if not group_races:
+            print(f"[{group_label}] No completed aligned races found; skipping group.")
+            continue
+
+        print(f"[{group_label}] Completed races used for scoring: {', '.join(completed_races)}")
+
+        group_roster = set().union(*(_roster_from_payload(payload_by_class[class_name]) for class_name in class_names))
+
+        group_discard_candidates = [
+            parse_discard_after_races_from_result_payload(payload_by_class[class_name], max_race=effective_max_race)
+            for class_name in class_names
+        ]
+        group_discard_candidates = [candidate for candidate in group_discard_candidates if candidate]
+        group_discard_after = max(group_discard_candidates, key=len) if group_discard_candidates else []
+        if group_discard_after:
+            print(f"[{group_label}] Discards after races: {', '.join(str(value) for value in group_discard_after)}")
+
+        combined_race_scores = combine_races(group_races)
+        combined_overall = combine_overall_from_races(
+            combined_race_scores,
+            max_race=effective_max_race,
+            all_competitors=sorted(group_roster) if group_roster else None,
+            discard_after=group_discard_after,
+        )
+
+        pdf_sections.append(
+            {
+                "group_label": group_label,
+                "combined_races": combined_race_scores,
+                "combined_overall": combined_overall,
+            }
+        )
+
+        for class_name in class_names:
+            source_descriptions.append(f"{args.event_url} [{group_label} / {class_name}]")
+
+    if not pdf_sections:
+        raise RuntimeError("No groups produced completed aligned races.")
+
+    output_pdf = output_dir / args.output_pdf
+    build_combined_pdf(output_pdf, pdf_sections, source_descriptions)
+
+    print(f"PDF created: {output_pdf}")
+
+    return 0
+
+
+def main() -> None:
+    parser = _build_parser()
+    args = parser.parse_args()
+    raise SystemExit(run(args))
+
+
+if __name__ == "__main__":
+    main()

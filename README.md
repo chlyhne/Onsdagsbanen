@@ -1,0 +1,193 @@
+# m2s-combiner
+
+Python CLI project to:
+
+1. Fetch Manage2Sail class results via API
+2. Combine class-group race rankings into one result
+3. Produce a combined PDF report
+
+## Architecture
+
+- API-first only: no browser automation
+- Reads event bootstrap JSON from the event page to discover class IDs
+- Fetches all requested classes in parallel from:
+  - https://www.manage2sail.com/api/event/{eventId}/regattaresult/{regattaId}
+- Computes race and overall combined results from corrected time (Beregnet)
+- Applies dynamic discard thresholds from API payload (`Discards`)
+
+## Setup
+
+```bash
+python -m venv .venv
+```
+
+Activate the virtual environment:
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Windows (cmd.exe):
+
+```bat
+.venv\Scripts\activate.bat
+```
+
+Install dependencies:
+
+```bash
+pip install -e .
+```
+
+## Run
+
+By default the CLI uses:
+
+- Event URL: https://www.manage2sail.com/da-DK/event/Onsdagsbanen2026#!/
+- Class groups:
+  - Stor bane 1 + Stor bane 2
+  - Lille bane 1 + Lille bane 2
+- Races: all available aligned race labels per group
+
+```bash
+python -m m2s_combiner.cli
+```
+
+Use custom event/class values:
+
+```bash
+python -m m2s_combiner.cli --event-url "https://www.manage2sail.com/...#!/" --class-names "Stor bane 1, Stor bane 2"
+```
+
+To run multiple groups in one report, repeat --class-names (one comma-separated group per flag):
+
+```bash
+python -m m2s_combiner.cli --class-names "Stor bane 1, Stor bane 2" --class-names "Lille bane 1, Lille bane 2"
+```
+
+Groups can include 3 or more classes:
+
+```bash
+python -m m2s_combiner.cli --class-names "Stor bane 1, Stor bane 2, Stor bane 3"
+```
+
+Compatibility warnings:
+
+- The CLI prints a warning when classes in the same group differ in race count.
+- The CLI prints a warning when classes in the same group have different race lengths.
+- The CLI prints a warning when classes in the same group have different start times.
+
+Max-race behavior:
+
+- `--max-race` is group-aware.
+- Provide it once to apply the same cap to all groups.
+- Or provide it once per `--class-names` group, in the same order.
+- A group cap can be lower than the group's available max race number.
+- A group cap cannot be higher than the group's available max race number; the CLI raises an error in that case.
+
+Examples:
+
+```bash
+# Same cap for all groups
+python -m m2s_combiner.cli --class-names "Stor bane 1, Stor bane 2" --class-names "Lille bane 1, Lille bane 2" --max-race 12
+
+# Per-group caps (order matches --class-names flags)
+python -m m2s_combiner.cli --class-names "Stor bane 1, Stor bane 2" --class-names "Lille bane 1, Lille bane 2" --max-race 12 --max-race 10
+```
+
+Common options:
+
+```bash
+python -m m2s_combiner.cli --output-pdf Results.pdf --output-dir . --max-race 12
+```
+
+## Email Results (Gmail)
+
+Use the script `send_results_gmail.py` to email result PDFs to multiple recipients.
+
+Recipient privacy:
+
+- All addresses from the recipients text file are sent as BCC.
+- Recipients do not see each other's email addresses.
+
+Safety confirmation:
+
+- Before sending, the script shows a popup asking for a final "really, really sure" confirmation.
+- The email is only sent if you confirm in the popup.
+- For automation/non-interactive runs, pass `--yes` to skip the popup.
+
+Important:
+
+- Gmail SMTP requires an App Password (not your normal account password).
+- If you use 2FA, create an App Password in your Google account security settings.
+- By default, the script reads sender email + app password from `gmail_app_password.txt` on this PC.
+- If the password file is missing/empty, it falls back to an interactive paste-friendly prompt.
+- You can still override sender with `--from-email`.
+
+Credentials file format (`gmail_app_password.txt`):
+
+```txt
+hummesse@gmail.com
+abcd efgh ijkl mnop
+```
+
+Recipient list format (`recipients.txt`):
+
+```txt
+person1@example.com
+person2@example.com
+# comments are allowed
+```
+
+A starter template is included as `recipients.txt.example`.
+Send default result PDFs (auto-detects existing `Results2025.pdf`, `Results2026.pdf`, `Results.pdf`) using `recipients.txt`:
+
+```bash
+python send_results_gmail.py
+```
+
+Use a custom credentials file path if needed:
+
+```bash
+python send_results_gmail.py --app-password-file my_gmail_credentials.txt
+```
+
+Attachment naming:
+
+- The sent PDF attachment is renamed in the email to:
+  - `Onsdagsbanen Kombinerede Resultater DD-MM-YYYY.pdf`
+- Example: `Onsdagsbanen Kombinerede Resultater 04-05-2026.pdf`
+- This is the attachment display name in the email; your local file is not renamed.
+
+Default attachment behavior:
+
+- If `--attach` is not provided, the script sends one primary file in this order:
+  - `Results2026.pdf`
+  - `Results.pdf`
+  - `Results2025.pdf`
+
+Or provide a custom recipients file and attachments:
+
+```bash
+python send_results_gmail.py --to-file recipients_crew.txt --attach "Results2025.pdf,Results2026.pdf" --subject "Onsdagsbanen results"
+```
+
+You can also send one file only:
+
+```bash
+python send_results_gmail.py --to-file recipients.txt --attach Results2025.pdf
+```
+
+Dry-run (validate inputs without sending):
+
+```bash
+python send_results_gmail.py --to-file recipients.txt --dry-run
+```
+
+Skip popup confirmation (password prompt still appears):
+
+```bash
+python send_results_gmail.py --to-file recipients.txt --yes
+```

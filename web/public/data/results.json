@@ -1,0 +1,99 @@
+{
+  "generatedAt": "04-05-2026 20:00",
+  "sourceUrls": [
+    "https://www.manage2sail.com/da-DK/event/Onsdagsbanen2026#!/"
+  ],
+  "sections": [
+    {
+      "groupLabel": "Stor Bane",
+      "combinedRaces": [],
+      "combinedOverall": {
+        "rows": [
+          {
+            "combinedRank": 1,
+            "competitor": "Team North",
+            "boatType": "J/80",
+            "racePoints": {
+              "R1": 1,
+              "R2": 2,
+              "R3": 4
+            },
+            "combinedPoints": 3,
+            "raceCount": 2
+          },
+          {
+            "combinedRank": 2,
+            "competitor": "Team East",
+            "boatType": "X-332",
+            "racePoints": {
+              "R1": 3,
+              "R2": 1,
+              "R3": 2
+            },
+            "combinedPoints": 4,
+            "raceCount": 2
+          },
+          {
+            "combinedRank": 3,
+            "competitor": "Team West",
+            "boatType": "J/70",
+            "racePoints": {
+              "R1": 2,
+              "R2": 3,
+              "R3": 3
+            },
+            "combinedPoints": 5,
+            "raceCount": 2
+          }
+        ],
+        "raceColumns": ["R1", "R2", "R3"],
+        "discardedRacesByCompetitor": {
+          "Team North": ["R3"],
+          "Team East": ["R1"],
+          "Team West": ["R3"]
+        },
+        "discardAfter": [3],
+        "discardCount": 1
+      }
+    },
+    {
+      "groupLabel": "Lille Bane",
+      "combinedRaces": [],
+      "combinedOverall": {
+        "rows": [
+          {
+            "combinedRank": 1,
+            "competitor": "Blue Bird",
+            "boatType": "ScanKap 99",
+            "racePoints": {
+              "R1": 1,
+              "R2": 1,
+              "R3": 2
+            },
+            "combinedPoints": 2,
+            "raceCount": 2
+          },
+          {
+            "combinedRank": 2,
+            "competitor": "Sea Light",
+            "boatType": "Banner 30",
+            "racePoints": {
+              "R1": 2,
+              "R2": 2,
+              "R3": 1
+            },
+            "combinedPoints": 3,
+            "raceCount": 2
+          }
+        ],
+        "raceColumns": ["R1", "R2", "R3"],
+        "discardedRacesByCompetitor": {
+          "Blue Bird": ["R3"],
+          "Sea Light": ["R2"]
+        },
+        "discardAfter": [3],
+        "discardCount": 1
+      }
+    }
+  ]
+}

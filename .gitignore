@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.vscode/
+output/
+.playwright/
+*.egg-info/
+recipients.txt
+gmail_app_password.txt
+web/node_modules/
+web/dist/
