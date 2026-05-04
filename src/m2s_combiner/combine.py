@@ -35,8 +35,6 @@ def combine_races(race_frames: list[pd.DataFrame]) -> pd.DataFrame:
         "race",
         "competitor",
         "series",
-        "beregnet_seconds",
-        "sailed_seconds",
         "boat_name",
         "boat_type",
         "hdcp",
@@ -44,6 +42,24 @@ def combine_races(race_frames: list[pd.DataFrame]) -> pd.DataFrame:
     missing_columns = sorted(required_columns.difference(combined.columns))
     if missing_columns:
         raise ValueError(f"Combined race inputs are missing required columns: {', '.join(missing_columns)}")
+
+    if "beregnet_seconds" not in combined.columns:
+        combined["beregnet_seconds"] = pd.NA
+    if "sailed_seconds" not in combined.columns:
+        combined["sailed_seconds"] = pd.NA
+    if "race_status_code" not in combined.columns:
+        combined["race_status_code"] = ""
+    if "race_points" not in combined.columns:
+        combined["race_points"] = pd.NA
+    if "race_rank_raw" not in combined.columns:
+        combined["race_rank_raw"] = pd.NA
+
+    def _first_non_empty(values: pd.Series) -> str:
+        for value in values:
+            text = str(value).strip()
+            if text:
+                return text
+        return ""
 
     grouped = (
         combined.groupby(["race", "competitor"], as_index=False)
@@ -53,23 +69,73 @@ def combine_races(race_frames: list[pd.DataFrame]) -> pd.DataFrame:
             boat_name=("boat_name", "first"),
             boat_type=("boat_type", "first"),
             hdcp=("hdcp", "first"),
+            race_status_code=("race_status_code", _first_non_empty),
+            race_points=("race_points", "min"),
+            race_rank_raw=("race_rank_raw", "min"),
             series_count=("series", lambda values: values.dropna().nunique()),
         )
-        .sort_values(["race", "beregnet_seconds", "competitor"], ascending=[True, True, True])
+        .sort_values(["race", "beregnet_seconds", "competitor"], ascending=[True, True, True], na_position="last")
         .reset_index(drop=True)
     )
 
-    grouped["race_rank"] = grouped.groupby("race")["beregnet_seconds"].rank(method="min", ascending=True).astype(int)
-    grouped["points"] = grouped["race_rank"].astype(int)
-    grouped["beregnet_time"] = grouped["beregnet_seconds"].map(_format_seconds)
+    grouped["race_rank"] = pd.Series(pd.NA, index=grouped.index, dtype="Int64")
+    if "race_rank_raw" in grouped.columns:
+        grouped["race_rank_raw"] = pd.to_numeric(grouped["race_rank_raw"], errors="coerce")
+        raw_rank_mask = grouped["race_rank_raw"].notna()
+        grouped.loc[raw_rank_mask, "race_rank"] = grouped.loc[raw_rank_mask, "race_rank_raw"].round().astype("Int64")
+
+    for race_label, race_rows in grouped.groupby("race"):
+        _ = race_label
+        finish_idx = race_rows[race_rows["beregnet_seconds"].notna()].index
+        if len(finish_idx) == 0:
+            continue
+        ranks = race_rows.loc[finish_idx, "beregnet_seconds"].rank(method="min", ascending=True).astype(int)
+        grouped.loc[finish_idx, "race_rank"] = ranks.astype("Int64")
+
+    grouped["race_points"] = pd.to_numeric(grouped["race_points"], errors="coerce")
+    grouped["points"] = pd.Series(pd.NA, index=grouped.index, dtype="Int64")
+    finisher_mask = grouped["beregnet_seconds"].notna() & grouped["race_rank"].notna()
+    grouped.loc[finisher_mask, "points"] = grouped.loc[finisher_mask, "race_rank"]
+
+    fallback_points_by_race = grouped.groupby("race")["competitor"].nunique().add(1).astype(int).to_dict()
+    status_points_mask = grouped["points"].isna() & grouped["race_points"].notna()
+    if status_points_mask.any():
+        status_points = grouped.loc[status_points_mask, "race_points"].round().astype(int)
+        fallback_for_status = grouped.loc[status_points_mask, "race"].map(fallback_points_by_race).astype(int)
+        grouped.loc[status_points_mask, "points"] = (
+            pd.concat([status_points, fallback_for_status], axis=1).max(axis=1).astype("Int64")
+        )
+
+    fallback_mask = grouped["points"].isna()
+    grouped.loc[fallback_mask, "points"] = (
+        grouped.loc[fallback_mask, "race"].map(fallback_points_by_race).astype("Int64")
+    )
+
+    grouped["beregnet_time"] = grouped["beregnet_seconds"].map(
+        lambda value: _format_seconds(value) if pd.notna(value) else ""
+    )
+    status_mask = grouped["beregnet_time"].eq("") & grouped["race_status_code"].astype(str).str.strip().ne("")
+    grouped.loc[status_mask, "beregnet_time"] = grouped.loc[status_mask, "race_status_code"].astype(str).str.strip()
     grouped["sailed_time"] = grouped["sailed_seconds"].map(
         lambda value: _format_seconds(value) if pd.notna(value) else ""
     )
 
-    grouped["delta_seconds"] = grouped["beregnet_seconds"] - grouped.groupby("race")["beregnet_seconds"].transform("min")
-    grouped["interval_seconds"] = grouped.groupby("race")["beregnet_seconds"].diff().fillna(0.0)
-    grouped["delta"] = grouped["delta_seconds"].map(_format_seconds)
-    grouped["interval"] = grouped["interval_seconds"].map(_format_seconds)
+    grouped["delta_seconds"] = pd.NA
+    grouped["interval_seconds"] = pd.NA
+    for race_label, race_rows in grouped.groupby("race"):
+        _ = race_label
+        finish_idx = race_rows[race_rows["beregnet_seconds"].notna()].index
+        if len(finish_idx) == 0:
+            continue
+        finish_times = grouped.loc[finish_idx, "beregnet_seconds"]
+        grouped.loc[finish_idx, "delta_seconds"] = finish_times - finish_times.min()
+        grouped.loc[finish_idx, "interval_seconds"] = finish_times.diff().fillna(0.0)
+    grouped["delta"] = grouped["delta_seconds"].map(
+        lambda value: _format_seconds(float(value)) if pd.notna(value) else ""
+    )
+    grouped["interval"] = grouped["interval_seconds"].map(
+        lambda value: _format_seconds(float(value)) if pd.notna(value) else ""
+    )
 
     return grouped[
         [

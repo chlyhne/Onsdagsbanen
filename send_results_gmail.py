@@ -5,6 +5,8 @@ import argparse
 from datetime import datetime
 import mimetypes
 import smtplib
+import socket
+import sys
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -79,8 +81,8 @@ def _build_message(
 ) -> EmailMessage:
     message = EmailMessage()
     message["From"] = sender
-    # Keep recipient addresses private by using BCC for distribution.
-    message["To"] = sender
+    # Keep recipient addresses private by using BCC only.
+    message["To"] = "undisclosed-recipients:;"
     message["Bcc"] = ", ".join(recipients)
     message["Subject"] = subject
     message.set_content(body)
@@ -152,6 +154,13 @@ def _confirm_send_with_popup(
 
 def _prompt_app_password() -> str:
     """Prompt for Gmail app password in a paste-friendly way without CLI args/env vars."""
+    # Prefer terminal prompt when available; GUI dialogs can be hidden on some Linux setups.
+    if sys.stdin.isatty():
+        try:
+            return input("Gmail App Password (paste allowed): ").strip()
+        except EOFError:
+            return ""
+
     try:
         import tkinter as tk
         from tkinter import simpledialog
@@ -176,7 +185,10 @@ def _prompt_app_password() -> str:
         return password.strip()
     except Exception:
         # Terminal fallback still avoids history while allowing paste.
-        return input("Gmail App Password (paste allowed): ").strip()
+        try:
+            return input("Gmail App Password (paste allowed): ").strip()
+        except EOFError:
+            return ""
 
 
 def _load_credentials_from_file(credentials_file: str) -> tuple[str, str]:
@@ -271,6 +283,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="SMTP SSL port (default: 465).",
     )
     parser.add_argument(
+        "--smtp-timeout",
+        type=float,
+        default=20.0,
+        help="SMTP connect/login timeout in seconds (default: 20).",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate inputs and print what would be sent, without sending email.",
@@ -294,7 +312,7 @@ def run(args: argparse.Namespace) -> int:
         date_text = datetime.now().strftime("%d-%m-%Y")
         print("Dry run: email not sent.")
         print(f"From: {sender or '(not set)'}")
-        print(f"To: {sender or '(not set)'}")
+        print("To: undisclosed-recipients:;")
         print(f"Bcc: {', '.join(recipients)}")
         print(f"Recipients file: {args.to_file}")
         print(f"Subject: {args.subject}")
@@ -327,6 +345,10 @@ def run(args: argparse.Namespace) -> int:
 
     app_password = file_password
     if not app_password:
+        print(
+            "No app password found in credentials file. "
+            "Please paste your Gmail app password in the prompt."
+        )
         app_password = _prompt_app_password()
     if not app_password:
         raise ValueError("No Gmail app password found in file or entered in prompt.")
@@ -339,9 +361,19 @@ def run(args: argparse.Namespace) -> int:
         attachments=attachments,
     )
 
-    with smtplib.SMTP_SSL(args.smtp_host, args.smtp_port) as smtp:
-        smtp.login(sender, app_password)
-        smtp.send_message(message)
+    try:
+        with smtplib.SMTP_SSL(args.smtp_host, args.smtp_port, timeout=float(args.smtp_timeout)) as smtp:
+            smtp.login(sender, app_password)
+            smtp.send_message(message, to_addrs=recipients)
+    except (socket.timeout, TimeoutError) as exc:
+        raise RuntimeError(
+            f"SMTP connection timed out to {args.smtp_host}:{args.smtp_port}. "
+            "Check network/firewall and try again, or increase --smtp-timeout."
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"Could not reach SMTP server {args.smtp_host}:{args.smtp_port}: {exc}"
+        ) from exc
 
     print(f"Email sent to {len(recipients)} recipient(s).")
     return 0

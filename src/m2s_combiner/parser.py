@@ -39,6 +39,24 @@ def _clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _parse_number(value: object) -> float | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = _clean_text(value).replace(",", ".")
+    if not text:
+        return None
+    if not re.fullmatch(r"-?\d+(?:\.\d+)?", text):
+        return None
+
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def parse_available_race_labels_from_result_payload(
     payload: dict[str, object],
     max_race: int | None = None,
@@ -151,9 +169,6 @@ def parse_race_rows_from_result_payload(
             else:
                 beregnet_seconds = _parse_time_to_seconds(race_result.get("CorrectedTime"))
 
-            if beregnet_seconds is None:
-                continue
-
             sailed_seconds = _parse_time_to_seconds(
                 race_result.get("RaceTime") or race_result.get("RaceTimeForCalculation")
             )
@@ -162,6 +177,22 @@ def parse_race_rows_from_result_payload(
                 hdcp = float(hdcp_value)
             else:
                 hdcp = None
+            race_status_code = _clean_text(race_result.get("RaceStatusCode"))
+            race_points = _parse_number(race_result.get("Points"))
+            race_rank_value = race_result.get("Rank")
+            if isinstance(race_rank_value, (int, float)):
+                race_rank_raw = int(race_rank_value)
+            else:
+                race_rank_raw = None
+
+            # Keep boats with status/points (e.g. DNC/DNS) even without corrected time.
+            if (
+                beregnet_seconds is None
+                and not race_status_code
+                and race_points is None
+                and race_rank_raw is None
+            ):
+                continue
 
             race_label = requested_indices[race_index]
             rows_by_label[race_label].append(
@@ -174,6 +205,9 @@ def parse_race_rows_from_result_payload(
                     "hdcp": hdcp,
                     "beregnet_seconds": beregnet_seconds,
                     "sailed_seconds": sailed_seconds,
+                    "race_status_code": race_status_code,
+                    "race_points": race_points,
+                    "race_rank_raw": race_rank_raw,
                 }
             )
 
@@ -183,7 +217,7 @@ def parse_race_rows_from_result_payload(
         if not rows:
             continue
         parsed = pd.DataFrame(rows)
-        parsed = parsed.dropna(subset=["beregnet_seconds"]).reset_index(drop=True)
+        parsed = parsed.reset_index(drop=True)
         if not parsed.empty:
             result[label] = parsed
 

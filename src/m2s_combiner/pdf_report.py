@@ -279,6 +279,8 @@ def build_combined_pdf(
             ]
             available_columns = [column for column in preferred_columns if column in race_rows.columns]
             printable_race = race_rows[available_columns].copy()
+            if "race_rank" in printable_race.columns:
+                printable_race["race_rank"] = printable_race["race_rank"].map(_int_text)
             printable_race = printable_race.rename(
                 columns={
                     "race_rank": "Plac.",
