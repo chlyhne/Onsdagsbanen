@@ -130,6 +130,8 @@ def parse_race_rows_from_result_payload(
             continue
         boat_name = _clean_text(entry.get("BoatName"))
         boat_type = _clean_text(entry.get("BoatType"))
+        if not boat_type:
+            boat_type = boat_name
 
         race_results = entry.get("EntryRaceResults")
         if not isinstance(race_results, list):

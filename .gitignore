@@ -11,3 +11,4 @@ recipients.txt
 gmail_app_password.txt
 web/node_modules/
 web/dist/
+Results*.pdf

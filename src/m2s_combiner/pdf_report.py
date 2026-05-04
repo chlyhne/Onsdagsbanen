@@ -241,11 +241,22 @@ def build_combined_pdf(
         theme = group_theme_map[group_label]
         combined_races = section.get("combined_races")
         combined_overall = section.get("combined_overall")
+        race_warnings_raw = section.get("race_warnings")
 
         if not isinstance(combined_races, pd.DataFrame):
             combined_races = pd.DataFrame()
         if not isinstance(combined_overall, pd.DataFrame):
             combined_overall = pd.DataFrame()
+        race_warnings: dict[str, list[str]] = {}
+        if isinstance(race_warnings_raw, dict):
+            for race_label, messages in race_warnings_raw.items():
+                if not isinstance(race_label, str):
+                    continue
+                if not isinstance(messages, list):
+                    continue
+                normalized_messages = [str(message).strip() for message in messages if str(message).strip()]
+                if normalized_messages:
+                    race_warnings[race_label] = normalized_messages
 
         race_labels: list[str] = []
         if not combined_races.empty and "race" in combined_races.columns:
@@ -308,6 +319,12 @@ def build_combined_pdf(
                     row_bg_colors=tuple(theme["row_bg_colors"]),
                 )
             )
+
+            warnings_for_race = race_warnings.get(str(race_label), [])
+            if warnings_for_race:
+                story.append(Spacer(1, 2 * mm))
+                for warning_text in warnings_for_race:
+                    story.append(Paragraph(f"<font color='#8B0000'>{warning_text}</font>", styles["BodyText"]))
 
             if race_index < len(race_labels) - 1 or not combined_overall.empty:
                 story.append(PageBreak())

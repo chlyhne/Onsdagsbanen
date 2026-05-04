@@ -161,11 +161,12 @@ def _warn_if_group_not_meaningfully_combinable(
     class_names: list[str],
     payload_by_class: dict[str, dict[str, object]],
     max_race: int | None,
-) -> None:
+) -> dict[str, list[str]]:
     race_meta_by_class = {
         class_name: _race_meta_from_payload(payload_by_class[class_name], max_race=max_race)
         for class_name in class_names
     }
+    race_warnings: dict[str, list[str]] = {}
 
     race_count_by_class: dict[str, int] = {}
     for class_name in class_names:
@@ -230,11 +231,34 @@ def _warn_if_group_not_meaningfully_combinable(
                 f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different race lengths for "
                 f"{_format_race_labels(length_mismatches)}."
             )
+            for race_index in length_mismatches:
+                race_label = f"R{race_index}"
+                race_warnings.setdefault(race_label, []).append(
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde i denne sejlads."
+                )
         if start_mismatches:
             print(
                 f"[{group_label}] WARNING: '{left_class}' and '{right_class}' have different start times for "
                 f"{_format_race_labels(start_mismatches)}."
             )
+            for race_index in start_mismatches:
+                race_label = f"R{race_index}"
+                race_warnings.setdefault(race_label, []).append(
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig starttid i denne sejlads."
+                )
+
+    deduped_warnings: dict[str, list[str]] = {}
+    for race_label, messages in race_warnings.items():
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for message in messages:
+            if message not in seen:
+                seen.add(message)
+                deduped.append(message)
+        if deduped:
+            deduped_warnings[race_label] = deduped
+
+    return deduped_warnings
 
 
 def run(args: argparse.Namespace) -> int:
@@ -289,7 +313,7 @@ def run(args: argparse.Namespace) -> int:
 
         effective_max_race = requested_max_race if requested_max_race is not None else group_max_available
 
-        _warn_if_group_not_meaningfully_combinable(
+        race_warnings = _warn_if_group_not_meaningfully_combinable(
             group_label=group_label,
             class_names=class_names,
             payload_by_class=payload_by_class,
@@ -357,6 +381,11 @@ def run(args: argparse.Namespace) -> int:
                 "group_label": group_label,
                 "combined_races": combined_race_scores,
                 "combined_overall": combined_overall,
+                "race_warnings": {
+                    race_label: race_warnings[race_label]
+                    for race_label in completed_races
+                    if race_label in race_warnings
+                },
             }
         )
 
