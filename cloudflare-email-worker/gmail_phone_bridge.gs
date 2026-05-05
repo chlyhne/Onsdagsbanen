@@ -4,10 +4,12 @@
 const M2S_CONFIG = {
   workerTriggerUrl: "https://m2s-email-trigger.hummesse.workers.dev/trigger",
   triggerToken: "REPLACE_WITH_TRIGGER_TOKEN",
-  // Only messages from these senders are accepted.
+  // Allow every sender to request results with the subject token below.
+  allowAnySender: true,
+  // Optional sender allow-list when allowAnySender is false.
   allowedSenders: ["hummesse@gmail.com"],
   // Incoming subject must contain this token.
-  requiredSubjectToken: "M2S RUN",
+  requiredSubjectToken: "RESULTATER",
   // Gmail label used to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
   // Optional: set true while validating setup.
@@ -101,7 +103,7 @@ function pollAndTrigger() {
 
     console.log(`Processing message from=${fromAddress}, subject=${subject}`);
 
-    if (!allowed.has(fromAddress)) {
+    if (!Boolean(M2S_CONFIG.allowAnySender) && !allowed.has(fromAddress)) {
       console.log(`Sender not allowed: ${fromAddress}. Marking as processed.`);
       thread.addLabel(processed);
       thread.markRead();

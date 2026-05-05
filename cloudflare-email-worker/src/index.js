@@ -7,6 +7,10 @@ function parseAllowedSenders(raw) {
   );
 }
 
+function parseOptionalEnv(env, name, fallback = "") {
+  return String(env[name] || fallback).trim();
+}
+
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 function extractEmailAddresses(rawText) {
@@ -51,6 +55,14 @@ function requireEnv(env, name) {
     throw new Error(`Missing required Worker setting: ${name}`);
   }
   return value;
+}
+
+function hasSubjectToken(subject, token) {
+  const cleanToken = String(token || "").trim().toLowerCase();
+  if (!cleanToken) {
+    return false;
+  }
+  return String(subject || "").toLowerCase().includes(cleanToken);
 }
 
 function tokenMatches(request, env) {
@@ -120,23 +132,36 @@ async function handleIncomingEmail(message, env) {
   const from = String(message.from || "").trim().toLowerCase();
   const subject = String(message.headers.get("subject") || "").trim();
   const allowedSenders = parseAllowedSenders(env.ALLOWED_SENDERS);
+  const standardTriggerToken = requireEnv(env, "TRIGGER_TOKEN");
+  const publicResultsToken = parseOptionalEnv(env, "PUBLIC_RESULTS_SUBJECT_TOKEN", "RESULTATER");
+  const isPublicResultsRequest = hasSubjectToken(subject, publicResultsToken);
+  const isStandardRequest = hasSubjectToken(subject, standardTriggerToken);
 
-  if (!from || !allowedSenders.has(from)) {
+  if (!from) {
+    console.log("Ignoring sender: (missing)");
+    return;
+  }
+
+  if (!isPublicResultsRequest && !allowedSenders.has(from)) {
     console.log(`Ignoring sender: ${from || "(missing)"}`);
     return;
   }
 
-  const triggerToken = requireEnv(env, "TRIGGER_TOKEN");
-  const subjectLower = subject.toLowerCase();
-  const tokenLower = triggerToken.toLowerCase();
-  if (!subjectLower.includes(tokenLower)) {
-    console.log("Ignoring email because trigger token was not found in subject.");
+  if (!isPublicResultsRequest && !isStandardRequest) {
+    console.log(
+      "Ignoring email because no recognized trigger token was found in subject."
+    );
     return;
   }
 
-  const rawEmail = await readRawEmail(message);
-  const bodyText = extractEmailBodyText(rawEmail);
-  const recipientsOverride = extractEmailAddresses(bodyText);
+  let recipientsOverride = [];
+  if (isPublicResultsRequest) {
+    recipientsOverride = [from];
+  } else {
+    const rawEmail = await readRawEmail(message);
+    const bodyText = extractEmailBodyText(rawEmail);
+    recipientsOverride = extractEmailAddresses(bodyText);
+  }
 
   await dispatchWorkflow({
     env,
@@ -146,7 +171,9 @@ async function handleIncomingEmail(message, env) {
     recipientsOverride,
   });
   console.log(
-    `Workflow dispatched for sender ${from}. recipient_override_count=${recipientsOverride.length}`
+    `Workflow dispatched for sender ${from}. mode=${
+      isPublicResultsRequest ? "public-results" : "standard"
+    } recipient_override_count=${recipientsOverride.length}`
   );
 }
 
@@ -177,20 +204,33 @@ async function handleHttpTrigger(request, env) {
   const from = String(payload.from || "").trim().toLowerCase();
   const subject = String(payload.subject || "").trim();
   const dryRun = Boolean(payload.dry_run);
+  const standardTriggerToken = requireEnv(env, "TRIGGER_TOKEN");
+  const publicResultsToken = parseOptionalEnv(env, "PUBLIC_RESULTS_SUBJECT_TOKEN", "RESULTATER");
+  const isPublicResultsRequest = hasSubjectToken(subject, publicResultsToken);
+  const isStandardRequest = hasSubjectToken(subject, standardTriggerToken);
   const bodyText = String(payload.body_text || payload.body || "").trim();
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
-  const recipientsOverride =
-    recipientsOverrideFromPayload.length > 0
+  const recipientsOverride = isPublicResultsRequest
+    ? [from]
+    : recipientsOverrideFromPayload.length > 0
       ? recipientsOverrideFromPayload
       : extractEmailAddresses(bodyText);
   const allowedSenders = parseAllowedSenders(env.ALLOWED_SENDERS);
 
-  if (!from || !allowedSenders.has(from)) {
+  if (!from) {
+    return new Response("Missing sender", { status: 400 });
+  }
+
+  if (!isPublicResultsRequest && !allowedSenders.has(from)) {
     return new Response("Sender not allowed", { status: 403 });
   }
 
   if (!subject) {
     return new Response("Missing subject", { status: 400 });
+  }
+
+  if (!isPublicResultsRequest && !isStandardRequest) {
+    return new Response("Missing trigger token in subject", { status: 400 });
   }
 
   await dispatchWorkflow({ env, from, subject, dryRun, recipientsOverride });
