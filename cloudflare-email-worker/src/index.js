@@ -190,10 +190,6 @@ async function handleHttpTrigger(request, env) {
     return new Response("Missing sender", { status: 400 });
   }
 
-  if (!isPublicResultsRequest && !allowedSenders.has(from)) {
-    return new Response("Sender not allowed", { status: 403 });
-  }
-
   if (!subject) {
     return new Response("Missing subject", { status: 400 });
   }
