@@ -44,6 +44,8 @@ function triggerWorker_(fromAddress, subject) {
     dry_run: Boolean(M2S_CONFIG.dryRun),
   };
 
+  console.log(`Triggering Worker for from=${fromAddress}, dry_run=${payload.dry_run}`);
+
   const response = UrlFetchApp.fetch(M2S_CONFIG.workerTriggerUrl, {
     method: "post",
     contentType: "application/json",
@@ -55,6 +57,7 @@ function triggerWorker_(fromAddress, subject) {
   });
 
   const status = response.getResponseCode();
+  console.log(`Worker HTTP status=${status}`);
   if (status < 200 || status >= 300) {
     throw new Error(`Worker trigger failed with HTTP ${status}: ${response.getContentText()}`);
   }
@@ -70,13 +73,23 @@ function pollAndTrigger() {
   const query = buildSearchQuery_();
   const threads = GmailApp.search(query, 0, 20);
 
+  console.log(`Search query=${query}`);
+  console.log(`Threads found=${threads.length}`);
+  if (threads.length === 0) {
+    console.log("No matching unread messages found.");
+    return;
+  }
+
   for (const thread of threads) {
     const messages = thread.getMessages();
     const message = messages[messages.length - 1];
     const fromAddress = extractEmailAddress(message.getFrom());
     const subject = String(message.getSubject() || "").trim();
 
+    console.log(`Processing message from=${fromAddress}, subject=${subject}`);
+
     if (!allowed.has(fromAddress)) {
+      console.log(`Sender not allowed: ${fromAddress}. Marking as processed.`);
       thread.addLabel(processed);
       thread.markRead();
       continue;
@@ -85,6 +98,7 @@ function pollAndTrigger() {
     triggerWorker_(fromAddress, subject);
     thread.addLabel(processed);
     thread.markRead();
+    console.log("Triggered successfully and marked thread as processed.");
   }
 }
 
