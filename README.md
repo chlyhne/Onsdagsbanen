@@ -237,3 +237,12 @@ Set worker variables (in `wrangler.toml` or dashboard):
 - `ALLOWED_SENDERS` (comma-separated)
 
 Then configure Cloudflare Email Routing so a dedicated address forwards to this Worker.
+
+No custom domain option:
+
+- If you do not have a domain, skip Email Routing.
+- Use the Worker HTTP endpoint on workers.dev instead:
+  - `POST /trigger` on your deployed Worker URL
+  - Include header `x-trigger-token: <TRIGGER_TOKEN>`
+  - Include JSON body with allowed sender and subject:
+    - `{"from":"hummesse@gmail.com","subject":"M2S run request"}`

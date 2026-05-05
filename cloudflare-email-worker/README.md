@@ -1,13 +1,17 @@
 # Cloudflare Email Trigger Worker
 
-This Worker listens for inbound email and dispatches a GitHub Actions workflow.
+This Worker can trigger a GitHub Actions workflow in two ways:
+
+1. Email event mode (requires a custom domain with Cloudflare Email Routing)
+2. HTTP trigger mode (works on workers.dev, no custom domain required)
 
 ## Trigger logic
 
-The Worker dispatches only when both checks pass:
+The Worker dispatches only when all checks pass:
 
 1. The sender exists in `ALLOWED_SENDERS`.
-2. The email subject contains the shared secret `TRIGGER_TOKEN`.
+2. The provided trigger token matches `TRIGGER_TOKEN`.
+3. The subject is present.
 
 ## Required Worker settings
 
@@ -22,7 +26,7 @@ Configure in `wrangler.toml`:
 Configure as Worker secrets:
 
 - `GH_TOKEN`: GitHub fine-grained token with Actions write permission on this repo
-- `TRIGGER_TOKEN`: Shared secret text that must appear in subject line
+- `TRIGGER_TOKEN`: Shared secret token for email or HTTP trigger auth
 
 ## Setup
 
@@ -35,7 +39,38 @@ npx wrangler secret put TRIGGER_TOKEN
 npm run deploy
 ```
 
-## Email routing
+## No-domain mode (workers.dev)
+
+If you do not own a custom domain, use HTTP trigger mode:
+
+POST to:
+
+`https://m2s-email-trigger.hummesse.workers.dev/trigger`
+
+Headers:
+
+- `x-trigger-token: <TRIGGER_TOKEN>`
+
+JSON body:
+
+```json
+{
+	"from": "hummesse@gmail.com",
+	"subject": "M2S run request",
+	"dry_run": true
+}
+```
+
+Example with curl:
+
+```bash
+curl -X POST "https://m2s-email-trigger.hummesse.workers.dev/trigger" \
+	-H "Content-Type: application/json" \
+	-H "x-trigger-token: YOUR_TRIGGER_TOKEN" \
+	-d '{"from":"hummesse@gmail.com","subject":"M2S run request","dry_run":true}'
+```
+
+## Email routing (domain required)
 
 In Cloudflare Email Routing, set your destination to this Worker.
 
