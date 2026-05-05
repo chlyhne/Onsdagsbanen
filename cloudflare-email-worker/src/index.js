@@ -1,17 +1,6 @@
-function parseAllowedSenders(raw) {
-  return new Set(
-    String(raw || "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-function parseOptionalEnv(env, name, fallback = "") {
-  return String(env[name] || fallback).trim();
-}
-
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const HUMMESSE_SENDER = "hummesse@gmail.com";
+const REQUIRED_SUBJECT = "resultater";
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -57,12 +46,8 @@ function requireEnv(env, name) {
   return value;
 }
 
-function hasSubjectToken(subject, token) {
-  const cleanToken = String(token || "").trim().toLowerCase();
-  if (!cleanToken) {
-    return false;
-  }
-  return String(subject || "").toLowerCase().includes(cleanToken);
+function isExactResultaterSubject(subject) {
+  return String(subject || "").trim().toLowerCase() === REQUIRED_SUBJECT;
 }
 
 function tokenMatches(request, env) {
@@ -131,36 +116,24 @@ async function dispatchWorkflow({
 async function handleIncomingEmail(message, env) {
   const from = String(message.from || "").trim().toLowerCase();
   const subject = String(message.headers.get("subject") || "").trim();
-  const allowedSenders = parseAllowedSenders(env.ALLOWED_SENDERS);
-  const standardTriggerToken = requireEnv(env, "TRIGGER_TOKEN");
-  const publicResultsToken = parseOptionalEnv(env, "PUBLIC_RESULTS_SUBJECT_TOKEN", "RESULTATER");
-  const isPublicResultsRequest = hasSubjectToken(subject, publicResultsToken);
-  const isStandardRequest = hasSubjectToken(subject, standardTriggerToken);
 
   if (!from) {
     console.log("Ignoring sender: (missing)");
     return;
   }
 
-  if (!isPublicResultsRequest && !allowedSenders.has(from)) {
-    console.log(`Ignoring sender: ${from || "(missing)"}`);
-    return;
-  }
-
-  if (!isPublicResultsRequest && !isStandardRequest) {
-    console.log(
-      "Ignoring email because no recognized trigger token was found in subject."
-    );
+  if (!isExactResultaterSubject(subject)) {
+    console.log("Ignoring email because subject was not exactly 'resultater'.");
     return;
   }
 
   let recipientsOverride = [];
-  if (isPublicResultsRequest) {
-    recipientsOverride = [from];
-  } else {
+  if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
     recipientsOverride = extractEmailAddresses(bodyText);
+  } else {
+    recipientsOverride = [from];
   }
 
   await dispatchWorkflow({
@@ -172,7 +145,7 @@ async function handleIncomingEmail(message, env) {
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
-      isPublicResultsRequest ? "public-results" : "standard"
+      from === HUMMESSE_SENDER ? "hummesse-special" : "sender-only"
     } recipient_override_count=${recipientsOverride.length}`
   );
 }
@@ -204,18 +177,14 @@ async function handleHttpTrigger(request, env) {
   const from = String(payload.from || "").trim().toLowerCase();
   const subject = String(payload.subject || "").trim();
   const dryRun = Boolean(payload.dry_run);
-  const standardTriggerToken = requireEnv(env, "TRIGGER_TOKEN");
-  const publicResultsToken = parseOptionalEnv(env, "PUBLIC_RESULTS_SUBJECT_TOKEN", "RESULTATER");
-  const isPublicResultsRequest = hasSubjectToken(subject, publicResultsToken);
-  const isStandardRequest = hasSubjectToken(subject, standardTriggerToken);
   const bodyText = String(payload.body_text || payload.body || "").trim();
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
-  const recipientsOverride = isPublicResultsRequest
-    ? [from]
-    : recipientsOverrideFromPayload.length > 0
-      ? recipientsOverrideFromPayload
-      : extractEmailAddresses(bodyText);
-  const allowedSenders = parseAllowedSenders(env.ALLOWED_SENDERS);
+  const recipientsOverride =
+    from === HUMMESSE_SENDER
+      ? recipientsOverrideFromPayload.length > 0
+        ? recipientsOverrideFromPayload
+        : extractEmailAddresses(bodyText)
+      : [from];
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -229,8 +198,8 @@ async function handleHttpTrigger(request, env) {
     return new Response("Missing subject", { status: 400 });
   }
 
-  if (!isPublicResultsRequest && !isStandardRequest) {
-    return new Response("Missing trigger token in subject", { status: 400 });
+  if (!isExactResultaterSubject(subject)) {
+    return new Response("Subject must be exactly 'resultater'", { status: 400 });
   }
 
   await dispatchWorkflow({ env, from, subject, dryRun, recipientsOverride });

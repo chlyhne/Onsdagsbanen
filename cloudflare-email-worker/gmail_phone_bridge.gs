@@ -8,8 +8,8 @@ const M2S_CONFIG = {
   allowAnySender: true,
   // Optional sender allow-list when allowAnySender is false.
   allowedSenders: ["hummesse@gmail.com"],
-  // Incoming subject must contain this token.
-  requiredSubjectToken: "RESULTATER",
+  // Incoming subject must be exactly this text (case-insensitive).
+  requiredSubjectToken: "resultater",
   // Gmail label used to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
   // Optional: set true while validating setup.
@@ -37,6 +37,10 @@ function buildSearchQuery_() {
   const token = M2S_CONFIG.requiredSubjectToken.replace(/"/g, "\\\"");
   const label = M2S_CONFIG.processedLabel.replace(/"/g, "\\\"");
   return `is:unread subject:"${token}" -label:"${label}" newer_than:7d`;
+}
+
+function isExactRequiredSubject_(subject) {
+  return String(subject || "").trim().toLowerCase() === String(M2S_CONFIG.requiredSubjectToken).trim().toLowerCase();
 }
 
 function extractEmailsFromBody_(plainBody) {
@@ -102,6 +106,13 @@ function pollAndTrigger() {
     const recipientsOverride = extractEmailsFromBody_(plainBody);
 
     console.log(`Processing message from=${fromAddress}, subject=${subject}`);
+
+    if (!isExactRequiredSubject_(subject)) {
+      console.log(`Subject not exact match. Expected exactly '${M2S_CONFIG.requiredSubjectToken}'. Marking as processed.`);
+      thread.addLabel(processed);
+      thread.markRead();
+      continue;
+    }
 
     if (!Boolean(M2S_CONFIG.allowAnySender) && !allowed.has(fromAddress)) {
       console.log(`Sender not allowed: ${fromAddress}. Marking as processed.`);
