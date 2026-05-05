@@ -3,8 +3,8 @@ main = "src/index.js"
 compatibility_date = "2026-05-05"
 
 [vars]
-GH_OWNER = "your-github-owner"
-GH_REPO = "m2s"
+GH_OWNER = "chlyhne"
+GH_REPO = "Onsdagsbanen"
 GH_WORKFLOW = "run-2026-email-pipeline.yml"
 GH_REF = "main"
-ALLOWED_SENDERS = "you@example.com"
+ALLOWED_SENDERS = "hummesse@gmail.com"
