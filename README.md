@@ -216,6 +216,25 @@ This repo includes an email-triggered automation path:
 - `M2S_GMAIL_APP_PASSWORD`
 - `M2S_RECIPIENTS` (newline-separated recipient addresses)
 
+Single source of truth for recipients:
+
+- Maintain recipients only in local `recipients.txt`.
+- Sync that file to GitHub secret `M2S_RECIPIENTS` with a cross-platform Python command:
+
+```bash
+python scripts/sync_recipients_secret.py
+```
+
+Notes:
+
+- Requires GitHub CLI (`gh`) installed and authenticated.
+- By default, the script infers repo from git origin.
+- If needed, pass explicit repo:
+
+```bash
+python scripts/sync_recipients_secret.py --repo chlyhne/Onsdagsbanen
+```
+
 ### Cloudflare Worker setup
 
 From `cloudflare-email-worker`:
