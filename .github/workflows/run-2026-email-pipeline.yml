@@ -16,6 +16,10 @@ on:
         required: false
         default: false
         type: boolean
+      recipient_override:
+        description: Optional recipient override list (comma/newline-separated emails)
+        required: false
+        type: string
 
 concurrency:
   group: m2s-results-email-pipeline
@@ -59,8 +63,15 @@ jobs:
       - name: Write recipients file
         env:
           M2S_RECIPIENTS: ${{ secrets.M2S_RECIPIENTS }}
+          RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
         run: |
-          printf '%s\n' "$M2S_RECIPIENTS" > recipients.txt
+          if [ -n "${RECIPIENT_OVERRIDE//[[:space:]]/}" ]; then
+            printf '%s\n' "$RECIPIENT_OVERRIDE" | tr ',;' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | awk 'NF' > recipients.txt
+            echo "Using recipient override from trigger payload."
+          else
+            printf '%s\n' "$M2S_RECIPIENTS" > recipients.txt
+            echo "Using recipients from M2S_RECIPIENTS secret."
+          fi
 
       - name: Log trigger metadata
         run: |
