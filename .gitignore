@@ -11,4 +11,6 @@ recipients.txt
 gmail_app_password.txt
 web/node_modules/
 web/dist/
+cloudflare-email-worker/node_modules/
+cloudflare-email-worker/.wrangler/
 Results*.pdf

@@ -163,21 +163,18 @@ Attachment naming:
 
 Default attachment behavior:
 
-- If `--attach` is not provided, the script sends one primary file in this order:
-  - `Results2026.pdf`
-  - `Results.pdf`
-  - `Results2025.pdf`
+- If `--attach` is not provided, the script sends `Results2026.pdf` from the current folder.
 
-Or provide a custom recipients file and attachments:
+Or provide a custom recipients file:
 
 ```bash
-python send_results_gmail.py --to-file recipients_crew.txt --attach "Results2025.pdf,Results2026.pdf" --subject "Onsdagsbanen results"
+python send_results_gmail.py --to-file recipients_crew.txt --subject "Onsdagsbanen results"
 ```
 
-You can also send one file only:
+You can also send one explicitly:
 
 ```bash
-python send_results_gmail.py --to-file recipients.txt --attach Results2025.pdf
+python send_results_gmail.py --to-file recipients.txt --attach Results2026.pdf
 ```
 
 Dry-run (validate inputs without sending):
@@ -191,3 +188,52 @@ Skip popup confirmation (password prompt still appears):
 ```bash
 python send_results_gmail.py --to-file recipients.txt --yes
 ```
+
+Automation credentials fallback:
+
+- `send_results_gmail.py` now also reads credentials from environment variables.
+- Sender address: `M2S_GMAIL_FROM`
+- App password: `M2S_GMAIL_APP_PASSWORD`
+
+## Cloudflare Email Trigger Automation
+
+This repo includes an email-triggered automation path:
+
+1. Cloudflare Email Worker receives incoming email.
+2. Worker verifies sender + trigger token in subject.
+3. Worker dispatches GitHub Actions workflow.
+4. Workflow runs `run_2026.py` and then `send_results_gmail.py --yes`.
+
+### Files
+
+- Worker code: `cloudflare-email-worker/src/index.js`
+- Worker config: `cloudflare-email-worker/wrangler.toml`
+- Workflow: `.github/workflows/run-2026-email-pipeline.yml`
+
+### GitHub secrets required
+
+- `M2S_GMAIL_FROM`
+- `M2S_GMAIL_APP_PASSWORD`
+- `M2S_RECIPIENTS` (newline-separated recipient addresses)
+
+### Cloudflare Worker setup
+
+From `cloudflare-email-worker`:
+
+```bash
+npm install
+npx wrangler login
+npx wrangler secret put GH_TOKEN
+npx wrangler secret put TRIGGER_TOKEN
+npm run deploy
+```
+
+Set worker variables (in `wrangler.toml` or dashboard):
+
+- `GH_OWNER`
+- `GH_REPO`
+- `GH_WORKFLOW` (default in repo: `run-2026-email-pipeline.yml`)
+- `GH_REF` (typically `main`)
+- `ALLOWED_SENDERS` (comma-separated)
+
+Then configure Cloudflare Email Routing so a dedicated address forwards to this Worker.

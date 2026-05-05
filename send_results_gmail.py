@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 import mimetypes
+import os
 import smtplib
 import socket
 import sys
@@ -232,6 +233,12 @@ def _load_credentials_from_file(credentials_file: str) -> tuple[str, str]:
     return sender, app_password
 
 
+def _load_credentials_from_env() -> tuple[str, str]:
+    sender = os.getenv("M2S_GMAIL_FROM", "").strip()
+    app_password = os.getenv("M2S_GMAIL_APP_PASSWORD", "").strip()
+    return sender, app_password
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Send result PDFs to recipients using a Gmail account.",
@@ -261,14 +268,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--from-email",
-        help="Gmail address to send from. Overrides sender in credentials file.",
+        help=(
+            "Gmail address to send from. Overrides sender from environment and credentials file. "
+            "Environment variable fallback: M2S_GMAIL_FROM."
+        ),
     )
     parser.add_argument(
         "--app-password-file",
         default="gmail_app_password.txt",
         help=(
             "Path to local credentials file. Supports sender email + app password. "
-            "Default: gmail_app_password.txt"
+            "Default: gmail_app_password.txt. Environment variable fallback: M2S_GMAIL_APP_PASSWORD"
         ),
     )
     parser.add_argument(
@@ -302,8 +312,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> int:
+    env_sender, env_password = _load_credentials_from_env()
     file_sender, file_password = _load_credentials_from_file(args.app_password_file)
-    sender = args.from_email.strip() if args.from_email else file_sender
+    if args.from_email:
+        sender = args.from_email.strip()
+    elif env_sender:
+        sender = env_sender
+    else:
+        sender = file_sender
 
     recipients = _load_recipients(args.to_file)
     attachments = _load_attachments(args.attach)
@@ -343,10 +359,10 @@ def run(args: argparse.Namespace) -> int:
             "No sender email found. Provide --from-email or include sender email in credentials file."
         )
 
-    app_password = file_password
+    app_password = env_password or file_password
     if not app_password:
         print(
-            "No app password found in credentials file. "
+            "No app password found in environment or credentials file. "
             "Please paste your Gmail app password in the prompt."
         )
         app_password = _prompt_app_password()

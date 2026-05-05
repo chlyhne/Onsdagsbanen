@@ -1,0 +1,10 @@
+name = "m2s-email-trigger"
+main = "src/index.js"
+compatibility_date = "2026-05-05"
+
+[vars]
+GH_OWNER = "your-github-owner"
+GH_REPO = "m2s"
+GH_WORKFLOW = "run-2026-email-pipeline.yml"
+GH_REF = "main"
+ALLOWED_SENDERS = "you@example.com"

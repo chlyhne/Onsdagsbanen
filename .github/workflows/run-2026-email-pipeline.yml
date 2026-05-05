@@ -1,0 +1,82 @@
+name: Run 2026 Results Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_from:
+        description: Sender address that triggered this run
+        required: false
+        type: string
+      trigger_subject:
+        description: Subject line that triggered this run
+        required: false
+        type: string
+      dry_run:
+        description: Validate and compose email without sending
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: m2s-results-email-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-and-send:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Validate required secrets
+        env:
+          M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
+          M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
+          M2S_RECIPIENTS: ${{ secrets.M2S_RECIPIENTS }}
+        run: |
+          missing=0
+          for name in M2S_GMAIL_FROM M2S_GMAIL_APP_PASSWORD M2S_RECIPIENTS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Write recipients file
+        env:
+          M2S_RECIPIENTS: ${{ secrets.M2S_RECIPIENTS }}
+        run: |
+          printf '%s\n' "$M2S_RECIPIENTS" > recipients.txt
+
+      - name: Log trigger metadata
+        run: |
+          echo "Triggered from: ${{ inputs.trigger_from }}"
+          echo "Trigger subject: ${{ inputs.trigger_subject }}"
+
+      - name: Build 2026 PDF
+        run: python run_2026.py
+
+      - name: Send or dry-run email
+        env:
+          M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
+          M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python send_results_gmail.py --yes --dry-run
+          else
+            python send_results_gmail.py --yes
+          fi
