@@ -37,14 +37,25 @@ function buildSearchQuery_() {
   return `is:unread subject:"${token}" -label:"${label}" newer_than:7d`;
 }
 
-function triggerWorker_(fromAddress, subject) {
+function extractEmailsFromBody_(plainBody) {
+  const matches = String(plainBody || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+  const normalized = matches
+    .map((value) => value.trim().replace(/[),;:]+$/g, "").toLowerCase())
+    .filter((value) => value.length > 0);
+  return [...new Set(normalized)];
+}
+
+function triggerWorker_(fromAddress, subject, recipientsOverride) {
   const payload = {
     from: fromAddress,
     subject: subject,
     dry_run: Boolean(M2S_CONFIG.dryRun),
+    recipients_override: recipientsOverride,
   };
 
-  console.log(`Triggering Worker for from=${fromAddress}, dry_run=${payload.dry_run}`);
+  console.log(
+    `Triggering Worker for from=${fromAddress}, dry_run=${payload.dry_run}, recipient_override_count=${recipientsOverride.length}`
+  );
 
   const response = UrlFetchApp.fetch(M2S_CONFIG.workerTriggerUrl, {
     method: "post",
@@ -85,6 +96,8 @@ function pollAndTrigger() {
     const message = messages[messages.length - 1];
     const fromAddress = extractEmailAddress(message.getFrom());
     const subject = String(message.getSubject() || "").trim();
+    const plainBody = String(message.getPlainBody() || "");
+    const recipientsOverride = extractEmailsFromBody_(plainBody);
 
     console.log(`Processing message from=${fromAddress}, subject=${subject}`);
 
@@ -95,7 +108,7 @@ function pollAndTrigger() {
       continue;
     }
 
-    triggerWorker_(fromAddress, subject);
+    triggerWorker_(fromAddress, subject, recipientsOverride);
     thread.addLabel(processed);
     thread.markRead();
     console.log("Triggered successfully and marked thread as processed.");

@@ -7,6 +7,44 @@ function parseAllowedSenders(raw) {
   );
 }
 
+const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+function extractEmailAddresses(rawText) {
+  const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
+  const normalized = matches
+    .map((value) => value.trim().replace(/[),;:]+$/g, "").toLowerCase())
+    .filter(Boolean);
+  return [...new Set(normalized)];
+}
+
+function normalizeRecipientsOverride(rawValue) {
+  if (Array.isArray(rawValue)) {
+    return extractEmailAddresses(rawValue.join("\n"));
+  }
+  return extractEmailAddresses(String(rawValue || ""));
+}
+
+async function readRawEmail(message) {
+  try {
+    return await new Response(message.raw).text();
+  } catch {
+    return "";
+  }
+}
+
+function extractEmailBodyText(rawEmail) {
+  const source = String(rawEmail || "");
+  if (!source) {
+    return "";
+  }
+
+  const separatorMatch = /\r?\n\r?\n/.exec(source);
+  if (!separatorMatch || separatorMatch.index === undefined) {
+    return source;
+  }
+  return source.slice(separatorMatch.index + separatorMatch[0].length);
+}
+
 function requireEnv(env, name) {
   const value = String(env[name] || "").trim();
   if (!value) {
@@ -34,7 +72,13 @@ function tokenMatches(request, env) {
   return false;
 }
 
-async function dispatchWorkflow({ env, from, subject, dryRun = false }) {
+async function dispatchWorkflow({
+  env,
+  from,
+  subject,
+  dryRun = false,
+  recipientsOverride = [],
+}) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
   const workflow = requireEnv(env, "GH_WORKFLOW");
@@ -58,6 +102,7 @@ async function dispatchWorkflow({ env, from, subject, dryRun = false }) {
           trigger_from: from,
           trigger_subject: subject.slice(0, 250),
           dry_run: dryRun ? "true" : "false",
+          recipient_override: recipientsOverride.join("\n"),
         },
       }),
     }
@@ -89,8 +134,20 @@ async function handleIncomingEmail(message, env) {
     return;
   }
 
-  await dispatchWorkflow({ env, from, subject, dryRun: false });
-  console.log(`Workflow dispatched for sender ${from}.`);
+  const rawEmail = await readRawEmail(message);
+  const bodyText = extractEmailBodyText(rawEmail);
+  const recipientsOverride = extractEmailAddresses(bodyText);
+
+  await dispatchWorkflow({
+    env,
+    from,
+    subject,
+    dryRun: false,
+    recipientsOverride,
+  });
+  console.log(
+    `Workflow dispatched for sender ${from}. recipient_override_count=${recipientsOverride.length}`
+  );
 }
 
 async function handleHttpTrigger(request, env) {
@@ -120,6 +177,12 @@ async function handleHttpTrigger(request, env) {
   const from = String(payload.from || "").trim().toLowerCase();
   const subject = String(payload.subject || "").trim();
   const dryRun = Boolean(payload.dry_run);
+  const bodyText = String(payload.body_text || payload.body || "").trim();
+  const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
+  const recipientsOverride =
+    recipientsOverrideFromPayload.length > 0
+      ? recipientsOverrideFromPayload
+      : extractEmailAddresses(bodyText);
   const allowedSenders = parseAllowedSenders(env.ALLOWED_SENDERS);
 
   if (!from || !allowedSenders.has(from)) {
@@ -130,7 +193,7 @@ async function handleHttpTrigger(request, env) {
     return new Response("Missing subject", { status: 400 });
   }
 
-  await dispatchWorkflow({ env, from, subject, dryRun });
+  await dispatchWorkflow({ env, from, subject, dryRun, recipientsOverride });
   return new Response("Triggered", { status: 202 });
 }
 
