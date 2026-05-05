@@ -211,8 +211,12 @@ export default {
     try {
       return await handleHttpTrigger(request, env);
     } catch (error) {
-      console.error(`HTTP trigger failed: ${error.message}`);
-      return new Response("Internal Error", { status: 500 });
+      const details =
+        error && typeof error.message === "string"
+          ? error.message
+          : String(error);
+      console.error(`HTTP trigger failed: ${details}`);
+      return new Response(`Internal Error: ${details}`, { status: 500 });
     }
   },
 
