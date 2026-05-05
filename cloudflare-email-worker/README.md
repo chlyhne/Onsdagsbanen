@@ -70,6 +70,28 @@ curl -X POST "https://m2s-email-trigger.hummesse.workers.dev/trigger" \
 	-d '{"from":"hummesse@gmail.com","subject":"M2S run request","dry_run":true}'
 ```
 
+## Trigger from phone email (no domain)
+
+Use Gmail Apps Script to bridge inbox messages to the HTTP trigger endpoint.
+
+Script file in this repo:
+
+- `gmail_phone_bridge.gs`
+
+High-level flow:
+
+1. You send an email from phone with subject containing `M2S RUN`.
+2. Apps Script polls inbox every minute.
+3. Matching message triggers `POST /trigger` with `x-trigger-token`.
+4. Worker dispatches the GitHub Actions workflow.
+
+One-time setup in Google Apps Script:
+
+1. Create a new script project at script.google.com.
+2. Paste content from `gmail_phone_bridge.gs`.
+3. Update `triggerToken` and any sender/subject settings.
+4. Run `installMinuteTrigger()` once and grant permissions.
+
 ## Email routing (domain required)
 
 In Cloudflare Email Routing, set your destination to this Worker.

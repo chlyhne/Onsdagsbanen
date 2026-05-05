@@ -246,3 +246,15 @@ No custom domain option:
   - Include header `x-trigger-token: <TRIGGER_TOKEN>`
   - Include JSON body with allowed sender and subject:
     - `{"from":"hummesse@gmail.com","subject":"M2S run request"}`
+
+Phone email trigger without domain (recommended):
+
+1. Use Google Apps Script as a bridge from Gmail to the Worker HTTP endpoint.
+2. Script file in this repo: `cloudflare-email-worker/gmail_phone_bridge.gs`
+3. Configure in the script:
+   - `triggerToken`
+   - `allowedSenders`
+   - `requiredSubjectToken` (example: `M2S RUN`)
+4. Install the time trigger by running `installMinuteTrigger()` once.
+5. From phone, send an email to your Gmail inbox with subject containing `M2S RUN`.
+6. The script polls inbox, calls Worker `/trigger`, and the GitHub workflow runs.
