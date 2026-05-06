@@ -3,6 +3,7 @@ const HUMMESSE_SENDER = "hummesse@gmail.com";
 const RESULTS_SUBJECT = "resultater";
 const APPEND_SUBJECT = "append";
 const DELETE_SUBJECT = "delete";
+const UNSUBSCRIBE_SUBJECT = "afmeld resultater";
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -60,6 +61,10 @@ function isExactDeleteSubject(subject) {
   return String(subject || "").trim().toLowerCase() === DELETE_SUBJECT;
 }
 
+function isExactUnsubscribeSubject(subject) {
+  return String(subject || "").trim().toLowerCase() === UNSUBSCRIBE_SUBJECT;
+}
+
 function tokenMatches(request, env) {
   const expected = requireEnv(env, "TRIGGER_TOKEN");
   const headerToken = String(request.headers.get("x-trigger-token") || "").trim();
@@ -88,6 +93,8 @@ async function dispatchWorkflow({
   persistRecipients = false,
   appendOnly = false,
   deleteMode = false,
+  sendUnsubscribeConfirmation = false,
+  unsubscribeRecipient = "",
 }) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
@@ -116,6 +123,8 @@ async function dispatchWorkflow({
           persist_recipients: persistRecipients ? "true" : "false",
           append_only: appendOnly ? "true" : "false",
           delete_mode: deleteMode ? "true" : "false",
+          send_unsubscribe_confirmation: sendUnsubscribeConfirmation ? "true" : "false",
+          unsubscribe_recipient: String(unsubscribeRecipient || "").trim().toLowerCase(),
         },
       }),
     }
@@ -141,8 +150,9 @@ async function handleIncomingEmail(message, env) {
   const isResultater = isExactResultaterSubject(subject);
   const isAppend = isExactAppendSubject(subject);
   const isDelete = isExactDeleteSubject(subject);
-  if (!isResultater && !isAppend && !isDelete) {
-    console.log("Ignoring email because subject was not exactly 'resultater', 'append', or 'delete'.");
+  const isUnsubscribe = isExactUnsubscribeSubject(subject);
+  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe) {
+    console.log("Ignoring email because subject was not exactly 'resultater', 'append', 'delete', or 'afmeld resultater'.");
     return;
   }
 
@@ -151,11 +161,25 @@ async function handleIncomingEmail(message, env) {
     return;
   }
 
+  if (isUnsubscribe && from === HUMMESSE_SENDER) {
+    console.log("Ignoring afmeld resultater for hummesse@gmail.com.");
+    return;
+  }
+
   let recipientsOverride = [];
   let persistRecipients = false;
   let appendOnly = false;
   let deleteMode = false;
-  if (from === HUMMESSE_SENDER) {
+  let sendUnsubscribeConfirmation = false;
+  let unsubscribeRecipient = "";
+  if (isUnsubscribe) {
+    recipientsOverride = [from];
+    persistRecipients = true;
+    appendOnly = true;
+    deleteMode = true;
+    sendUnsubscribeConfirmation = true;
+    unsubscribeRecipient = from;
+  } else if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
     recipientsOverride = extractEmailAddresses(bodyText);
@@ -181,10 +205,14 @@ async function handleIncomingEmail(message, env) {
     persistRecipients,
     appendOnly,
     deleteMode,
+    sendUnsubscribeConfirmation,
+    unsubscribeRecipient,
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
-      deleteMode
+      isUnsubscribe
+        ? "unsubscribe"
+        : deleteMode
         ? "delete-only"
         : appendOnly
         ? "append-only"
@@ -226,25 +254,34 @@ async function handleHttpTrigger(request, env) {
   const isResultater = isExactResultaterSubject(subject);
   const isAppend = isExactAppendSubject(subject);
   const isDelete = isExactDeleteSubject(subject);
+  const isUnsubscribe = isExactUnsubscribeSubject(subject);
 
-  if (!isResultater && !isAppend && !isDelete) {
-    return new Response("Subject must be exactly 'resultater', 'append', or 'delete'", { status: 400 });
+  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe) {
+    return new Response("Subject must be exactly 'resultater', 'append', 'delete', or 'afmeld resultater'", { status: 400 });
   }
 
   if ((isAppend || isDelete) && from !== HUMMESSE_SENDER) {
     return new Response("Only hummesse@gmail.com may use subject 'append' or 'delete'", { status: 403 });
   }
 
+  if (isUnsubscribe && from === HUMMESSE_SENDER) {
+    return new Response("hummesse@gmail.com cannot use subject 'afmeld resultater'", { status: 403 });
+  }
+
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
-  const recipientsOverride =
+  const recipientsOverride = isUnsubscribe
+    ? [from]
+    :
     from === HUMMESSE_SENDER
       ? recipientsOverrideFromPayload.length > 0
         ? recipientsOverrideFromPayload
         : extractEmailAddresses(bodyText)
       : [from];
   const persistRecipients = recipientsOverride.length > 0;
-  const appendOnly = isAppend || isDelete;
-  const deleteMode = isDelete;
+  const appendOnly = isAppend || isDelete || isUnsubscribe;
+  const deleteMode = isDelete || isUnsubscribe;
+  const sendUnsubscribeConfirmation = isUnsubscribe;
+  const unsubscribeRecipient = isUnsubscribe ? from : "";
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -267,6 +304,8 @@ async function handleHttpTrigger(request, env) {
     persistRecipients,
     appendOnly,
     deleteMode,
+    sendUnsubscribeConfirmation,
+    unsubscribeRecipient,
   });
   return new Response("Triggered", { status: 202 });
 }

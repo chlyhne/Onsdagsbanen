@@ -8,6 +8,7 @@ const M2S_CONFIG = {
   resultaterSubjectToken: "resultater",
   appendSubjectToken: "append",
   deleteSubjectToken: "delete",
+  unsubscribeSubjectToken: "afmeld resultater",
   // Allow every sender to request result emails (subject=resultater).
   allowAnySenderForResultater: true,
   // Optional sender allow-list when allowAnySenderForResultater is false.
@@ -16,6 +17,8 @@ const M2S_CONFIG = {
   appendSender: "hummesse@gmail.com",
   // Only this sender may use delete mode.
   deleteSender: "hummesse@gmail.com",
+  // Non-hummesse senders can unsubscribe themselves with subject 'afmeld resultater'.
+  unsubscribeDisallowedSender: "hummesse@gmail.com",
   // Gmail label used as automation folder and to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
   // Archive processed automation threads so Inbox stays clean.
@@ -62,6 +65,9 @@ function getModeFromSubject_(subject) {
   if (normalized === normalizeSubject_(M2S_CONFIG.deleteSubjectToken)) {
     return "delete";
   }
+  if (normalized === normalizeSubject_(M2S_CONFIG.unsubscribeSubjectToken)) {
+    return "unsubscribe";
+  }
   return "";
 }
 
@@ -71,6 +77,9 @@ function isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders) {
   }
   if (mode === "delete") {
     return fromAddress === normalizeSubject_(M2S_CONFIG.deleteSender);
+  }
+  if (mode === "unsubscribe") {
+    return fromAddress !== normalizeSubject_(M2S_CONFIG.unsubscribeDisallowedSender);
   }
   if (mode === "resultater") {
     if (Boolean(M2S_CONFIG.allowAnySenderForResultater)) {
@@ -86,6 +95,7 @@ function collectCandidateThreads_() {
     buildSearchQueryForToken_(M2S_CONFIG.resultaterSubjectToken),
     buildSearchQueryForToken_(M2S_CONFIG.appendSubjectToken),
     buildSearchQueryForToken_(M2S_CONFIG.deleteSubjectToken),
+    buildSearchQueryForToken_(M2S_CONFIG.unsubscribeSubjectToken),
   ];
 
   const byId = new Map();
@@ -170,7 +180,8 @@ function pollAndTrigger() {
     const subject = String(message.getSubject() || "").trim();
     const mode = getModeFromSubject_(subject);
     const plainBody = String(message.getPlainBody() || "");
-    const recipientsOverride = extractEmailsFromBody_(plainBody);
+    const recipientsOverride =
+      mode === "unsubscribe" ? [fromAddress] : extractEmailsFromBody_(plainBody);
 
     console.log(
       `Processing message from=${fromAddress}, subject=${subject}, mode=${mode || "ignored"}`
@@ -178,7 +189,7 @@ function pollAndTrigger() {
 
     if (!mode) {
       console.log(
-        `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}', '${M2S_CONFIG.appendSubjectToken}', or '${M2S_CONFIG.deleteSubjectToken}'. Marking as processed.`
+        `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}', '${M2S_CONFIG.appendSubjectToken}', '${M2S_CONFIG.deleteSubjectToken}', or '${M2S_CONFIG.unsubscribeSubjectToken}'. Marking as processed.`
       );
       markThreadProcessed_(thread, processed);
       continue;

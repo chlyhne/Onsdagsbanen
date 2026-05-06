@@ -35,6 +35,15 @@ on:
         required: false
         default: false
         type: boolean
+      send_unsubscribe_confirmation:
+        description: Send a confirmation email for afmeld resultater unsubscribe requests
+        required: false
+        default: false
+        type: boolean
+      unsubscribe_recipient:
+        description: Recipient email for unsubscribe confirmation
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -304,9 +313,11 @@ jobs:
           if delete_mode:
             remove_set = set(override_emails)
             merged_registry = [email for email in registry_emails if email not in remove_set]
+            removed_count = len(registry_emails) - len(merged_registry)
           else:
             base_registry = registry_emails
             merged_registry = dedupe(base_registry + override_emails)
+            removed_count = 0
 
           persist_changed = merged_registry != registry_emails
           if persist_changed:
@@ -321,9 +332,11 @@ jobs:
           if github_output:
             with open(github_output, "a", encoding="utf-8") as fh:
               fh.write(f"persist_changed={'true' if persist_changed else 'false'}\n")
+              fh.write(f"removed_count={removed_count}\n")
           PY
 
       - name: Commit persisted recipients registry
+        id: commit_registry
         if: steps.persist_registry.outputs.persist_changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
@@ -331,3 +344,58 @@ jobs:
           git add recipients_repo.enc
           git commit -m "chore: update recipients registry from email trigger"
           git push
+
+      - name: Send unsubscribe confirmation
+        if: ${{ inputs.send_unsubscribe_confirmation == 'true' && inputs.unsubscribe_recipient != '' && steps.persist_registry.outcome == 'success' && (steps.persist_registry.outputs.persist_changed != 'true' || steps.commit_registry.outcome == 'success') }}
+        env:
+          M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
+          M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
+          UNSUBSCRIBE_RECIPIENT: ${{ inputs.unsubscribe_recipient }}
+          REMOVED_COUNT: ${{ steps.persist_registry.outputs.removed_count }}
+        run: |
+          python - <<'PY'
+          import os
+          import smtplib
+          from email.message import EmailMessage
+
+          from_email = os.getenv("M2S_GMAIL_FROM", "").strip()
+          app_password = os.getenv("M2S_GMAIL_APP_PASSWORD", "").strip()
+          recipient = os.getenv("UNSUBSCRIBE_RECIPIENT", "").strip().lower()
+          removed_count_raw = os.getenv("REMOVED_COUNT", "0").strip()
+
+          if not from_email or not app_password:
+            raise RuntimeError("Missing Gmail credentials for unsubscribe confirmation.")
+          if not recipient:
+            raise RuntimeError("Missing unsubscribe recipient.")
+
+          try:
+            removed_count = int(removed_count_raw)
+          except ValueError:
+            removed_count = 0
+
+          if removed_count > 0:
+            body = (
+              "Din email er nu afmeldt resultatlisten.\n\n"
+              "Du vil ikke modtage flere resultatmails, medmindre du tilmelder dig igen."
+            )
+          else:
+            body = (
+              "Din email var allerede afmeldt resultatlisten.\n\n"
+              "Du vil ikke modtage resultatmails."
+            )
+
+          message = EmailMessage()
+          message["From"] = from_email
+          message["To"] = recipient
+          message["Subject"] = "Afmelding bekræftet"
+          message.set_content(body)
+
+          with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(from_email, app_password)
+            smtp.send_message(message, to_addrs=[recipient])
+
+          print("Unsubscribe confirmation email sent.")
+          PY

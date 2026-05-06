@@ -236,6 +236,11 @@ Email trigger subjects:
   - Only accepted from `hummesse@gmail.com`.
   - Extracts emails from message body and removes those addresses from the encrypted recipient registry.
   - Does not build PDFs and does not send result emails.
+- `afmeld resultater`: unsubscribe mode.
+  - Accepted for non-`hummesse@gmail.com` senders.
+  - Removes the sender email from the encrypted recipient registry.
+  - Does not build PDFs and does not send result emails.
+  - Sends a confirmation email that the sender is no longer on the list.
 
 ### Cloudflare Worker setup
 
