@@ -205,11 +205,11 @@ jobs:
           echo "Trigger subject: ${{ inputs.trigger_subject }}"
 
       - name: Build 2026 PDF
-        if: ${{ inputs.append_only != 'true' }}
+        if: ${{ inputs.append_only != true && inputs.append_only != 'true' }}
         run: python run_2026.py
 
       - name: Send or dry-run email
-        if: ${{ inputs.append_only != 'true' }}
+        if: ${{ inputs.append_only != true && inputs.append_only != 'true' }}
         env:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
@@ -346,7 +346,7 @@ jobs:
           git push
 
       - name: Send unsubscribe confirmation
-        if: ${{ inputs.send_unsubscribe_confirmation == 'true' && inputs.unsubscribe_recipient != '' && steps.persist_registry.outcome == 'success' && (steps.persist_registry.outputs.persist_changed != 'true' || steps.commit_registry.outcome == 'success') }}
+        if: ${{ (inputs.send_unsubscribe_confirmation == true || inputs.send_unsubscribe_confirmation == 'true') && inputs.unsubscribe_recipient != '' && steps.persist_registry.outcome == 'success' && (steps.persist_registry.outputs.persist_changed != 'true' || steps.commit_registry.outcome == 'success') }}
         env:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
