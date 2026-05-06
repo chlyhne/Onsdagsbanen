@@ -4,16 +4,19 @@
 const M2S_CONFIG = {
   workerTriggerUrl: "https://m2s-email-trigger.hummesse.workers.dev/trigger",
   triggerToken: "REPLACE_WITH_TRIGGER_TOKEN",
-  // Allow every sender to request results with the subject token below.
-  allowAnySender: true,
-  // Optional sender allow-list when allowAnySender is false.
-  allowedSenders: ["hummesse@gmail.com"],
-  // Incoming subject must be exactly this text (case-insensitive).
-  requiredSubjectToken: "resultater",
+  // Subject tokens accepted by the worker.
+  resultaterSubjectToken: "resultater",
+  appendSubjectToken: "append",
+  // Allow every sender to request result emails (subject=resultater).
+  allowAnySenderForResultater: true,
+  // Optional sender allow-list when allowAnySenderForResultater is false.
+  allowedSendersForResultater: ["hummesse@gmail.com"],
+  // Only this sender may use append mode.
+  appendSender: "hummesse@gmail.com",
   // Gmail label used to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
-  // Optional: set true while validating setup.
-  dryRun: true,
+  // Set true to avoid sending result emails for resultater mode while testing.
+  dryRun: false,
 };
 
 function extractEmailAddress(rawFrom) {
@@ -33,14 +36,57 @@ function getOrCreateLabel_(labelName) {
   return GmailApp.createLabel(labelName);
 }
 
-function buildSearchQuery_() {
-  const token = M2S_CONFIG.requiredSubjectToken.replace(/"/g, "\\\"");
+function buildSearchQueryForToken_(subjectToken) {
+  const token = String(subjectToken || "").replace(/"/g, "\\\"");
   const label = M2S_CONFIG.processedLabel.replace(/"/g, "\\\"");
   return `is:unread subject:"${token}" -label:"${label}" newer_than:7d`;
 }
 
-function isExactRequiredSubject_(subject) {
-  return String(subject || "").trim().toLowerCase() === String(M2S_CONFIG.requiredSubjectToken).trim().toLowerCase();
+function normalizeSubject_(subject) {
+  return String(subject || "").trim().toLowerCase();
+}
+
+function getModeFromSubject_(subject) {
+  const normalized = normalizeSubject_(subject);
+  if (normalized === normalizeSubject_(M2S_CONFIG.resultaterSubjectToken)) {
+    return "resultater";
+  }
+  if (normalized === normalizeSubject_(M2S_CONFIG.appendSubjectToken)) {
+    return "append";
+  }
+  return "";
+}
+
+function isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders) {
+  if (mode === "append") {
+    return fromAddress === normalizeSubject_(M2S_CONFIG.appendSender);
+  }
+  if (mode === "resultater") {
+    if (Boolean(M2S_CONFIG.allowAnySenderForResultater)) {
+      return true;
+    }
+    return allowedResultaterSenders.has(fromAddress);
+  }
+  return false;
+}
+
+function collectCandidateThreads_() {
+  const queries = [
+    buildSearchQueryForToken_(M2S_CONFIG.resultaterSubjectToken),
+    buildSearchQueryForToken_(M2S_CONFIG.appendSubjectToken),
+  ];
+
+  const byId = new Map();
+  for (const query of queries) {
+    const threads = GmailApp.search(query, 0, 20);
+    console.log(`Search query=${query}`);
+    console.log(`Threads found for query=${threads.length}`);
+    for (const thread of threads) {
+      byId.set(thread.getId(), thread);
+    }
+  }
+
+  return [...byId.values()];
 }
 
 function extractEmailsFromBody_(plainBody) {
@@ -85,13 +131,13 @@ function pollAndTrigger() {
     throw new Error("Set M2S_CONFIG.triggerToken before running pollAndTrigger.");
   }
 
-  const allowed = new Set(M2S_CONFIG.allowedSenders.map((x) => String(x).toLowerCase()));
+  const allowedResultaterSenders = new Set(
+    M2S_CONFIG.allowedSendersForResultater.map((x) => String(x).toLowerCase())
+  );
   const processed = getOrCreateLabel_(M2S_CONFIG.processedLabel);
-  const query = buildSearchQuery_();
-  const threads = GmailApp.search(query, 0, 20);
+  const threads = collectCandidateThreads_();
 
-  console.log(`Search query=${query}`);
-  console.log(`Threads found=${threads.length}`);
+  console.log(`Unique candidate threads=${threads.length}`);
   if (threads.length === 0) {
     console.log("No matching unread messages found.");
     return;
@@ -102,20 +148,32 @@ function pollAndTrigger() {
     const message = messages[messages.length - 1];
     const fromAddress = extractEmailAddress(message.getFrom());
     const subject = String(message.getSubject() || "").trim();
+    const mode = getModeFromSubject_(subject);
     const plainBody = String(message.getPlainBody() || "");
     const recipientsOverride = extractEmailsFromBody_(plainBody);
 
-    console.log(`Processing message from=${fromAddress}, subject=${subject}`);
+    console.log(
+      `Processing message from=${fromAddress}, subject=${subject}, mode=${mode || "ignored"}`
+    );
 
-    if (!isExactRequiredSubject_(subject)) {
-      console.log(`Subject not exact match. Expected exactly '${M2S_CONFIG.requiredSubjectToken}'. Marking as processed.`);
+    if (!mode) {
+      console.log(
+        `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}' or '${M2S_CONFIG.appendSubjectToken}'. Marking as processed.`
+      );
       thread.addLabel(processed);
       thread.markRead();
       continue;
     }
 
-    if (!Boolean(M2S_CONFIG.allowAnySender) && !allowed.has(fromAddress)) {
-      console.log(`Sender not allowed: ${fromAddress}. Marking as processed.`);
+    if (!isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders)) {
+      console.log(`Sender not allowed for mode=${mode}: ${fromAddress}. Marking as processed.`);
+      thread.addLabel(processed);
+      thread.markRead();
+      continue;
+    }
+
+    if (mode === "append" && recipientsOverride.length === 0) {
+      console.log("Append mode requires at least one email in body. Marking as processed.");
       thread.addLabel(processed);
       thread.markRead();
       continue;
