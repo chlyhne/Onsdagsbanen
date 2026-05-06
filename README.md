@@ -214,14 +214,16 @@ This repo includes an email-triggered automation path:
 
 - `M2S_GMAIL_FROM`
 - `M2S_GMAIL_APP_PASSWORD`
+- `M2S_RECIPIENTS_KEY` (Fernet key used to decrypt/encrypt recipient registry)
 
 Recipient source of truth:
 
-- Main registry file: `recipients_repo.txt` (committed, visible in the repo).
+- Main registry file: `recipients_repo.enc` (encrypted and committed to the repo).
 - Workflow runtime file: `recipients.txt` (generated during Actions runs).
-- If sender is `hummesse@gmail.com` and body emails are provided, those addresses are used for that run, then merged into `recipients_repo.txt` at the end of the workflow (deduped).
-- For other senders, behavior stays sender-only for that run, and that sender address is merged into `recipients_repo.txt` at the end of the workflow (deduped).
-- If `recipients_repo.txt` is empty and no body override is provided, the run fails fast.
+- Registry data is decrypted only inside the GitHub Actions job using `M2S_RECIPIENTS_KEY`, then re-encrypted before commit.
+- If sender is `hummesse@gmail.com` and body emails are provided, those addresses are used for that run, then merged into the encrypted registry at the end of the workflow (deduped).
+- For other senders, behavior stays sender-only for that run, and that sender address is merged into the encrypted registry at the end of the workflow (deduped).
+- If `recipients_repo.enc` is empty/missing and no body override is provided, the run fails fast.
 
 ### Cloudflare Worker setup
 
