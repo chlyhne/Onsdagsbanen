@@ -2,6 +2,7 @@ const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const HUMMESSE_SENDER = "hummesse@gmail.com";
 const RESULTS_SUBJECT = "resultater";
 const APPEND_SUBJECT = "append";
+const DELETE_SUBJECT = "delete";
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -55,6 +56,10 @@ function isExactAppendSubject(subject) {
   return String(subject || "").trim().toLowerCase() === APPEND_SUBJECT;
 }
 
+function isExactDeleteSubject(subject) {
+  return String(subject || "").trim().toLowerCase() === DELETE_SUBJECT;
+}
+
 function tokenMatches(request, env) {
   const expected = requireEnv(env, "TRIGGER_TOKEN");
   const headerToken = String(request.headers.get("x-trigger-token") || "").trim();
@@ -82,6 +87,7 @@ async function dispatchWorkflow({
   recipientsOverride = [],
   persistRecipients = false,
   appendOnly = false,
+  deleteMode = false,
 }) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
@@ -109,6 +115,7 @@ async function dispatchWorkflow({
           recipient_override: recipientsOverride.join("\n"),
           persist_recipients: persistRecipients ? "true" : "false",
           append_only: appendOnly ? "true" : "false",
+          delete_mode: deleteMode ? "true" : "false",
         },
       }),
     }
@@ -133,28 +140,31 @@ async function handleIncomingEmail(message, env) {
 
   const isResultater = isExactResultaterSubject(subject);
   const isAppend = isExactAppendSubject(subject);
-  if (!isResultater && !isAppend) {
-    console.log("Ignoring email because subject was not exactly 'resultater' or 'append'.");
+  const isDelete = isExactDeleteSubject(subject);
+  if (!isResultater && !isAppend && !isDelete) {
+    console.log("Ignoring email because subject was not exactly 'resultater', 'append', or 'delete'.");
     return;
   }
 
-  if (isAppend && from !== HUMMESSE_SENDER) {
-    console.log("Ignoring append email because sender was not hummesse@gmail.com.");
+  if ((isAppend || isDelete) && from !== HUMMESSE_SENDER) {
+    console.log("Ignoring append/delete email because sender was not hummesse@gmail.com.");
     return;
   }
 
   let recipientsOverride = [];
   let persistRecipients = false;
   let appendOnly = false;
+  let deleteMode = false;
   if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
     recipientsOverride = extractEmailAddresses(bodyText);
     persistRecipients = recipientsOverride.length > 0;
-    appendOnly = isAppend;
+    appendOnly = isAppend || isDelete;
+    deleteMode = isDelete;
 
-    if (isAppend && recipientsOverride.length === 0) {
-      console.log("Ignoring append email from hummesse because no email addresses were found in body.");
+    if ((isAppend || isDelete) && recipientsOverride.length === 0) {
+      console.log("Ignoring append/delete email from hummesse because no email addresses were found in body.");
       return;
     }
   } else {
@@ -170,10 +180,13 @@ async function handleIncomingEmail(message, env) {
     recipientsOverride,
     persistRecipients,
     appendOnly,
+    deleteMode,
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
-      appendOnly
+      deleteMode
+        ? "delete-only"
+        : appendOnly
         ? "append-only"
         : from === HUMMESSE_SENDER
         ? "hummesse-special"
@@ -212,13 +225,14 @@ async function handleHttpTrigger(request, env) {
   const bodyText = String(payload.body_text || payload.body || "").trim();
   const isResultater = isExactResultaterSubject(subject);
   const isAppend = isExactAppendSubject(subject);
+  const isDelete = isExactDeleteSubject(subject);
 
-  if (!isResultater && !isAppend) {
-    return new Response("Subject must be exactly 'resultater' or 'append'", { status: 400 });
+  if (!isResultater && !isAppend && !isDelete) {
+    return new Response("Subject must be exactly 'resultater', 'append', or 'delete'", { status: 400 });
   }
 
-  if (isAppend && from !== HUMMESSE_SENDER) {
-    return new Response("Only hummesse@gmail.com may use subject 'append'", { status: 403 });
+  if ((isAppend || isDelete) && from !== HUMMESSE_SENDER) {
+    return new Response("Only hummesse@gmail.com may use subject 'append' or 'delete'", { status: 403 });
   }
 
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
@@ -229,7 +243,8 @@ async function handleHttpTrigger(request, env) {
         : extractEmailAddresses(bodyText)
       : [from];
   const persistRecipients = recipientsOverride.length > 0;
-  const appendOnly = isAppend;
+  const appendOnly = isAppend || isDelete;
+  const deleteMode = isDelete;
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -239,8 +254,8 @@ async function handleHttpTrigger(request, env) {
     return new Response("Missing subject", { status: 400 });
   }
 
-  if (appendOnly && recipientsOverride.length === 0) {
-    return new Response("Append mode requires at least one email address in body or recipients_override", { status: 400 });
+  if ((isAppend || isDelete) && recipientsOverride.length === 0) {
+    return new Response("Append/delete mode requires at least one email address in body or recipients_override", { status: 400 });
   }
 
   await dispatchWorkflow({
@@ -251,6 +266,7 @@ async function handleHttpTrigger(request, env) {
     recipientsOverride,
     persistRecipients,
     appendOnly,
+    deleteMode,
   });
   return new Response("Triggered", { status: 202 });
 }

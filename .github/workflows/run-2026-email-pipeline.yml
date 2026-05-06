@@ -26,7 +26,12 @@ on:
         default: false
         type: boolean
       append_only:
-        description: Append recipients only without building/sending result emails
+        description: Recipient list update mode without building/sending result emails
+        required: false
+        default: false
+        type: boolean
+      delete_mode:
+        description: Remove recipient_override addresses from encrypted recipients registry
         required: false
         default: false
         type: boolean
@@ -212,6 +217,7 @@ jobs:
         env:
           RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
           RECIPIENTS_KEY: ${{ secrets.M2S_RECIPIENTS_KEY }}
+          DELETE_MODE: ${{ inputs.delete_mode }}
         run: |
           python - <<'PY'
           import os
@@ -286,6 +292,8 @@ jobs:
           if not recipients_key:
             raise RuntimeError("Missing RECIPIENTS_KEY from workflow secret.")
 
+          delete_mode = os.getenv("DELETE_MODE", "").strip().lower() == "true"
+
           override_emails = parse_emails(
             os.getenv("RECIPIENT_OVERRIDE", ""),
             "recipient_override",
@@ -293,14 +301,19 @@ jobs:
           )
           registry_emails = load_registry_emails(REGISTRY_PATH, recipients_key)
 
-          base_registry = registry_emails
-          merged_registry = dedupe(base_registry + override_emails)
+          if delete_mode:
+            remove_set = set(override_emails)
+            merged_registry = [email for email in registry_emails if email not in remove_set]
+          else:
+            base_registry = registry_emails
+            merged_registry = dedupe(base_registry + override_emails)
 
           persist_changed = merged_registry != registry_emails
           if persist_changed:
             encrypted_payload = encrypt_registry(merged_registry, recipients_key)
             REGISTRY_PATH.write_text(encrypted_payload, encoding="utf-8")
-            print(f"Persisted {len(merged_registry)} recipient(s) to recipients_repo.enc")
+            operation = "Deleted" if delete_mode else "Persisted"
+            print(f"{operation} to {len(merged_registry)} recipient(s) in recipients_repo.enc")
           else:
             print("No recipient registry changes needed.")
 

@@ -232,6 +232,10 @@ Email trigger subjects:
   - Only accepted from `hummesse@gmail.com`.
   - Extracts emails from message body and appends them to the encrypted recipient registry (deduped).
   - Does not build PDFs and does not send result emails.
+- `delete`: delete-only mode.
+  - Only accepted from `hummesse@gmail.com`.
+  - Extracts emails from message body and removes those addresses from the encrypted recipient registry.
+  - Does not build PDFs and does not send result emails.
 
 ### Cloudflare Worker setup
 

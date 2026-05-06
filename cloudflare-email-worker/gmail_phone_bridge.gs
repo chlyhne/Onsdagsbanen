@@ -7,12 +7,15 @@ const M2S_CONFIG = {
   // Subject tokens accepted by the worker.
   resultaterSubjectToken: "resultater",
   appendSubjectToken: "append",
+  deleteSubjectToken: "delete",
   // Allow every sender to request result emails (subject=resultater).
   allowAnySenderForResultater: true,
   // Optional sender allow-list when allowAnySenderForResultater is false.
   allowedSendersForResultater: ["hummesse@gmail.com"],
   // Only this sender may use append mode.
   appendSender: "hummesse@gmail.com",
+  // Only this sender may use delete mode.
+  deleteSender: "hummesse@gmail.com",
   // Gmail label used as automation folder and to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
   // Archive processed automation threads so Inbox stays clean.
@@ -56,12 +59,18 @@ function getModeFromSubject_(subject) {
   if (normalized === normalizeSubject_(M2S_CONFIG.appendSubjectToken)) {
     return "append";
   }
+  if (normalized === normalizeSubject_(M2S_CONFIG.deleteSubjectToken)) {
+    return "delete";
+  }
   return "";
 }
 
 function isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders) {
   if (mode === "append") {
     return fromAddress === normalizeSubject_(M2S_CONFIG.appendSender);
+  }
+  if (mode === "delete") {
+    return fromAddress === normalizeSubject_(M2S_CONFIG.deleteSender);
   }
   if (mode === "resultater") {
     if (Boolean(M2S_CONFIG.allowAnySenderForResultater)) {
@@ -76,6 +85,7 @@ function collectCandidateThreads_() {
   const queries = [
     buildSearchQueryForToken_(M2S_CONFIG.resultaterSubjectToken),
     buildSearchQueryForToken_(M2S_CONFIG.appendSubjectToken),
+    buildSearchQueryForToken_(M2S_CONFIG.deleteSubjectToken),
   ];
 
   const byId = new Map();
@@ -168,7 +178,7 @@ function pollAndTrigger() {
 
     if (!mode) {
       console.log(
-        `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}' or '${M2S_CONFIG.appendSubjectToken}'. Marking as processed.`
+        `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}', '${M2S_CONFIG.appendSubjectToken}', or '${M2S_CONFIG.deleteSubjectToken}'. Marking as processed.`
       );
       markThreadProcessed_(thread, processed);
       continue;
@@ -180,8 +190,8 @@ function pollAndTrigger() {
       continue;
     }
 
-    if (mode === "append" && recipientsOverride.length === 0) {
-      console.log("Append mode requires at least one email in body. Marking as processed.");
+    if ((mode === "append" || mode === "delete") && recipientsOverride.length === 0) {
+      console.log("Append/delete mode requires at least one email in body. Marking as processed.");
       markThreadProcessed_(thread, processed);
       continue;
     }
