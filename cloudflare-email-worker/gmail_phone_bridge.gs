@@ -13,8 +13,10 @@ const M2S_CONFIG = {
   allowedSendersForResultater: ["hummesse@gmail.com"],
   // Only this sender may use append mode.
   appendSender: "hummesse@gmail.com",
-  // Gmail label used to avoid reprocessing the same mail.
+  // Gmail label used as automation folder and to avoid reprocessing the same mail.
   processedLabel: "m2s-processed",
+  // Archive processed automation threads so Inbox stays clean.
+  archiveProcessedThreads: true,
   // Set true to avoid sending result emails for resultater mode while testing.
   dryRun: false,
 };
@@ -89,6 +91,14 @@ function collectCandidateThreads_() {
   return [...byId.values()];
 }
 
+function markThreadProcessed_(thread, processedLabel) {
+  thread.addLabel(processedLabel);
+  thread.markRead();
+  if (Boolean(M2S_CONFIG.archiveProcessedThreads)) {
+    thread.moveToArchive();
+  }
+}
+
 function extractEmailsFromBody_(plainBody) {
   const matches = String(plainBody || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
   const normalized = matches
@@ -160,28 +170,24 @@ function pollAndTrigger() {
       console.log(
         `Subject not exact match. Expected exactly '${M2S_CONFIG.resultaterSubjectToken}' or '${M2S_CONFIG.appendSubjectToken}'. Marking as processed.`
       );
-      thread.addLabel(processed);
-      thread.markRead();
+      markThreadProcessed_(thread, processed);
       continue;
     }
 
     if (!isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders)) {
       console.log(`Sender not allowed for mode=${mode}: ${fromAddress}. Marking as processed.`);
-      thread.addLabel(processed);
-      thread.markRead();
+      markThreadProcessed_(thread, processed);
       continue;
     }
 
     if (mode === "append" && recipientsOverride.length === 0) {
       console.log("Append mode requires at least one email in body. Marking as processed.");
-      thread.addLabel(processed);
-      thread.markRead();
+      markThreadProcessed_(thread, processed);
       continue;
     }
 
     triggerWorker_(fromAddress, subject, recipientsOverride);
-    thread.addLabel(processed);
-    thread.markRead();
+    markThreadProcessed_(thread, processed);
     console.log("Triggered successfully and marked thread as processed.");
   }
 }
