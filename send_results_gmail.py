@@ -272,6 +272,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Plain-text email body.",
     )
     parser.add_argument(
+        "--include-refresh-instruction",
+        action="store_true",
+        help=(
+            "Append a note that recipients can request a fresh result email by sending "
+            "subject 'resultater' to hummesse@gmail.com."
+        ),
+    )
+    parser.add_argument(
         "--from-email",
         help=(
             "Gmail address to send from. Overrides sender from environment and credentials file. "
@@ -374,11 +382,20 @@ def run(args: argparse.Namespace) -> int:
     if not app_password:
         raise ValueError("No Gmail app password found in file or entered in prompt.")
 
+    body_text = args.body
+    if args.include_refresh_instruction:
+        if body_text and not body_text.endswith("\n"):
+            body_text += "\n"
+        body_text += (
+            "\nHvis du ønsker en ny mail med de seneste resultater, "
+            "kan du sende en e-mail til hummesse@gmail.com med emnet \"resultater\".\n"
+        )
+
     message = _build_message(
         sender=sender,
         recipients=recipients,
         subject=args.subject,
-        body=args.body,
+        body=body_text,
         attachments=attachments,
     )
 

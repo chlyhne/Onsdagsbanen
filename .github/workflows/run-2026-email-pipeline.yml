@@ -214,11 +214,17 @@ jobs:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
         run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            python send_results_gmail.py --yes --dry-run
-          else
-            python send_results_gmail.py --yes
+          args=(--yes)
+
+          if [ "${{ inputs.trigger_from }}" = "hummesse@gmail.com" ]; then
+            args+=(--include-refresh-instruction)
           fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          python send_results_gmail.py "${args[@]}"
 
       - name: Persist recipients registry
         id: persist_registry
