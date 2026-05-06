@@ -75,6 +75,7 @@ async function dispatchWorkflow({
   subject,
   dryRun = false,
   recipientsOverride = [],
+  persistRecipients = false,
 }) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
@@ -100,6 +101,7 @@ async function dispatchWorkflow({
           trigger_subject: subject.slice(0, 250),
           dry_run: dryRun ? "true" : "false",
           recipient_override: recipientsOverride.join("\n"),
+          persist_recipients: persistRecipients ? "true" : "false",
         },
       }),
     }
@@ -128,12 +130,15 @@ async function handleIncomingEmail(message, env) {
   }
 
   let recipientsOverride = [];
+  let persistRecipients = false;
   if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
     recipientsOverride = extractEmailAddresses(bodyText);
+    persistRecipients = recipientsOverride.length > 0;
   } else {
     recipientsOverride = [from];
+    persistRecipients = true;
   }
 
   await dispatchWorkflow({
@@ -142,6 +147,7 @@ async function handleIncomingEmail(message, env) {
     subject,
     dryRun: false,
     recipientsOverride,
+    persistRecipients,
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
@@ -185,6 +191,7 @@ async function handleHttpTrigger(request, env) {
         ? recipientsOverrideFromPayload
         : extractEmailAddresses(bodyText)
       : [from];
+  const persistRecipients = recipientsOverride.length > 0;
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -198,7 +205,14 @@ async function handleHttpTrigger(request, env) {
     return new Response("Subject must be exactly 'resultater'", { status: 400 });
   }
 
-  await dispatchWorkflow({ env, from, subject, dryRun, recipientsOverride });
+  await dispatchWorkflow({
+    env,
+    from,
+    subject,
+    dryRun,
+    recipientsOverride,
+    persistRecipients,
+  });
   return new Response("Triggered", { status: 202 });
 }
 

@@ -20,6 +20,14 @@ on:
         description: Optional recipient override list (comma/newline-separated emails)
         required: false
         type: string
+      persist_recipients:
+        description: Persist recipient_override addresses to recipients_repo.txt
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
 
 concurrency:
   group: m2s-results-email-pipeline
@@ -47,10 +55,9 @@ jobs:
         env:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
-          M2S_RECIPIENTS: ${{ secrets.M2S_RECIPIENTS }}
         run: |
           missing=0
-          for name in M2S_GMAIL_FROM M2S_GMAIL_APP_PASSWORD M2S_RECIPIENTS; do
+          for name in M2S_GMAIL_FROM M2S_GMAIL_APP_PASSWORD; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: ${name}"
               missing=1
@@ -60,18 +67,94 @@ jobs:
             exit 1
           fi
 
-      - name: Write recipients file
+      - name: Prepare recipients file
+        id: prepare_recipients
         env:
-          M2S_RECIPIENTS: ${{ secrets.M2S_RECIPIENTS }}
           RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
+          PERSIST_RECIPIENTS: ${{ inputs.persist_recipients }}
         run: |
-          if [ -n "${RECIPIENT_OVERRIDE//[[:space:]]/}" ]; then
-            printf '%s\n' "$RECIPIENT_OVERRIDE" | tr ',;' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | awk 'NF' > recipients.txt
-            echo "Using recipient override from trigger payload."
-          else
-            printf '%s\n' "$M2S_RECIPIENTS" > recipients.txt
-            echo "Using recipients from M2S_RECIPIENTS secret."
-          fi
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+          REGISTRY_PATH = Path("recipients_repo.txt")
+          EFFECTIVE_PATH = Path("recipients.txt")
+
+          def dedupe(values):
+            seen = set()
+            ordered = []
+            for value in values:
+              lowered = value.lower()
+              if lowered in seen:
+                continue
+              seen.add(lowered)
+              ordered.append(lowered)
+            return ordered
+
+          def parse_emails(raw, label, *, allow_comments=False, separators=("\n",), strict=True):
+            text = str(raw or "")
+            for sep in separators:
+              text = text.replace(sep, "\n")
+            parsed = []
+            invalid = []
+            for raw_line in text.splitlines():
+              line = raw_line.strip()
+              if not line:
+                continue
+              if allow_comments and line.startswith("#"):
+                continue
+              if not EMAIL_RE.fullmatch(line):
+                invalid.append(line)
+                continue
+              parsed.append(line)
+            if strict and invalid:
+              raise RuntimeError(f"Invalid email(s) in {label}: {', '.join(invalid)}")
+            return dedupe(parsed)
+
+          override_raw = os.getenv("RECIPIENT_OVERRIDE", "")
+          persist_requested = os.getenv("PERSIST_RECIPIENTS", "").strip().lower() == "true"
+
+          registry_emails = []
+          if REGISTRY_PATH.exists():
+            registry_emails = parse_emails(
+              REGISTRY_PATH.read_text(encoding="utf-8"),
+              "recipients_repo.txt",
+              allow_comments=True,
+            )
+
+          override_emails = parse_emails(
+            override_raw,
+            "recipient_override",
+            separators=("\n", ",", ";"),
+          )
+
+          should_persist = persist_requested and len(override_emails) > 0
+
+          if override_emails:
+            effective_emails = override_emails
+            source_label = "recipient_override"
+          elif registry_emails:
+            effective_emails = registry_emails
+            source_label = "recipients_repo.txt"
+          else:
+            effective_emails = []
+            source_label = "none"
+
+          if not effective_emails:
+            raise RuntimeError(
+              "No recipients available. Populate recipients_repo.txt or provide recipient_override."
+            )
+
+          EFFECTIVE_PATH.write_text("\n".join(effective_emails) + "\n", encoding="utf-8")
+          print(f"Using recipients from {source_label} ({len(effective_emails)} address(es)).")
+
+          github_output = os.getenv("GITHUB_OUTPUT")
+          if github_output:
+            with open(github_output, "a", encoding="utf-8") as fh:
+              fh.write(f"should_persist={'true' if should_persist else 'false'}\n")
+          PY
 
       - name: Log trigger metadata
         run: |
@@ -91,3 +174,86 @@ jobs:
           else
             python send_results_gmail.py --yes
           fi
+
+      - name: Persist recipients registry
+        id: persist_registry
+        if: steps.prepare_recipients.outputs.should_persist == 'true'
+        env:
+          RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+          REGISTRY_PATH = Path("recipients_repo.txt")
+
+          def dedupe(values):
+            seen = set()
+            ordered = []
+            for value in values:
+              lowered = value.lower()
+              if lowered in seen:
+                continue
+              seen.add(lowered)
+              ordered.append(lowered)
+            return ordered
+
+          def parse_emails(raw, label, *, allow_comments=False, separators=("\n",), strict=True):
+            text = str(raw or "")
+            for sep in separators:
+              text = text.replace(sep, "\n")
+            parsed = []
+            invalid = []
+            for raw_line in text.splitlines():
+              line = raw_line.strip()
+              if not line:
+                continue
+              if allow_comments and line.startswith("#"):
+                continue
+              if not EMAIL_RE.fullmatch(line):
+                invalid.append(line)
+                continue
+              parsed.append(line)
+            if strict and invalid:
+              raise RuntimeError(f"Invalid email(s) in {label}: {', '.join(invalid)}")
+            return dedupe(parsed)
+
+          override_emails = parse_emails(
+            os.getenv("RECIPIENT_OVERRIDE", ""),
+            "recipient_override",
+            separators=("\n", ",", ";"),
+          )
+          registry_emails = []
+          if REGISTRY_PATH.exists():
+            registry_emails = parse_emails(
+              REGISTRY_PATH.read_text(encoding="utf-8"),
+              "recipients_repo.txt",
+              allow_comments=True,
+            )
+
+          base_registry = registry_emails
+          merged_registry = dedupe(base_registry + override_emails)
+
+          persist_changed = merged_registry != registry_emails
+          if persist_changed:
+            REGISTRY_PATH.write_text("\n".join(merged_registry) + "\n", encoding="utf-8")
+            print(f"Persisted {len(merged_registry)} recipient(s) to recipients_repo.txt")
+          else:
+            print("No recipient registry changes needed.")
+
+          github_output = os.getenv("GITHUB_OUTPUT")
+          if github_output:
+            with open(github_output, "a", encoding="utf-8") as fh:
+              fh.write(f"persist_changed={'true' if persist_changed else 'false'}\n")
+          PY
+
+      - name: Commit persisted recipients registry
+        if: steps.persist_registry.outputs.persist_changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recipients_repo.txt
+          git commit -m "chore: update recipients registry from email trigger"
+          git push
