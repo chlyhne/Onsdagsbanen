@@ -258,12 +258,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--subject",
-        default="Manage2Sail Results",
+        default="Onsdagsbanen resultater",
         help="Email subject.",
     )
     parser.add_argument(
         "--body",
-        default="Hej,\n\nHermed de nyeste kombinerede resultater fra onsdagsbanen.\n",
+        default=(
+            "Hej\n\n"
+            "Hermed de nyeste kombinerede resultater fra Onsdagsbanen.\n\n"
+            "Hvis du ikke længere ønsker at modtage resultater, kan du afmelde dig ved at sende en e-mail til "
+            "hummesse@gmail.com med emnet \"afmeld resultater\".\n"
+        ),
         help="Plain-text email body.",
     )
     parser.add_argument(
