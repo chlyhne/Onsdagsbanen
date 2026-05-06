@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      append_only:
+        description: Append recipients only without building/sending result emails
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -186,9 +191,11 @@ jobs:
           echo "Trigger subject: ${{ inputs.trigger_subject }}"
 
       - name: Build 2026 PDF
+        if: ${{ inputs.append_only != 'true' }}
         run: python run_2026.py
 
       - name: Send or dry-run email
+        if: ${{ inputs.append_only != 'true' }}
         env:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}

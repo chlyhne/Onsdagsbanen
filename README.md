@@ -225,6 +225,14 @@ Recipient source of truth:
 - For other senders, behavior stays sender-only for that run, and that sender address is merged into the encrypted registry at the end of the workflow (deduped).
 - If `recipients_repo.enc` is empty/missing and no body override is provided, the run fails fast.
 
+Email trigger subjects:
+
+- `resultater`: normal run (build + send results) using sender-specific recipient behavior.
+- `append`: append-only mode.
+  - Only accepted from `hummesse@gmail.com`.
+  - Extracts emails from message body and appends them to the encrypted recipient registry (deduped).
+  - Does not build PDFs and does not send result emails.
+
 ### Cloudflare Worker setup
 
 From `cloudflare-email-worker`:

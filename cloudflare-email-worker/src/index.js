@@ -1,6 +1,7 @@
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const HUMMESSE_SENDER = "hummesse@gmail.com";
-const REQUIRED_SUBJECT = "resultater";
+const RESULTS_SUBJECT = "resultater";
+const APPEND_SUBJECT = "append";
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -47,7 +48,11 @@ function requireEnv(env, name) {
 }
 
 function isExactResultaterSubject(subject) {
-  return String(subject || "").trim().toLowerCase() === REQUIRED_SUBJECT;
+  return String(subject || "").trim().toLowerCase() === RESULTS_SUBJECT;
+}
+
+function isExactAppendSubject(subject) {
+  return String(subject || "").trim().toLowerCase() === APPEND_SUBJECT;
 }
 
 function tokenMatches(request, env) {
@@ -76,6 +81,7 @@ async function dispatchWorkflow({
   dryRun = false,
   recipientsOverride = [],
   persistRecipients = false,
+  appendOnly = false,
 }) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
@@ -102,6 +108,7 @@ async function dispatchWorkflow({
           dry_run: dryRun ? "true" : "false",
           recipient_override: recipientsOverride.join("\n"),
           persist_recipients: persistRecipients ? "true" : "false",
+          append_only: appendOnly ? "true" : "false",
         },
       }),
     }
@@ -124,18 +131,32 @@ async function handleIncomingEmail(message, env) {
     return;
   }
 
-  if (!isExactResultaterSubject(subject)) {
-    console.log("Ignoring email because subject was not exactly 'resultater'.");
+  const isResultater = isExactResultaterSubject(subject);
+  const isAppend = isExactAppendSubject(subject);
+  if (!isResultater && !isAppend) {
+    console.log("Ignoring email because subject was not exactly 'resultater' or 'append'.");
+    return;
+  }
+
+  if (isAppend && from !== HUMMESSE_SENDER) {
+    console.log("Ignoring append email because sender was not hummesse@gmail.com.");
     return;
   }
 
   let recipientsOverride = [];
   let persistRecipients = false;
+  let appendOnly = false;
   if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
     recipientsOverride = extractEmailAddresses(bodyText);
     persistRecipients = recipientsOverride.length > 0;
+    appendOnly = isAppend;
+
+    if (isAppend && recipientsOverride.length === 0) {
+      console.log("Ignoring append email from hummesse because no email addresses were found in body.");
+      return;
+    }
   } else {
     recipientsOverride = [from];
     persistRecipients = true;
@@ -145,13 +166,18 @@ async function handleIncomingEmail(message, env) {
     env,
     from,
     subject,
-    dryRun: false,
+    dryRun: appendOnly,
     recipientsOverride,
     persistRecipients,
+    appendOnly,
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
-      from === HUMMESSE_SENDER ? "hummesse-special" : "sender-only"
+      appendOnly
+        ? "append-only"
+        : from === HUMMESSE_SENDER
+        ? "hummesse-special"
+        : "sender-only"
     } recipient_override_count=${recipientsOverride.length}`
   );
 }
@@ -184,6 +210,17 @@ async function handleHttpTrigger(request, env) {
   const subject = String(payload.subject || "").trim();
   const dryRun = Boolean(payload.dry_run);
   const bodyText = String(payload.body_text || payload.body || "").trim();
+  const isResultater = isExactResultaterSubject(subject);
+  const isAppend = isExactAppendSubject(subject);
+
+  if (!isResultater && !isAppend) {
+    return new Response("Subject must be exactly 'resultater' or 'append'", { status: 400 });
+  }
+
+  if (isAppend && from !== HUMMESSE_SENDER) {
+    return new Response("Only hummesse@gmail.com may use subject 'append'", { status: 403 });
+  }
+
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
   const recipientsOverride =
     from === HUMMESSE_SENDER
@@ -192,6 +229,7 @@ async function handleHttpTrigger(request, env) {
         : extractEmailAddresses(bodyText)
       : [from];
   const persistRecipients = recipientsOverride.length > 0;
+  const appendOnly = isAppend;
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -201,17 +239,18 @@ async function handleHttpTrigger(request, env) {
     return new Response("Missing subject", { status: 400 });
   }
 
-  if (!isExactResultaterSubject(subject)) {
-    return new Response("Subject must be exactly 'resultater'", { status: 400 });
+  if (appendOnly && recipientsOverride.length === 0) {
+    return new Response("Append mode requires at least one email address in body or recipients_override", { status: 400 });
   }
 
   await dispatchWorkflow({
     env,
     from,
     subject,
-    dryRun,
+    dryRun: appendOnly ? true : dryRun,
     recipientsOverride,
     persistRecipients,
+    appendOnly,
   });
   return new Response("Triggered", { status: 202 });
 }
