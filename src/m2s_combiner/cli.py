@@ -198,10 +198,9 @@ def _format_wind_category_da(wind_speed_type: object) -> str:
         return "ukendt"
 
     wind_map = {
-        1: "let vind",
-        2: "mellem vind",
-        3: "haard vind",
-        4: "meget haard vind",
+        0: "lav",
+        1: "mellem",
+        2: "hoej",
     }
     return wind_map.get(wind_speed_type, f"kategori {wind_speed_type}")
 
