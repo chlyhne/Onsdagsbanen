@@ -4,6 +4,7 @@ import colorsys
 from datetime import datetime
 from pathlib import Path
 import re
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from reportlab.lib import colors
@@ -19,6 +20,13 @@ from reportlab.platypus import SimpleDocTemplate
 from reportlab.platypus import Spacer
 from reportlab.platypus import Table
 from reportlab.platypus import TableStyle
+
+
+_DANISH_TZ = ZoneInfo("Europe/Copenhagen")
+
+
+def _danish_now() -> datetime:
+    return datetime.now(_DANISH_TZ)
 
 
 def _table_data(frame: pd.DataFrame) -> list[list[object]]:
@@ -228,7 +236,7 @@ def build_combined_pdf(
     table_font_size = float(styles["BodyText"].fontSize)
 
     story = []
-    generated_at = datetime.now().strftime("%d-%m-%Y %H:%M")
+    generated_at = _danish_now().strftime("%d-%m-%Y %H:%M")
     group_theme_map: dict[str, dict[str, object]] = {}
 
     for section in sections:

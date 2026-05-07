@@ -10,6 +10,14 @@ import socket
 import sys
 from email.message import EmailMessage
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+
+_DANISH_TZ = ZoneInfo("Europe/Copenhagen")
+
+
+def _danish_now() -> datetime:
+    return datetime.now(_DANISH_TZ)
 
 
 def _split_csv_values(values: list[str] | None) -> list[str]:
@@ -88,7 +96,7 @@ def _build_message(
     message["Subject"] = subject
     message.set_content(body)
 
-    date_text = datetime.now().strftime("%d-%m-%Y")
+    date_text = _danish_now().strftime("%d-%m-%Y")
 
     for index, path in enumerate(attachments):
         content_type, encoding = mimetypes.guess_type(path.name)
@@ -338,7 +346,7 @@ def run(args: argparse.Namespace) -> int:
     attachments = _load_attachments(args.attach)
 
     if args.dry_run:
-        date_text = datetime.now().strftime("%d-%m-%Y")
+        date_text = _danish_now().strftime("%d-%m-%Y")
         print("Dry run: email not sent.")
         print(f"From: {sender or '(not set)'}")
         print("To: undisclosed-recipients:;")
