@@ -3,6 +3,11 @@
 import pandas as pd
 
 
+LOW_POINT_RULE = "low-point"
+HIGH_POINT_RULE = "high-point"
+SUPPORTED_SCORING_RULES = {LOW_POINT_RULE, HIGH_POINT_RULE}
+
+
 def _format_seconds(total_seconds: float) -> str:
     seconds_int = int(round(total_seconds))
     hours, remainder = divmod(seconds_int, 3600)
@@ -10,8 +15,14 @@ def _format_seconds(total_seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{seconds:02d}"
 
 
-def combine_races(race_frames: list[pd.DataFrame]) -> pd.DataFrame:
+def combine_races(
+    race_frames: list[pd.DataFrame],
+    scoring_rule: str = LOW_POINT_RULE,
+) -> pd.DataFrame:
     """Combine per-race rows by matching race labels across all classes."""
+    if scoring_rule not in SUPPORTED_SCORING_RULES:
+        raise ValueError(f"Unsupported scoring rule: {scoring_rule}")
+
     if not race_frames:
         return pd.DataFrame(
             columns=[
@@ -93,23 +104,62 @@ def combine_races(race_frames: list[pd.DataFrame]) -> pd.DataFrame:
         grouped.loc[finish_idx, "race_rank"] = ranks.astype("Int64")
 
     grouped["race_points"] = pd.to_numeric(grouped["race_points"], errors="coerce")
-    grouped["points"] = pd.Series(pd.NA, index=grouped.index, dtype="Int64")
-    finisher_mask = grouped["beregnet_seconds"].notna() & grouped["race_rank"].notna()
-    grouped.loc[finisher_mask, "points"] = grouped.loc[finisher_mask, "race_rank"]
+    if scoring_rule == LOW_POINT_RULE:
+        grouped["points"] = pd.Series(pd.NA, index=grouped.index, dtype="Int64")
+        finisher_mask = grouped["beregnet_seconds"].notna() & grouped["race_rank"].notna()
+        grouped.loc[finisher_mask, "points"] = grouped.loc[finisher_mask, "race_rank"]
 
-    fallback_points_by_race = grouped.groupby("race")["competitor"].nunique().add(1).astype(int).to_dict()
-    status_points_mask = grouped["points"].isna() & grouped["race_points"].notna()
-    if status_points_mask.any():
-        status_points = grouped.loc[status_points_mask, "race_points"].round().astype(int)
-        fallback_for_status = grouped.loc[status_points_mask, "race"].map(fallback_points_by_race).astype(int)
-        grouped.loc[status_points_mask, "points"] = (
-            pd.concat([status_points, fallback_for_status], axis=1).max(axis=1).astype("Int64")
+        fallback_points_by_race = grouped.groupby("race")["competitor"].nunique().add(1).astype(int).to_dict()
+        status_points_mask = grouped["points"].isna() & grouped["race_points"].notna()
+        if status_points_mask.any():
+            status_points = grouped.loc[status_points_mask, "race_points"].round().astype(int)
+            fallback_for_status = grouped.loc[status_points_mask, "race"].map(fallback_points_by_race).astype(int)
+            grouped.loc[status_points_mask, "points"] = (
+                pd.concat([status_points, fallback_for_status], axis=1).max(axis=1).astype("Int64")
+            )
+
+        fallback_mask = grouped["points"].isna()
+        grouped.loc[fallback_mask, "points"] = (
+            grouped.loc[fallback_mask, "race"].map(fallback_points_by_race).astype("Int64")
         )
+    else:
+        # High-point rule:
+        # Non-participation (e.g. DNS/DNC) is 0 points.
+        # Participation is 1 point, plus one point per boat left behind for finishers.
+        non_participation_statuses = {"DNS", "DNC", "DSQ"}
+        status_series = grouped["race_status_code"].fillna("").astype(str).str.strip().str.upper()
+        non_participation_mask = status_series.isin(non_participation_statuses)
 
-    fallback_mask = grouped["points"].isna()
-    grouped.loc[fallback_mask, "points"] = (
-        grouped.loc[fallback_mask, "race"].map(fallback_points_by_race).astype("Int64")
-    )
+        grouped["points"] = pd.Series(0, index=grouped.index, dtype="Int64")
+        finisher_mask = (
+            grouped["beregnet_seconds"].notna()
+            & grouped["race_rank"].notna()
+            & (~non_participation_mask)
+        )
+        participating_mask = finisher_mask | (
+            (~non_participation_mask)
+            & (
+                grouped["race_rank_raw"].notna()
+                | grouped["race_points"].notna()
+                | status_series.ne("")
+            )
+        )
+        grouped.loc[participating_mask, "points"] = 1
+
+        race_participants_by_race = (
+            grouped.loc[participating_mask]
+            .groupby("race")["competitor"]
+            .nunique()
+            .astype(int)
+            .to_dict()
+        )
+        if finisher_mask.any() and race_participants_by_race:
+            finish_points = (
+                grouped.loc[finisher_mask, "race"].map(race_participants_by_race).fillna(0).astype(int)
+                + 1
+                - grouped.loc[finisher_mask, "race_rank"].astype(int)
+            )
+            grouped.loc[finisher_mask, "points"] = finish_points.astype("Int64")
 
     grouped["beregnet_time"] = grouped["beregnet_seconds"].map(
         lambda value: _format_seconds(value) if pd.notna(value) else ""
@@ -160,8 +210,12 @@ def combine_overall_from_races(
     max_race: int = 18,
     all_competitors: list[str] | None = None,
     discard_after: list[int] | None = None,
+    scoring_rule: str = LOW_POINT_RULE,
 ) -> pd.DataFrame:
     """Create fixed-size overall standings with R1..Rmax columns and integer totals."""
+    if scoring_rule not in SUPPORTED_SCORING_RULES:
+        raise ValueError(f"Unsupported scoring rule: {scoring_rule}")
+
     race_columns = [f"R{race_number}" for race_number in range(1, max_race + 1)]
 
     if combined_races.empty:
@@ -184,9 +238,7 @@ def combine_overall_from_races(
 
     working = combined_races[["race", "competitor", "points"]].copy()
     working["points"] = working["points"].round().astype(int)
-    dns_points_by_race = (
-        working.groupby("race")["competitor"].nunique().add(1).astype(int).to_dict()
-    )
+    participants_by_race = working.groupby("race")["competitor"].nunique().astype(int).to_dict()
 
     pivot = working.pivot_table(index="competitor", columns="race", values="points", aggfunc="min")
 
@@ -195,16 +247,22 @@ def combine_overall_from_races(
         pivot = pivot.reindex(competitor_index)
     roster_size = len(pivot.index)
 
-    dns_points_by_race = {
-        race_label: max(points, roster_size) + 1
-        for race_label, points in dns_points_by_race.items()
-    }
+    if scoring_rule == LOW_POINT_RULE:
+        missing_points_by_race = {
+            race_label: max(points, roster_size) + 1
+            for race_label, points in participants_by_race.items()
+        }
+    else:
+        missing_points_by_race = {
+            race_label: 0
+            for race_label in participants_by_race
+        }
 
     pivot = pivot.reindex(columns=race_columns)
 
-    sailed_races = [label for label in race_columns if label in dns_points_by_race]
+    sailed_races = [label for label in race_columns if label in missing_points_by_race]
     for race_label in sailed_races:
-        pivot[race_label] = pivot[race_label].fillna(dns_points_by_race[race_label])
+        pivot[race_label] = pivot[race_label].fillna(missing_points_by_race[race_label])
 
     discard_after = sorted({int(value) for value in (discard_after or []) if int(value) > 0})
     discard_count = sum(1 for threshold in discard_after if threshold <= len(sailed_races))
@@ -226,7 +284,10 @@ def combine_overall_from_races(
 
         discarded_labels: list[str] = []
         if discard_count > 0 and row_values:
-            sorted_worst = sorted(row_values, key=lambda item: (item[1], _race_number(item[0])), reverse=True)
+            if scoring_rule == LOW_POINT_RULE:
+                sorted_worst = sorted(row_values, key=lambda item: (item[1], _race_number(item[0])), reverse=True)
+            else:
+                sorted_worst = sorted(row_values, key=lambda item: (item[1], -_race_number(item[0])))
             discarded_labels = [label for label, _ in sorted_worst[: min(discard_count, len(sorted_worst))]]
             discarded_labels = sorted(discarded_labels, key=_race_number)
 
@@ -252,12 +313,14 @@ def combine_overall_from_races(
         result["boat_type"] = result["competitor"].map(boat_type_by_competitor).fillna("")
     else:
         result["boat_type"] = ""
-    result = result.sort_values(["combined_points", "competitor"], ascending=[True, True], na_position="last").reset_index(drop=True)
-    result["combined_rank"] = result["combined_points"].rank(method="min", ascending=True)
+    ascending_points = scoring_rule == LOW_POINT_RULE
+    result = result.sort_values(["combined_points", "competitor"], ascending=[ascending_points, True], na_position="last").reset_index(drop=True)
+    result["combined_rank"] = result["combined_points"].rank(method="min", ascending=ascending_points)
     result["combined_rank"] = result["combined_rank"].astype("Int64")
 
     result.attrs["discarded_races_by_competitor"] = discarded_map
     result.attrs["discard_after"] = discard_after
     result.attrs["discard_count"] = discard_count
+    result.attrs["scoring_rule"] = scoring_rule
 
     return result[["combined_rank", "competitor", "boat_type", *race_columns, "combined_points", "race_count"]]

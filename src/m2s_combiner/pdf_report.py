@@ -22,6 +22,9 @@ from reportlab.platypus import Spacer
 from reportlab.platypus import Table
 from reportlab.platypus import TableStyle
 
+from .combine import HIGH_POINT_RULE
+from .combine import LOW_POINT_RULE
+
 
 _DANISH_TZ = ZoneInfo("Europe/Copenhagen")
 _REPORT_CREDIT = "hummesse@gmail.com"
@@ -224,10 +227,51 @@ def _mathify_time_columns(frame: pd.DataFrame, font_size: float) -> pd.DataFrame
     return printable
 
 
+def _scoring_explanation_lines(scoring_rule: str) -> list[str]:
+    if scoring_rule == HIGH_POINT_RULE:
+        return [
+            "Valgt system: High-point.",
+            "Både med status DNS, DNC eller DSQ gives 0 point i den sejlads.",
+            "Deltagelse giver 1 point, og fuldførte både får derudover 1 point pr. båd de ligger foran.",
+            "Samlet stilling sorteres faldende efter point (flest point er bedst).",
+        ]
+
+    return [
+        "Valgt system: Low-point.",
+        "Fuldførte både får point svarende til placering i sejladsen (1 for nr. 1, 2 for nr. 2 osv.).",
+        "Både uden fuldført tid får strafpoint i forhold til antal både i feltet.",
+        "Samlet stilling sorteres stigende efter point (færrest point er bedst).",
+    ]
+
+
+def _race_page_meta_line(race_meta: dict[str, str] | None) -> str:
+    if not isinstance(race_meta, dict):
+        race_meta = {}
+
+    wind_category = str(race_meta.get("wind_category_da") or "ukendt").strip() or "ukendt"
+    course_length = str(race_meta.get("course_length") or "ukendt").strip() or "ukendt"
+    start_time = str(race_meta.get("start_time") or "ukendt").strip() or "ukendt"
+    return f"Vindkategori: {wind_category} | Banelængde: {course_length} | Starttid: {start_time}"
+
+
+def _overall_discard_meta_line(discard_after: object) -> str:
+    if isinstance(discard_after, list):
+        values = sorted({int(value) for value in discard_after if isinstance(value, int) and value > 0})
+    else:
+        values = []
+
+    if not values:
+        return "Fratrækkere efter sejladser: ingen"
+
+    labels = ", ".join(f"R{value}" for value in values)
+    return f"Fratrækkere efter sejladser: {labels}"
+
+
 def build_combined_pdf(
     output_path: Path,
     sections: list[dict[str, object]],
     source_urls: list[str],
+    scoring_rule: str = LOW_POINT_RULE,
 ) -> None:
     """Build PDF with race and overall pages for each class group section."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +328,10 @@ def build_combined_pdf(
     )
     story.append(Paragraph("Når først du er tilmeldt vil du modtage nye resultater hver gang der er nye", cover_text_style))
     story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Pointsystem", cover_heading_style))
+    for line in _scoring_explanation_lines(scoring_rule):
+        story.append(Paragraph(line, cover_text_style))
+    story.append(Spacer(1, 3 * mm))
     story.append(Paragraph("Hvordan resultaterne laves", cover_heading_style))
     story.append(
         Paragraph(
@@ -315,6 +363,7 @@ def build_combined_pdf(
         theme = group_theme_map[group_label]
         combined_races = section.get("combined_races")
         combined_overall = section.get("combined_overall")
+        race_page_meta_raw = section.get("race_page_meta")
         race_warnings_raw = section.get("race_warnings")
 
         if not isinstance(combined_races, pd.DataFrame):
@@ -322,6 +371,7 @@ def build_combined_pdf(
         if not isinstance(combined_overall, pd.DataFrame):
             combined_overall = pd.DataFrame()
         race_warnings: dict[str, list[str]] = {}
+        race_page_meta: dict[str, dict[str, str]] = {}
         if isinstance(race_warnings_raw, dict):
             for race_label, messages in race_warnings_raw.items():
                 if not isinstance(race_label, str):
@@ -332,6 +382,18 @@ def build_combined_pdf(
                 if normalized_messages:
                     race_warnings[race_label] = normalized_messages
 
+        if isinstance(race_page_meta_raw, dict):
+            for race_label, values in race_page_meta_raw.items():
+                if not isinstance(race_label, str):
+                    continue
+                if not isinstance(values, dict):
+                    continue
+                race_page_meta[race_label] = {
+                    "wind_category_da": str(values.get("wind_category_da") or "").strip(),
+                    "course_length": str(values.get("course_length") or "").strip(),
+                    "start_time": str(values.get("start_time") or "").strip(),
+                }
+
         race_labels: list[str] = []
         if not combined_races.empty and "race" in combined_races.columns:
             race_labels = sorted(combined_races["race"].dropna().astype(str).unique().tolist(), key=_race_sort_key)
@@ -341,7 +403,7 @@ def build_combined_pdf(
             race_rows = race_rows.sort_values(["race_rank", "competitor"], ascending=[True, True]).reset_index(drop=True)
 
             preferred_columns = [
-                "race_rank",
+                "points",
                 "competitor",
                 "boat_name",
                 "boat_type",
@@ -353,11 +415,11 @@ def build_combined_pdf(
             ]
             available_columns = [column for column in preferred_columns if column in race_rows.columns]
             printable_race = race_rows[available_columns].copy()
-            if "race_rank" in printable_race.columns:
-                printable_race["race_rank"] = printable_race["race_rank"].map(_int_text)
+            if "points" in printable_race.columns:
+                printable_race["points"] = printable_race["points"].map(_int_text)
             printable_race = printable_race.rename(
                 columns={
-                    "race_rank": "Plac.",
+                    "points": "Point",
                     "competitor": "Deltager",
                     "boat_name": "Bådnavn",
                     "boat_type": "Bådtype",
@@ -376,7 +438,7 @@ def build_combined_pdf(
                 column
                 for column in printable_race.columns
                 if column
-                in {"Plac.", "Handicap", "Sejlet tid", "Beregnet tid", "Forskel", "Interval", "Point"}
+                in {"Handicap", "Sejlet tid", "Beregnet tid", "Forskel", "Interval", "Point"}
                 or re.fullmatch(r"R\d+", str(column))
             }
             printable_race = _mathify_time_columns(printable_race, font_size=table_font_size)
@@ -389,6 +451,8 @@ def build_combined_pdf(
             )
             story.append(Spacer(1, 3 * mm))
             story.append(Paragraph(f"Genereret: {generated_at}", styles["Normal"]))
+            story.append(Spacer(1, 1.5 * mm))
+            story.append(Paragraph(_race_page_meta_line(race_page_meta.get(str(race_label))), styles["BodyText"]))
             story.append(Spacer(1, 3 * mm))
             story.append(
                 _styled_table(
@@ -417,6 +481,8 @@ def build_combined_pdf(
         )
         story.append(Spacer(1, 3 * mm))
         story.append(Paragraph(f"Genereret: {generated_at}", styles["Normal"]))
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(_overall_discard_meta_line(combined_overall.attrs.get("discard_after")), styles["BodyText"]))
         story.append(Spacer(1, 4 * mm))
 
         overall_printable = combined_overall.copy()

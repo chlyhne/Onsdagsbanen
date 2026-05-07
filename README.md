@@ -103,6 +103,22 @@ Common options:
 python -m m2s_combiner.cli --output-pdf Results.pdf --output-dir . --max-race 12
 ```
 
+Scoring rule options:
+
+- `--scoring-rule low-point` (default): classic low-point scoring where lowest total wins.
+- `--scoring-rule high-point`: each boat gets 1 point for participating in a race row, plus 1 point per boat left behind. Highest total wins.
+- Discards still apply in both modes.
+
+Examples:
+
+```bash
+# Use high-point scoring directly from CLI
+python -m m2s_combiner.cli --scoring-rule high-point
+
+# run_2026.py forwards extra args to the CLI
+python run_2026.py --scoring-rule high-point
+```
+
 ## Email Results (Gmail)
 
 Use the script `send_results_gmail.py` to email result PDFs to multiple recipients.
@@ -228,10 +244,19 @@ Recipient source of truth:
 Email trigger subjects:
 
 - `resultater`: normal run (build + send results) using sender-specific recipient behavior.
+  - From `hummesse@gmail.com` with one or more emails in the message body:
+    - Results are sent to those body email addresses for that run.
+    - The same addresses are appended to the encrypted recipient registry (deduped).
+  - From `hummesse@gmail.com` without body emails:
+    - Runs normally using the persisted registry recipients.
+  - From any other sender:
+    - Runs sender-only for that request, and the sender is appended to the encrypted recipient registry.
+  - Use this mode when you want both immediate delivery and persistence of new recipients.
 - `append`: append-only mode.
   - Only accepted from `hummesse@gmail.com`.
   - Extracts emails from message body and appends them to the encrypted recipient registry (deduped).
   - Does not build PDFs and does not send result emails.
+  - Use this mode when you want persistence only (no email send in that run).
 - `delete`: delete-only mode.
   - Only accepted from `hummesse@gmail.com`.
   - Extracts emails from message body and removes those addresses from the encrypted recipient registry.
@@ -260,7 +285,6 @@ Set worker variables (in `wrangler.toml` or dashboard):
 - `GH_REPO`
 - `GH_WORKFLOW` (default in repo: `run-2026-email-pipeline.yml`)
 - `GH_REF` (typically `main`)
-- `ALLOWED_SENDERS` (comma-separated)
 
 Then configure Cloudflare Email Routing so a dedicated address forwards to this Worker.
 
@@ -269,9 +293,10 @@ No custom domain option:
 - If you do not have a domain, skip Email Routing.
 - Use the Worker HTTP endpoint on workers.dev instead:
   - `POST /trigger` on your deployed Worker URL
-  - Include header `x-trigger-token: <TRIGGER_TOKEN>`
-  - Include JSON body with allowed sender and subject:
-    - `{"from":"hummesse@gmail.com","subject":"M2S run request"}`
+  - Include header `x-trigger-token: <TRIGGER_TOKEN>` (or `Authorization: Bearer <TRIGGER_TOKEN>`)
+  - Include JSON body with valid sender and one exact subject:
+   - `{"from":"hummesse@gmail.com","subject":"resultater"}`
+   - `{"from":"hummesse@gmail.com","subject":"append","body_text":"new@example.com"}`
 
 Phone email trigger without domain (recommended):
 
@@ -279,8 +304,12 @@ Phone email trigger without domain (recommended):
 2. Script file in this repo: `cloudflare-email-worker/gmail_phone_bridge.gs`
 3. Configure in the script:
    - `triggerToken`
-   - `allowedSenders`
-   - `requiredSubjectToken` (example: `M2S RUN`)
+  - Subject tokens: `resultater`, `append`, `delete`, `afmeld resultater`
+  - Sender rules (`appendSender`, `deleteSender`, `unsubscribeDisallowedSender`)
 4. Install the time trigger by running `installMinuteTrigger()` once.
-5. From phone, send an email to your Gmail inbox with subject containing `M2S RUN`.
-6. The script polls inbox, calls Worker `/trigger`, and the GitHub workflow runs.
+5. From phone, send an email to your Gmail inbox with one exact subject:
+  - `resultater`
+  - `append` (hummesse only, body must include recipient emails)
+  - `delete` (hummesse only, body must include recipient emails)
+  - `afmeld resultater` (non-hummesse only)
+6. The script polls inbox, calls Worker `/trigger`, labels processed threads, and the GitHub workflow runs.

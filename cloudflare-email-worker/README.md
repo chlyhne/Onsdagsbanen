@@ -1,32 +1,51 @@
 # Cloudflare Email Trigger Worker
 
-This Worker can trigger a GitHub Actions workflow in two ways:
+This Worker dispatches the GitHub Actions pipeline from either:
 
-1. Email event mode (requires a custom domain with Cloudflare Email Routing)
-2. HTTP trigger mode (works on workers.dev, no custom domain required)
+1. Cloudflare Email Routing events (custom domain mode)
+2. HTTP POST to `/trigger` (workers.dev or bridge mode)
 
-## Trigger logic
+## Email interface (current behavior)
 
-The Worker dispatches only when all checks pass:
+Subjects are matched exactly (trimmed + case-insensitive):
 
-1. The sender exists in `ALLOWED_SENDERS`.
-2. The provided trigger token matches `TRIGGER_TOKEN`.
-3. The subject is present.
+- `resultater`
+- `append`
+- `delete`
+- `afmeld resultater`
 
-## Required Worker settings
+Sender and mode rules:
 
-Configure in `wrangler.toml`:
+- `resultater`
+	- Any sender can use this.
+	- If sender is not `hummesse@gmail.com`, sender address is auto-added to recipients list.
+	- If sender is `hummesse@gmail.com`, addresses in email body are extracted and may be persisted.
+- `append`
+	- Only `hummesse@gmail.com` can use this.
+	- Requires at least one email address in body.
+	- Runs in append-only mode (recipient update, no results email send).
+- `delete`
+	- Only `hummesse@gmail.com` can use this.
+	- Requires at least one email address in body.
+	- Runs in delete mode (recipient removal, no results email send).
+- `afmeld resultater`
+	- Allowed for any sender except `hummesse@gmail.com`.
+	- Removes sender address from recipients list.
+	- Triggers unsubscribe confirmation email.
+
+## Required Worker configuration
+
+Set in `wrangler.toml`:
 
 - `GH_OWNER`: GitHub owner/org
 - `GH_REPO`: Repository name
-- `GH_WORKFLOW`: Workflow file name in `.github/workflows/`
-- `GH_REF`: Branch/ref to dispatch (usually `main`)
-- `ALLOWED_SENDERS`: Comma-separated allowed sender addresses
+- `GH_WORKFLOW`: Workflow filename in `.github/workflows/`
+- `GH_REF`: Branch/ref to dispatch (typically `main`)
 
-Configure as Worker secrets:
+Set as Worker secrets:
 
-- `GH_TOKEN`: GitHub fine-grained token with Actions write permission on this repo
-- `TRIGGER_TOKEN`: Shared secret token for email or HTTP trigger auth
+- `GH_TOKEN`: GitHub token with permission to dispatch Actions workflows
+- `TRIGGER_TOKEN`: Shared token for HTTP trigger auth
 
 ## Setup
 
@@ -39,65 +58,53 @@ npx wrangler secret put TRIGGER_TOKEN
 npm run deploy
 ```
 
-## No-domain mode (workers.dev)
+## HTTP trigger mode
 
-If you do not own a custom domain, use HTTP trigger mode:
+Endpoint:
 
-POST to:
+`POST https://m2s-email-trigger.hummesse.workers.dev/trigger`
 
-`https://m2s-email-trigger.hummesse.workers.dev/trigger`
-
-Headers:
+Auth headers (one of these):
 
 - `x-trigger-token: <TRIGGER_TOKEN>`
+- `Authorization: Bearer <TRIGGER_TOKEN>`
 
-JSON body:
+JSON fields:
+
+- `from` (required)
+- `subject` (required, must be one of the exact subjects above)
+- `dry_run` (optional; forced to true for append/delete/unsubscribe)
+- `body_text` or `body` (optional; used to extract emails)
+- `recipients_override` (optional string or array)
+
+Example:
 
 ```json
 {
 	"from": "hummesse@gmail.com",
-	"subject": "M2S run request",
-	"dry_run": true
+	"subject": "append",
+	"body_text": "new1@example.com, new2@example.com"
 }
 ```
 
-Example with curl:
+## Gmail bridge mode (no custom domain)
 
-```bash
-curl -X POST "https://m2s-email-trigger.hummesse.workers.dev/trigger" \
-	-H "Content-Type: application/json" \
-	-H "x-trigger-token: YOUR_TRIGGER_TOKEN" \
-	-d '{"from":"hummesse@gmail.com","subject":"M2S run request","dry_run":true}'
-```
+Use Apps Script file `gmail_phone_bridge.gs` to poll Gmail and forward matching messages to `/trigger`.
 
-## Trigger from phone email (no domain)
+One-time setup:
 
-Use Gmail Apps Script to bridge inbox messages to the HTTP trigger endpoint.
-
-Script file in this repo:
-
-- `gmail_phone_bridge.gs`
-
-High-level flow:
-
-1. You send an email from phone with subject containing `M2S RUN`.
-2. Apps Script polls inbox every minute.
-3. Matching message triggers `POST /trigger` with `x-trigger-token`.
-4. Worker dispatches the GitHub Actions workflow.
-
-One-time setup in Google Apps Script:
-
-1. Create a new script project at script.google.com.
+1. Create a Google Apps Script project.
 2. Paste content from `gmail_phone_bridge.gs`.
-3. Update `triggerToken` and any sender/subject settings.
-4. Run `installMinuteTrigger()` once and grant permissions.
+3. Set `M2S_CONFIG.triggerToken`.
+4. Run `installMinuteTrigger()` and grant permissions.
 
-## Email routing (domain required)
+Bridge behavior:
 
-In Cloudflare Email Routing, set your destination to this Worker.
+- Polls unread messages for subjects: `resultater`, `append`, `delete`, `afmeld resultater`.
+- Applies sender restrictions consistent with Worker rules.
+- Labels processed threads with `m2s-processed` and can archive them.
 
-Example subject to trigger:
+## Email routing mode (custom domain)
 
-```text
-M2S run please [my-long-trigger-token]
-```
+If using Cloudflare Email Routing, route destination emails directly to this Worker.
+Use one of the supported exact subject commands above.

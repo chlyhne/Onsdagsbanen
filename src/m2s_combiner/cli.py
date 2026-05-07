@@ -5,6 +5,9 @@ from itertools import combinations
 import re
 from pathlib import Path
 
+from .combine import HIGH_POINT_RULE
+from .combine import LOW_POINT_RULE
+from .combine import SUPPORTED_SCORING_RULES
 from .combine import combine_overall_from_races
 from .combine import combine_races
 from .parser import parse_available_race_labels_from_result_payload
@@ -52,6 +55,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         default=".",
         help="Folder for output PDF files.",
+    )
+    parser.add_argument(
+        "--scoring-rule",
+        default=LOW_POINT_RULE,
+        choices=[LOW_POINT_RULE, HIGH_POINT_RULE],
+        help=(
+            "Scoring rule. "
+            f"'{LOW_POINT_RULE}' keeps the current low-point system; "
+            f"'{HIGH_POINT_RULE}' gives 1 point for participation plus one per boat left behind."
+        ),
     )
     return parser
 
@@ -138,10 +151,13 @@ def _race_meta_from_payload(payload: dict[str, object], max_race: int | None) ->
         start_seconds = int(start_time_value) if isinstance(start_time_value, (int, float)) else None
 
         start_text = str(item.get("StartTimeText") or "").strip()
+        wind_speed_type_value = item.get("WindSpeedType")
+        wind_speed_type = int(wind_speed_type_value) if isinstance(wind_speed_type_value, (int, float)) else None
         meta_by_race[race_index] = {
             "length_nm": length_nm,
             "start_seconds": start_seconds,
             "start_text": start_text,
+            "wind_speed_type": wind_speed_type,
         }
 
     return meta_by_race
@@ -175,6 +191,63 @@ def _format_start_value(start_seconds: object, start_text: object) -> str:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{hours:02d}:{minutes:02d}"
     return "ukendt"
+
+
+def _format_wind_category_da(wind_speed_type: object) -> str:
+    if not isinstance(wind_speed_type, int):
+        return "ukendt"
+
+    wind_map = {
+        1: "let vind",
+        2: "mellem vind",
+        3: "haard vind",
+        4: "meget haard vind",
+    }
+    return wind_map.get(wind_speed_type, f"kategori {wind_speed_type}")
+
+
+def _single_or_varies(values: list[str], unknown_text: str = "ukendt") -> str:
+    normalized = [value.strip() for value in values if value.strip()]
+    unique_values = sorted(set(normalized))
+    if not unique_values:
+        return unknown_text
+    if len(unique_values) == 1:
+        return unique_values[0]
+    return "varierer mellem klasser"
+
+
+def _race_page_meta_by_label(
+    class_names: list[str],
+    payload_by_class: dict[str, dict[str, object]],
+    race_labels: list[str],
+    max_race: int | None,
+) -> dict[str, dict[str, str]]:
+    meta_by_class = {
+        class_name: _race_meta_from_payload(payload_by_class[class_name], max_race=max_race)
+        for class_name in class_names
+    }
+
+    race_meta: dict[str, dict[str, str]] = {}
+    for race_label in race_labels:
+        race_index = int(race_label[1:])
+
+        length_values: list[str] = []
+        start_values: list[str] = []
+        wind_values: list[str] = []
+
+        for class_name in class_names:
+            race_info = meta_by_class[class_name].get(race_index, {})
+            length_values.append(_format_length_value(race_info.get("length_nm")))
+            start_values.append(_format_start_value(race_info.get("start_seconds"), race_info.get("start_text")))
+            wind_values.append(_format_wind_category_da(race_info.get("wind_speed_type")))
+
+        race_meta[race_label] = {
+            "wind_category_da": _single_or_varies(wind_values),
+            "course_length": _single_or_varies(length_values),
+            "start_time": _single_or_varies(start_values),
+        }
+
+    return race_meta
 
 
 def _warn_if_group_not_meaningfully_combinable(
@@ -379,6 +452,13 @@ def run(args: argparse.Namespace) -> int:
             print(f"[{group_label}] No completed aligned races found; skipping group.")
             continue
 
+        race_page_meta = _race_page_meta_by_label(
+            class_names=class_names,
+            payload_by_class=payload_by_class,
+            race_labels=selected_races,
+            max_race=effective_max_race,
+        )
+
         print(f"[{group_label}] Aligned race labels: {', '.join(selected_races)}")
 
         parsed_races_by_class = {
@@ -416,12 +496,13 @@ def run(args: argparse.Namespace) -> int:
         if group_discard_after:
             print(f"[{group_label}] Discards after races: {', '.join(str(value) for value in group_discard_after)}")
 
-        combined_race_scores = combine_races(group_races)
+        combined_race_scores = combine_races(group_races, scoring_rule=args.scoring_rule)
         combined_overall = combine_overall_from_races(
             combined_race_scores,
             max_race=effective_max_race,
             all_competitors=sorted(group_roster) if group_roster else None,
             discard_after=group_discard_after,
+            scoring_rule=args.scoring_rule,
         )
 
         pdf_sections.append(
@@ -429,6 +510,7 @@ def run(args: argparse.Namespace) -> int:
                 "group_label": group_label,
                 "combined_races": combined_race_scores,
                 "combined_overall": combined_overall,
+                "race_page_meta": race_page_meta,
                 "race_warnings": {
                     race_label: race_warnings[race_label]
                     for race_label in completed_races
@@ -444,7 +526,7 @@ def run(args: argparse.Namespace) -> int:
         raise RuntimeError("No groups produced completed aligned races.")
 
     output_pdf = output_dir / args.output_pdf
-    build_combined_pdf(output_pdf, pdf_sections, source_descriptions)
+    build_combined_pdf(output_pdf, pdf_sections, source_descriptions, scoring_rule=args.scoring_rule)
 
     print(f"PDF created: {output_pdf}")
 
