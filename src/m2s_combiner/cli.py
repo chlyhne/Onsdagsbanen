@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from itertools import combinations
 import re
 from pathlib import Path
@@ -151,12 +152,16 @@ def _race_meta_from_payload(payload: dict[str, object], max_race: int | None) ->
         start_seconds = int(start_time_value) if isinstance(start_time_value, (int, float)) else None
 
         start_text = str(item.get("StartTimeText") or "").strip()
+        start_date = str(item.get("StartDate") or "").strip()
+        start_date_with_time = str(item.get("StartDateWithTime") or "").strip()
         wind_speed_type_value = item.get("WindSpeedType")
         wind_speed_type = int(wind_speed_type_value) if isinstance(wind_speed_type_value, (int, float)) else None
         meta_by_race[race_index] = {
             "length_nm": length_nm,
             "start_seconds": start_seconds,
             "start_text": start_text,
+            "start_date": start_date,
+            "start_date_with_time": start_date_with_time,
             "wind_speed_type": wind_speed_type,
         }
 
@@ -190,6 +195,28 @@ def _format_start_value(start_seconds: object, start_text: object) -> str:
         if seconds:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{hours:02d}:{minutes:02d}"
+    return "ukendt"
+
+
+def _format_race_date_value(start_date: object, start_date_with_time: object) -> str:
+    start_date_text = str(start_date or "").strip()
+    if start_date_text:
+        normalized = start_date_text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+            return parsed.strftime("%d-%m-%Y")
+        except ValueError:
+            pass
+
+    start_date_with_time_text = str(start_date_with_time or "").strip()
+    if start_date_with_time_text:
+        for pattern in ("%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S"):
+            try:
+                parsed = datetime.strptime(start_date_with_time_text, pattern)
+                return parsed.strftime("%d-%m-%Y")
+            except ValueError:
+                continue
+
     return "ukendt"
 
 
@@ -232,18 +259,21 @@ def _race_page_meta_by_label(
 
         length_values: list[str] = []
         start_values: list[str] = []
+        date_values: list[str] = []
         wind_values: list[str] = []
 
         for class_name in class_names:
             race_info = meta_by_class[class_name].get(race_index, {})
             length_values.append(_format_length_value(race_info.get("length_nm")))
             start_values.append(_format_start_value(race_info.get("start_seconds"), race_info.get("start_text")))
+            date_values.append(_format_race_date_value(race_info.get("start_date"), race_info.get("start_date_with_time")))
             wind_values.append(_format_wind_category_da(race_info.get("wind_speed_type")))
 
         race_meta[race_label] = {
             "wind_category_da": _single_or_varies(wind_values),
             "course_length": _single_or_varies(length_values),
             "start_time": _single_or_varies(start_values),
+            "race_date": _single_or_varies(date_values),
         }
 
     return race_meta

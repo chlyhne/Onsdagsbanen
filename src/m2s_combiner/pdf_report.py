@@ -248,10 +248,11 @@ def _race_page_meta_line(race_meta: dict[str, str] | None) -> str:
     if not isinstance(race_meta, dict):
         race_meta = {}
 
+    race_date = str(race_meta.get("race_date") or "ukendt").strip() or "ukendt"
     wind_category = str(race_meta.get("wind_category_da") or "ukendt").strip() or "ukendt"
     course_length = str(race_meta.get("course_length") or "ukendt").strip() or "ukendt"
     start_time = str(race_meta.get("start_time") or "ukendt").strip() or "ukendt"
-    return f"Vindkategori: {wind_category} | Banelængde: {course_length} | Starttid: {start_time}"
+    return f"Dato: {race_date} | Vindkategori: {wind_category} | Banelængde: {course_length} | Starttid: {start_time}"
 
 
 def _overall_discard_meta_line(discard_after: object) -> str:
@@ -389,6 +390,7 @@ def build_combined_pdf(
                 if not isinstance(values, dict):
                     continue
                 race_page_meta[race_label] = {
+                    "race_date": str(values.get("race_date") or "").strip(),
                     "wind_category_da": str(values.get("wind_category_da") or "").strip(),
                     "course_length": str(values.get("course_length") or "").strip(),
                     "start_time": str(values.get("start_time") or "").strip(),
