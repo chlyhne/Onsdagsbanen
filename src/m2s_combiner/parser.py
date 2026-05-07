@@ -39,13 +39,6 @@ def _clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", text)
 
 
-def _title_case_words(value: str) -> str:
-    text = _clean_text(value)
-    if not text:
-        return ""
-    return " ".join(word[:1].upper() + word[1:].lower() for word in text.split(" "))
-
-
 def _parse_number(value: object) -> float | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -159,13 +152,13 @@ def parse_race_rows_from_result_payload(
         if not isinstance(entry, dict):
             continue
 
-        competitor = _title_case_words(_clean_text(entry.get("TeamName")))
+        competitor = _clean_text(entry.get("TeamName"))
         if not competitor:
             continue
         boat_name = _clean_text(entry.get("BoatName"))
-        boat_type = _title_case_words(_clean_text(entry.get("BoatType")))
+        boat_type = _clean_text(entry.get("BoatType"))
         if not boat_type:
-            boat_type = _title_case_words(boat_name)
+            boat_type = boat_name
 
         race_results = entry.get("EntryRaceResults")
         if not isinstance(race_results, list):

@@ -84,6 +84,18 @@ function escapeHtml(value: unknown): string {
     .replaceAll("'", "&#39;");
 }
 
+function titleCaseWords(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .split(/\s+/)
+    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function raceColumnsForRows(rows: CombinedOverallRow[], raceColumns: RaceLabel[]): RaceLabel[] {
   return raceColumns.filter((raceLabel) => rows.some((row) => row.racePoints[raceLabel] !== null));
 }
@@ -120,8 +132,8 @@ function renderOverallTable(section: SectionSnapshot, theme: Theme): string {
       const rowColor = theme.rowColors[index % 2];
       return `<tr style="background:${rowColor}">
         <td>${escapeHtml(row.combinedRank ?? "")}</td>
-        <td class="left">${escapeHtml(row.competitor)}</td>
-        <td class="left">${escapeHtml(row.boatType)}</td>
+        <td class="left">${escapeHtml(titleCaseWords(row.competitor))}</td>
+        <td class="left">${escapeHtml(titleCaseWords(row.boatType))}</td>
         ${raceCells}
         <td class="strong">${escapeHtml(row.combinedPoints ?? "")}</td>
       </tr>`;

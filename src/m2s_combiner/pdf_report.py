@@ -29,6 +29,13 @@ def _danish_now() -> datetime:
     return datetime.now(_DANISH_TZ)
 
 
+def _title_case_words(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return " ".join(word[:1].upper() + word[1:].lower() for word in text.split(" "))
+
+
 def _table_data(frame: pd.DataFrame) -> list[list[object]]:
     header = list(frame.columns)
     rows = frame.values.tolist()
@@ -302,6 +309,10 @@ def build_combined_pdf(
                     "interval": "Interval",
                 }
             )
+            if "Deltager" in printable_race.columns:
+                printable_race["Deltager"] = printable_race["Deltager"].map(_title_case_words)
+            if "Bådtype" in printable_race.columns:
+                printable_race["Bådtype"] = printable_race["Bådtype"].map(_title_case_words)
             race_center_columns = {
                 column
                 for column in printable_race.columns
@@ -383,6 +394,10 @@ def build_combined_pdf(
 
         overall_printable = _mathify_point_columns(overall_printable, discard_map=discard_map, font_size=table_font_size)
         overall_printable = _mathify_time_columns(overall_printable, font_size=table_font_size)
+        if "Deltager" in overall_printable.columns:
+            overall_printable["Deltager"] = overall_printable["Deltager"].map(_title_case_words)
+        if "Bådtype" in overall_printable.columns:
+            overall_printable["Bådtype"] = overall_printable["Bådtype"].map(_title_case_words)
 
         overall_center_columns = {
             column

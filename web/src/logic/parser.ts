@@ -46,18 +46,6 @@ function cleanText(value: unknown): string {
   return text.replace(/\s+/g, " ");
 }
 
-function titleCaseWords(value: unknown): string {
-  const text = cleanText(value);
-  if (!text) {
-    return "";
-  }
-
-  return text
-    .split(" ")
-    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
 export function parseAvailableRaceLabelsFromResultPayload(
   payload: Record<string, unknown>,
   maxRace: number | null = null,
@@ -172,13 +160,13 @@ export function parseRaceRowsFromResultPayload(
     }
 
     const typedEntry = entry as Record<string, unknown>;
-    const competitor = titleCaseWords(typedEntry.TeamName);
+    const competitor = cleanText(typedEntry.TeamName);
     if (!competitor) {
       continue;
     }
 
     const boatName = cleanText(typedEntry.BoatName);
-    const boatType = titleCaseWords(typedEntry.BoatType);
+    const boatType = cleanText(typedEntry.BoatType);
 
     const raceResults = typedEntry.EntryRaceResults;
     if (!Array.isArray(raceResults)) {
