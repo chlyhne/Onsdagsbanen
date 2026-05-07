@@ -11,6 +11,7 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.pagesizes import landscape
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Flowable
@@ -23,6 +24,7 @@ from reportlab.platypus import TableStyle
 
 
 _DANISH_TZ = ZoneInfo("Europe/Copenhagen")
+_REPORT_CREDIT = "hummesse@gmail.com"
 
 
 def _danish_now() -> datetime:
@@ -241,10 +243,67 @@ def build_combined_pdf(
     styles = getSampleStyleSheet()
     _shrink_styles_by_one_point(styles)
     table_font_size = float(styles["BodyText"].fontSize)
+    cover_text_style = ParagraphStyle(
+        "CoverText",
+        parent=styles["BodyText"],
+        fontSize=styles["BodyText"].fontSize + 1,
+        leading=styles["BodyText"].leading + 2,
+    )
+    cover_heading_style = ParagraphStyle(
+        "CoverHeading",
+        parent=styles["Heading3"],
+        fontSize=styles["Heading3"].fontSize + 0.5,
+        leading=styles["Heading3"].leading + 1,
+    )
 
     story = []
     generated_at = _danish_now().strftime("%d-%m-%Y %H:%M")
     group_theme_map: dict[str, dict[str, object]] = {}
+
+    story.append(Paragraph("Kaløvig Onsdagsbanen 2026", styles["Title"]))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph("Kombinerede resultater", styles["Heading2"]))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(f"Genereret: {generated_at}", cover_text_style))
+    story.append(Spacer(1, 2 * mm))
+    story.append(
+        Paragraph(
+            "De kombinerede resultater udsendes af Casper Lyhne for Kaløvig Onsdagsbanen 2026.",
+            cover_text_style,
+        )
+    )
+    story.append(Paragraph(f"<b>Kontakt:</b> {_REPORT_CREDIT}", cover_text_style))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Sådan får du resultater", cover_heading_style))
+    story.append(Paragraph("Tilmelding: Send mail til hummesse@gmail.com med emnet <b>resultater</b>.", cover_text_style))
+    story.append(
+        Paragraph(
+            "Afmelding: Send mail fra adressen der skal afmeldes med emnet <b>afmeld resultater</b>.",
+            cover_text_style,
+        )
+    )
+    story.append(Paragraph("Når først du er tilmeldt vil du modtage nye resultater hver gang der er nye", cover_text_style))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Hvordan resultaterne laves", cover_heading_style))
+    story.append(
+        Paragraph(
+            "Når en mail modtages afføder det en kørsel af et program, som henter data fra manage 2 sail. Løbene kombineres, point beregnes, og PDF genereres og udsendes.",
+            cover_text_style,
+        )
+    )
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Formål med de kombinerede resultater", cover_heading_style))
+    story.append(
+        Paragraph(
+            "Formålet er at skabe en samlet stilling for stor bane og lille bane henholdsvist, "
+            "så deltagene kan sammenligne sig med både i et andet løb, som har sejlet den samme bane på samme tidspunkt. Dette understøttes ikke af manage2sail p.t.",
+            cover_text_style,
+        )
+    )
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Datakilde", cover_heading_style))
+    story.append(Paragraph("Officielle Manage2Sail-data for Kaløvig Onsdagsbanen 2026.", cover_text_style))
+    story.append(PageBreak())
 
     for section in sections:
         group_label = str(section.get("group_label", "Kombineret"))
