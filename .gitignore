@@ -14,3 +14,4 @@ web/dist/
 cloudflare-email-worker/node_modules/
 cloudflare-email-worker/.wrangler/
 Results*.pdf
+analysis/*.csv

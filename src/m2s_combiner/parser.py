@@ -159,6 +159,9 @@ def parse_race_rows_from_result_payload(
         boat_type = _clean_text(entry.get("BoatType"))
         if not boat_type:
             boat_type = boat_name
+        sail_number = _clean_text(entry.get("SailNumber"))
+        sail_number_country = _clean_text(entry.get("SailNumberCountry"))
+        skipper = _clean_text(entry.get("Skipper"))
 
         race_results = entry.get("EntryRaceResults")
         if not isinstance(race_results, list):
@@ -211,6 +214,9 @@ def parse_race_rows_from_result_payload(
                     "competitor": competitor,
                     "boat_name": boat_name,
                     "boat_type": boat_type,
+                    "sail_number": sail_number,
+                    "sail_number_country": sail_number_country,
+                    "skipper": skipper,
                     "hdcp": hdcp,
                     "beregnet_seconds": beregnet_seconds,
                     "sailed_seconds": sailed_seconds,
