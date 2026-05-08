@@ -6,9 +6,10 @@ from itertools import combinations
 import re
 from pathlib import Path
 
+from .combine import BAYESIAN_POINT_RULE
+from .combine import FRACTIONAL_POINT_RULE
 from .combine import HIGH_POINT_RULE
 from .combine import LOW_POINT_RULE
-from .combine import SUPPORTED_SCORING_RULES
 from .combine import combine_overall_from_races
 from .combine import combine_races
 from .parser import parse_available_race_labels_from_result_payload
@@ -60,11 +61,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scoring-rule",
         default=LOW_POINT_RULE,
-        choices=[LOW_POINT_RULE, HIGH_POINT_RULE],
+        choices=[LOW_POINT_RULE, HIGH_POINT_RULE, FRACTIONAL_POINT_RULE, BAYESIAN_POINT_RULE],
         help=(
             "Scoring rule. "
             f"'{LOW_POINT_RULE}' keeps the current low-point system; "
-            f"'{HIGH_POINT_RULE}' gives 1 point for participation plus one per boat left behind."
+            f"'{HIGH_POINT_RULE}' gives 1 point for participation plus one per boat left behind; "
+            f"'{FRACTIONAL_POINT_RULE}' is high-point normalized by race participants, then multiplied by 100 and rounded; "
+            f"'{BAYESIAN_POINT_RULE}' applies order-invariant, time-based hierarchical Bayesian scoring with handicap baseline (no discards)."
         ),
     )
     return parser
@@ -227,7 +230,7 @@ def _format_wind_category_da(wind_speed_type: object) -> str:
     wind_map = {
         0: "lav",
         1: "mellem",
-        2: "hoej",
+        2: "høj",
     }
     return wind_map.get(wind_speed_type, f"kategori {wind_speed_type}")
 
@@ -381,13 +384,13 @@ def _warn_if_group_not_meaningfully_combinable(
 
             if "length" in issues and "start" in issues:
                 message = (
-                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde "
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelængde "
                     f"({left_length_text} vs {right_length_text}) og starttid "
                     f"({left_start_text} vs {right_start_text}) i denne sejlads."
                 )
             elif "length" in issues:
                 message = (
-                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelaengde "
+                    f"OBS: '{left_class}' og '{right_class}' har forskellig banelængde "
                     f"({left_length_text} vs {right_length_text}) i denne sejlads."
                 )
             else:
@@ -516,14 +519,18 @@ def run(args: argparse.Namespace) -> int:
 
         group_roster = set().union(*(_roster_from_payload(payload_by_class[class_name]) for class_name in class_names))
 
-        group_discard_candidates = [
-            parse_discard_after_races_from_result_payload(payload_by_class[class_name], max_race=effective_max_race)
-            for class_name in class_names
-        ]
-        group_discard_candidates = [candidate for candidate in group_discard_candidates if candidate]
-        group_discard_after = max(group_discard_candidates, key=len) if group_discard_candidates else []
-        if group_discard_after:
-            print(f"[{group_label}] Discards after races: {', '.join(str(value) for value in group_discard_after)}")
+        if args.scoring_rule == BAYESIAN_POINT_RULE:
+            group_discard_after = []
+            print(f"[{group_label}] Bayesian scoring selected: discards disabled.")
+        else:
+            group_discard_candidates = [
+                parse_discard_after_races_from_result_payload(payload_by_class[class_name], max_race=effective_max_race)
+                for class_name in class_names
+            ]
+            group_discard_candidates = [candidate for candidate in group_discard_candidates if candidate]
+            group_discard_after = max(group_discard_candidates, key=len) if group_discard_candidates else []
+            if group_discard_after:
+                print(f"[{group_label}] Discards after races: {', '.join(str(value) for value in group_discard_after)}")
 
         combined_race_scores = combine_races(group_races, scoring_rule=args.scoring_rule)
         combined_overall = combine_overall_from_races(

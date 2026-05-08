@@ -22,6 +22,8 @@ from reportlab.platypus import Spacer
 from reportlab.platypus import Table
 from reportlab.platypus import TableStyle
 
+from .combine import BAYESIAN_POINT_RULE
+from .combine import FRACTIONAL_POINT_RULE
 from .combine import HIGH_POINT_RULE
 from .combine import LOW_POINT_RULE
 
@@ -103,6 +105,24 @@ def _int_text(value: object) -> str:
     if pd.isna(value):
         return ""
     return str(int(value))
+
+
+def _point_text(value: object, as_percent: bool = False) -> str:
+    if pd.isna(value):
+        return ""
+
+    numeric = pd.to_numeric([value], errors="coerce")[0]
+    if pd.isna(numeric):
+        return str(value)
+
+    number = float(numeric)
+    if as_percent:
+        return f"{number * 100:.1f}%"
+
+    if abs(number - round(number)) < 1e-9:
+        return str(int(round(number)))
+
+    return str(number)
 
 
 def _rgb_to_hex(rgb: tuple[float, float, float]) -> str:
@@ -236,6 +256,24 @@ def _scoring_explanation_lines(scoring_rule: str) -> list[str]:
             "Samlet stilling sorteres faldende efter point (flest point er bedst).",
         ]
 
+    if scoring_rule == FRACTIONAL_POINT_RULE:
+        return [
+            "Valgt system: Fractional-point.",
+            "Grundpoint beregnes som i high-point.",
+            "Point i hver sejlads divideres med antal deltagere, ganges med 100 og afrundes.",
+            "Samlet stilling sorteres faldende efter point (flest point er bedst).",
+        ]
+
+    if scoring_rule == BAYESIAN_POINT_RULE:
+        return [
+            "Valgt system: Bayesian-point.",
+            "Pr. sejlads beregnes performance fra beregnet tid, justeret med en fælles handicap-baseline.",
+            "Hver sejlads får sin egen niveaukorrektion, så systematiske race-forskelle (fx vind) ikke skævvrider sammenligningen.",
+            "Samlet score estimeres med en hierarkisk Bayesian model med shrinkage mod feltets middel; ingen discards anvendes.",
+            "Vinderchance næste estimeres betinget på deltagelse via posterior-predictive Monte Carlo: der samples i hastighedsrum og konverteres til pace.",
+            "Point vises som procent med 1 decimal, og samlet stilling sorteres faldende (højest er bedst).",
+        ]
+
     return [
         "Valgt system: Low-point.",
         "Fuldførte både får point svarende til placering i sejladsen (1 for nr. 1, 2 for nr. 2 osv.).",
@@ -302,6 +340,7 @@ def build_combined_pdf(
     )
 
     story = []
+    bayesian_percent_display = scoring_rule == BAYESIAN_POINT_RULE
     generated_at = _danish_now().strftime("%d-%m-%Y %H:%M")
     group_theme_map: dict[str, dict[str, object]] = {}
 
@@ -418,7 +457,9 @@ def build_combined_pdf(
             available_columns = [column for column in preferred_columns if column in race_rows.columns]
             printable_race = race_rows[available_columns].copy()
             if "points" in printable_race.columns:
-                printable_race["points"] = printable_race["points"].map(_int_text)
+                printable_race["points"] = printable_race["points"].map(
+                    lambda value: _point_text(value, as_percent=bayesian_percent_display)
+                )
             printable_race = printable_race.rename(
                 columns={
                     "points": "Point",
@@ -498,6 +539,7 @@ def build_combined_pdf(
             "competitor": "Deltager",
             "boat_type": "Bådtype",
             "combined_points": "Point",
+            "next_race_win_probability": "Vinderchance næste (ved deltagelse)",
         }
         overall_printable = overall_printable.rename(columns=rename_map)
 
@@ -507,17 +549,28 @@ def build_combined_pdf(
         ordered_columns.extend([f"R{race_number}" for race_number in range(1, 19) if f"R{race_number}" in overall_printable.columns])
         if "Point" in overall_printable.columns:
             ordered_columns.append("Point")
+        if "Vinderchance næste (ved deltagelse)" in overall_printable.columns:
+            ordered_columns.append("Vinderchance næste (ved deltagelse)")
         overall_printable = overall_printable[[column for column in ordered_columns if column in overall_printable.columns]]
 
         if "Point" in overall_printable.columns:
-            overall_printable["Point"] = overall_printable["Point"].map(_int_text)
+            overall_printable["Point"] = overall_printable["Point"].map(
+                lambda value: _point_text(value, as_percent=bayesian_percent_display)
+            )
+
+        if "Vinderchance næste (ved deltagelse)" in overall_printable.columns:
+            overall_printable["Vinderchance næste (ved deltagelse)"] = overall_printable["Vinderchance næste (ved deltagelse)"].map(
+                lambda value: _point_text(value, as_percent=True)
+            )
 
         if "Plac." in overall_printable.columns:
             overall_printable["Plac."] = overall_printable["Plac."].map(_int_text)
 
         for column in overall_printable.columns:
             if re.fullmatch(r"R\d+", str(column)):
-                overall_printable[column] = overall_printable[column].map(_int_text)
+                overall_printable[column] = overall_printable[column].map(
+                    lambda value: _point_text(value, as_percent=bayesian_percent_display)
+                )
 
         overall_printable = _mathify_point_columns(overall_printable, discard_map=discard_map, font_size=table_font_size)
         overall_printable = _mathify_time_columns(overall_printable, font_size=table_font_size)
@@ -529,7 +582,7 @@ def build_combined_pdf(
         overall_center_columns = {
             column
             for column in overall_printable.columns
-            if column in {"Plac.", "Point"} or re.fullmatch(r"R\d+", str(column))
+            if column in {"Plac.", "Point", "Vinderchance næste (ved deltagelse)"} or re.fullmatch(r"R\d+", str(column))
         }
         story.append(
             _styled_table(

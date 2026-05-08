@@ -107,7 +107,10 @@ Scoring rule options:
 
 - `--scoring-rule low-point` (default): classic low-point scoring where lowest total wins.
 - `--scoring-rule high-point`: each boat gets 1 point for participating in a race row, plus 1 point per boat left behind. Highest total wins.
-- Discards still apply in both modes.
+- `--scoring-rule fractional-point`: high-point normalized per race by participant count, then multiplied by 100 and rounded (`round((high-point points / participants) * 100)`). Highest total wins.
+- `--scoring-rule bayesian-point`: order-invariant, time-based hierarchical Bayesian score using corrected times with race-specific bias correction and handicap baseline adjustment. Displayed as percent with one decimal. No discards.
+- For `bayesian-point`, the final table includes `Vinderchance næste`: posterior-predictive Monte Carlo estimate of winning the next race conditional on participation, using speed-space sampling converted to pace (shown as percent).
+- Discards apply for `low-point`, `high-point`, and `fractional-point`, but not for `bayesian-point`.
 
 Examples:
 
@@ -115,8 +118,20 @@ Examples:
 # Use high-point scoring directly from CLI
 python -m m2s_combiner.cli --scoring-rule high-point
 
+# Use normalized high-point scoring
+python -m m2s_combiner.cli --scoring-rule fractional-point
+
+# Use order-invariant Bayesian scoring
+python -m m2s_combiner.cli --scoring-rule bayesian-point
+
 # run_2026.py forwards extra args to the CLI
 python run_2026.py --scoring-rule high-point
+
+# run_2024.py and run_2025.py also forward extra args
+python run_2025.py --scoring-rule fractional-point
+
+# Bayesian scoring works via run scripts too
+python run_2025.py --scoring-rule bayesian-point
 ```
 
 ## Email Results (Gmail)

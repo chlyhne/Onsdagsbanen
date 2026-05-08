@@ -19,6 +19,7 @@ def main() -> int:
         "--output-pdf",
         "Results2025.pdf",
     ]
+    cmd.extend(sys.argv[1:])
     completed = subprocess.run(cmd, cwd=root)
     return completed.returncode
 
