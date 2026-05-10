@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from difflib import SequenceMatcher
+import json
 import math
 from pathlib import Path
 import re
@@ -26,11 +27,12 @@ EVENT_URLS_BY_YEAR: dict[int, str] = {
 }
 EPS = 1e-9
 Z50 = 0.6744897501960817
-TARGET_GROUP = "Stor Bane"
 NON_OBS_STATUSES = {"DNS", "DNC", "DSQ", "DNF"}
 Q_SEARCH_MIN = 1e-12
 Q_SEARCH_MAX = 1e-2
-P_CAP_FACTOR = 30.0
+P_CAP_FACTOR = 365.0
+PLOT_ACTIVE_YEAR = 2026
+GROUP_Q_CACHE_FILENAME = "redress_group_q_cache.json"
 
 
 @dataclass
@@ -38,6 +40,15 @@ class BoatState:
     x: float
     p: float
     last_state_date: datetime | None
+
+
+@dataclass
+class GroupFilterResult:
+    history: pd.DataFrame
+    nll_sum: float
+    observed_count: int
+    loo_sq_error_sum: float
+    loo_error_count: int
 
 
 def _race_sort_key(label: str) -> int:
@@ -51,34 +62,66 @@ def _race_num(label: str) -> int:
         return 0
 
 
-def _latex_escape(text: object) -> str:
-    value = str(text)
-    replacements = {
-        "\\": r"\textbackslash{}",
-        "&": r"\&",
-        "%": r"\%",
-        "$": r"\$",
-        "#": r"\#",
-        "_": r"\_",
-        "{": r"\{",
-        "}": r"\}",
-        "~": r"\textasciitilde{}",
-        "^": r"\textasciicircum{}",
-    }
-    for old, new in replacements.items():
-        value = value.replace(old, new)
-    return value
-
-
-def _format_seconds(value: float | int | None) -> str:
-    if value is None or (isinstance(value, float) and (math.isnan(value) or math.isinf(value))):
+def _display_name(value: str) -> str:
+    compact = " ".join(str(value).strip().split())
+    if not compact:
         return ""
-    total = int(round(float(value)))
+    return compact.title()
+
+
+def _slugify_filename(value: str) -> str:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return "item"
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-") or "item"
+
+
+def _format_seconds_hms(value: float | int | None) -> str:
+    if value is None:
+        return ""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not np.isfinite(numeric):
+        return ""
+    total = int(round(numeric))
     sign = "-" if total < 0 else ""
     total = abs(total)
     hours, rem = divmod(total, 3600)
     minutes, seconds = divmod(rem, 60)
     return f"{sign}{hours}:{minutes:02d}:{seconds:02d}"
+
+
+def _format_rank_error(value: float | int | None) -> str:
+    if value is None:
+        return ""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not np.isfinite(numeric):
+        return ""
+    rounded = int(round(numeric))
+    if rounded > 0:
+        return f"+{rounded}"
+    return str(rounded)
+
+
+def _format_percent_signed(value: float | int | None) -> str:
+    if value is None:
+        return ""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not np.isfinite(numeric):
+        return ""
+    if abs(numeric) < 0.05:
+        return "0.0\\%"
+    sign = "+" if numeric > 0 else ""
+    formatted = f"{numeric:.1f}"
+    return f"{sign}{formatted}\\%"
 
 
 def _parse_race_date(item: dict[str, Any]) -> datetime | None:
@@ -367,7 +410,7 @@ def _build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
 
             combined = pd.concat(race_frames, ignore_index=True)
             combined = (
-                combined.groupby(["year", "race", "competitor"], as_index=False)
+                combined.groupby(["year", "race", "series", "competitor"], as_index=False)
                 .agg(
                     boat_name=("boat_name", "first"),
                     boat_type=("boat_type", "first"),
@@ -398,6 +441,7 @@ def _build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
             continue
 
         combined = _soft_match_competitors(combined)
+        combined["race_local"] = combined["race"].astype(str)
 
         race_keys = combined.loc[:, ["year", "race", "race_date"]].drop_duplicates().copy()
         race_keys["race_local_num"] = race_keys["race"].map(_race_num)
@@ -437,23 +481,33 @@ def _build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
         all_rows.append(combined)
 
     all_data = pd.concat(all_rows, ignore_index=True) if all_rows else pd.DataFrame()
-    return groups, all_data
-
-
-def _filter_groups(
-    groups: list[dict[str, Any]],
-    all_data: pd.DataFrame,
-    target_group: str | None,
-) -> tuple[list[dict[str, Any]], pd.DataFrame]:
-    if not target_group:
+    if not groups or all_data.empty:
         return groups, all_data
 
-    filtered_groups = [group for group in groups if str(group.get("group", "")) == target_group]
-    if all_data.empty:
-        filtered_all = all_data.copy()
-    else:
-        filtered_all = all_data[all_data["group"] == target_group].copy()
-    return filtered_groups, filtered_all
+    stacked_rows: list[pd.DataFrame] = []
+    for idx, group in enumerate(groups):
+        chunk = group["combined"].copy()
+        chunk["_group_idx"] = idx
+        stacked_rows.append(chunk)
+    stacked = pd.concat(stacked_rows, ignore_index=True)
+    stacked = _soft_match_competitors(stacked)
+
+    updated_groups: list[dict[str, Any]] = []
+    for idx, group in enumerate(groups):
+        updated = dict(group)
+        updated["combined"] = (
+            stacked[stacked["_group_idx"] == idx]
+            .drop(columns=["_group_idx"])
+            .reset_index(drop=True)
+        )
+        updated_groups.append(updated)
+
+    all_data = (
+        stacked.drop(columns=["_group_idx"]).reset_index(drop=True)
+        if "_group_idx" in stacked.columns
+        else stacked.reset_index(drop=True)
+    )
+    return updated_groups, all_data
 
 
 def _estimate_global_q(all_data: pd.DataFrame) -> float:
@@ -495,18 +549,258 @@ def _estimate_global_q(all_data: pd.DataFrame) -> float:
     return max(q, 1e-8)
 
 
+def _build_competitor_year_group_map(all_data: pd.DataFrame) -> dict[tuple[str, int], str]:
+    if all_data.empty:
+        return {}
+
+    work = all_data.copy()
+    status_series = work["race_status_code"] if "race_status_code" in work.columns else pd.Series("", index=work.index)
+    work["status_upper"] = status_series.fillna("").astype(str).str.upper().str.strip()
+    work["is_obs"] = work["beregnet_seconds"].notna() & (~work["status_upper"].isin(NON_OBS_STATUSES))
+
+    summary = (
+        work.groupby(["competitor", "year", "group"], as_index=False)
+        .agg(
+            observed_count=("is_obs", "sum"),
+            row_count=("race", "count"),
+        )
+        .sort_values(["competitor", "year", "observed_count", "row_count", "group"], ascending=[True, True, False, False, True])
+    )
+    chosen = summary.drop_duplicates(subset=["competitor", "year"], keep="first")
+    mapping = {
+        (str(row["competitor"]), int(row["year"])): str(row["group"])
+        for _, row in chosen.iterrows()
+    }
+    return mapping
+
+
+def _load_group_q_cache(path: Path) -> dict[str, float]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if isinstance(payload, dict) and isinstance(payload.get("group_q"), dict):
+        source = payload["group_q"]
+    elif isinstance(payload, dict):
+        source = payload
+    else:
+        return {}
+
+    q_map: dict[str, float] = {}
+    for key, value in source.items():
+        try:
+            q_val = float(value)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(q_val) and q_val > 0.0:
+            q_map[str(key)] = q_val
+    return q_map
+
+
+def _save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
+    payload = {
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "group_q": {str(k): float(v) for k, v in sorted(q_by_group.items())},
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _prepare_group_runtime(group: dict[str, Any]) -> dict[str, Any]:
+    cached = group.get("_runtime")
+    if isinstance(cached, dict):
+        return cached
+
+    combined: pd.DataFrame = group["combined"].copy()
+    combined["competitor"] = combined["competitor"].astype(str)
+    combined["status_upper"] = combined["race_status_code"].fillna("").astype(str).str.upper().str.strip()
+
+    competitors = sorted(combined["competitor"].dropna().unique().tolist())
+    race_rows_by_label: dict[str, pd.DataFrame] = {}
+    race_lookup_by_label: dict[str, dict[str, dict[str, Any]]] = {}
+    for race_label, race_rows in combined.groupby("race", sort=False):
+        label = str(race_label)
+        race_frame = race_rows.copy()
+        race_rows_by_label[label] = race_frame
+        race_lookup_by_label[label] = (
+            race_frame.drop_duplicates(subset=["competitor"], keep="first")
+            .set_index("competitor", drop=False)
+            .to_dict("index")
+        )
+
+    runtime = {
+        "combined": combined,
+        "competitors": competitors,
+        "race_rows_by_label": race_rows_by_label,
+        "race_lookup_by_label": race_lookup_by_label,
+    }
+    group["_runtime"] = runtime
+    return runtime
+
+
+def _mu_hat_given_measurement_variance(
+    measurement_variance: float,
+    centered_values: np.ndarray,
+    p_priors: np.ndarray,
+) -> float:
+    s_values = np.maximum(EPS, p_priors + measurement_variance)
+    weights = 1.0 / s_values
+    return float(np.sum(weights * centered_values) / np.sum(weights))
+
+
+def _measurement_nll(measurement_variance: float, centered_values: np.ndarray, p_priors: np.ndarray) -> float:
+    s_values = np.maximum(EPS, p_priors + measurement_variance)
+    mu_hat = _mu_hat_given_measurement_variance(measurement_variance, centered_values, p_priors)
+    return 0.5 * float(
+        np.sum(np.log(2.0 * math.pi * s_values) + np.square(centered_values - mu_hat) / s_values)
+    )
+
+
+def _fit_measurement_variance(centered_values: np.ndarray, p_priors: np.ndarray) -> float:
+    if centered_values.size == 0:
+        return float("nan")
+
+    lower = EPS
+    base_scale = max(
+        EPS,
+        float(np.var(centered_values, ddof=0)),
+        float(np.mean(np.square(centered_values))),
+        float(np.mean(p_priors)),
+    )
+    upper = max(lower * 16.0, base_scale)
+    upper_nll = _measurement_nll(upper, centered_values, p_priors)
+
+    for _ in range(8):
+        candidate_upper = upper * 4.0
+        candidate_nll = _measurement_nll(candidate_upper, centered_values, p_priors)
+        if candidate_nll < upper_nll:
+            upper = candidate_upper
+            upper_nll = candidate_nll
+        else:
+            break
+
+    phi = (1.0 + math.sqrt(5.0)) / 2.0
+    left = lower
+    right = upper
+    c = right - (right - left) / phi
+    d = left + (right - left) / phi
+    fc = _measurement_nll(c, centered_values, p_priors)
+    fd = _measurement_nll(d, centered_values, p_priors)
+
+    for _ in range(32):
+        if fc <= fd:
+            right = d
+            d = c
+            fd = fc
+            c = right - (right - left) / phi
+            fc = _measurement_nll(c, centered_values, p_priors)
+        else:
+            left = c
+            c = d
+            fc = fd
+            d = left + (right - left) / phi
+            fd = _measurement_nll(d, centered_values, p_priors)
+
+    return max(EPS, float(0.5 * (left + right)))
+
+
+def _fit_day_parameters(centered_values: np.ndarray, p_priors: np.ndarray) -> tuple[float, float, float]:
+    if centered_values.size == 0:
+        return float("nan"), float("nan"), 0.0
+
+    r_t = _fit_measurement_variance(centered_values, p_priors)
+    mu_hat = _mu_hat_given_measurement_variance(r_t, centered_values, p_priors)
+    nll_sum = _measurement_nll(r_t, centered_values, p_priors)
+    return mu_hat, r_t, nll_sum
+
+
+def _compute_observation_step(
+    observed: pd.DataFrame,
+    prior_by_competitor: dict[str, tuple[float, float, int]],
+) -> dict[str, Any]:
+    if observed.empty:
+        return {
+            "b_hat": float("nan"),
+            "r_t": float("nan"),
+            "innovation_by_competitor": {},
+            "gain_by_competitor": {},
+            "y_pred_loo_by_competitor": {},
+            "nll_sum": 0.0,
+            "observed_count": 0,
+            "loo_sq_error_sum": 0.0,
+            "loo_error_count": 0,
+        }
+
+    competitors = observed["competitor"].astype(str).tolist()
+    beregnet_seconds = observed["beregnet_seconds"].to_numpy(dtype=float)
+    y_values = np.log(np.clip(beregnet_seconds, EPS, None))
+    x_priors = np.array([prior_by_competitor[competitor][0] for competitor in competitors], dtype=float)
+    p_priors = np.array([prior_by_competitor[competitor][1] for competitor in competitors], dtype=float)
+
+    centered_values = y_values - x_priors
+    b_hat, r_t, nll_sum = _fit_day_parameters(centered_values, p_priors)
+
+    y_pred_loo_by_competitor: dict[str, float] = {}
+    if len(competitors) == 1:
+        y_pred_loo_by_competitor[competitors[0]] = float(b_hat + x_priors[0])
+    else:
+        for idx, competitor in enumerate(competitors):
+            centered_values_loo = np.delete(centered_values, idx)
+            p_priors_loo = np.delete(p_priors, idx)
+            b_hat_loo, _, _ = _fit_day_parameters(centered_values_loo, p_priors_loo)
+            y_pred_loo_by_competitor[competitor] = float(b_hat_loo + x_priors[idx])
+
+    innovations = centered_values - b_hat
+    gains = p_priors / (p_priors + r_t)
+
+    innovation_by_competitor = {
+        competitor: float(innovation)
+        for competitor, innovation in zip(competitors, innovations)
+    }
+    gain_by_competitor = {
+        competitor: float(gain)
+        for competitor, gain in zip(competitors, gains)
+    }
+
+    loo_sq_error_sum = 0.0
+    loo_error_count = 0
+    for competitor, x_prior, observed_seconds in zip(competitors, x_priors, beregnet_seconds):
+        y_pred_loo = y_pred_loo_by_competitor[competitor]
+        pred_seconds = float(np.exp(y_pred_loo))
+        if np.isfinite(pred_seconds):
+            error = float(observed_seconds - pred_seconds)
+            loo_sq_error_sum += error * error
+            loo_error_count += 1
+
+    return {
+        "b_hat": b_hat,
+        "r_t": r_t,
+        "innovation_by_competitor": innovation_by_competitor,
+        "gain_by_competitor": gain_by_competitor,
+        "y_pred_loo_by_competitor": y_pred_loo_by_competitor,
+        "nll_sum": nll_sum,
+        "observed_count": len(competitors),
+        "loo_sq_error_sum": loo_sq_error_sum,
+        "loo_error_count": loo_error_count,
+    }
+
+
 def _run_group_filter(
     group: dict[str, Any],
     global_q: float,
     *,
     collect_history: bool = True,
-) -> tuple[pd.DataFrame, float, int]:
-    combined: pd.DataFrame = group["combined"].copy()
+) -> GroupFilterResult:
+    runtime = _prepare_group_runtime(group)
     selected_races: list[str] = list(group["selected_races"])
     race_dates: dict[str, datetime] = dict(group["race_dates"])
     group_label = str(group["group"])
 
-    competitors = sorted(combined["competitor"].dropna().astype(str).unique().tolist())
+    competitors: list[str] = runtime["competitors"]
+    race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
+    race_lookup_by_label: dict[str, dict[str, dict[str, Any]]] = runtime["race_lookup_by_label"]
     p_cap = float(P_CAP_FACTOR * global_q)
     states: dict[str, BoatState] = {
         competitor: BoatState(x=0.0, p=p_cap, last_state_date=None)
@@ -516,14 +810,18 @@ def _run_group_filter(
     history_rows: list[dict[str, Any]] = []
     nll_sum = 0.0
     observed_count = 0
+    loo_sq_error_sum = 0.0
+    loo_error_count = 0
 
     for race_label in selected_races:
         race_date = race_dates.get(race_label)
         if race_date is None:
             continue
 
-        race_rows = combined[combined["race"] == race_label].copy()
-        race_rows["status_upper"] = race_rows["race_status_code"].fillna("").astype(str).str.upper().str.strip()
+        race_rows = race_rows_by_label.get(race_label)
+        if race_rows is None:
+            continue
+        race_lookup = race_lookup_by_label.get(race_label, {})
 
         prior_by_competitor: dict[str, tuple[float, float, int]] = {}
         for competitor in competitors:
@@ -538,85 +836,47 @@ def _run_group_filter(
 
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
-        observed["competitor"] = observed["competitor"].astype(str)
-        observed["y"] = np.log(observed["beregnet_seconds"].astype(float).clip(lower=EPS))
-
-        if observed.empty:
-            a_hat = float("nan")
-            r_t = float("nan")
-            innovation_by_competitor: dict[str, float] = {}
-            gain_by_competitor: dict[str, float] = {}
-            y_pred_loo_by_competitor: dict[str, float] = {}
-        else:
-            a_samples = observed.apply(
-                lambda row: float(row["y"] + prior_by_competitor[row["competitor"]][0]),
-                axis=1,
-            ).to_numpy(dtype=float)
-            a_hat = float(np.median(a_samples))
-            a_by_competitor = {
-                str(row["competitor"]): float(row["y"] + prior_by_competitor[str(row["competitor"])][0])
-                for _, row in observed.iterrows()
-            }
-            y_pred_loo_by_competitor = {}
-            observed_competitors_list = list(a_by_competitor.keys())
-            for competitor in observed_competitors_list:
-                x_prior, _, _ = prior_by_competitor[competitor]
-                others = [a_by_competitor[c] for c in observed_competitors_list if c != competitor]
-                a_hat_loo = float(np.median(np.array(others, dtype=float))) if others else a_hat
-                y_pred_loo_by_competitor[competitor] = float(a_hat_loo - x_prior)
-
-            innovation_by_competitor = {}
-            innovations: list[float] = []
-            for _, row in observed.iterrows():
-                competitor = str(row["competitor"])
-                y_val = float(row["y"])
-                x_prior, p_prior, _ = prior_by_competitor[competitor]
-                y_prior = a_hat - x_prior
-                nu = y_val - y_prior
-                innovation_by_competitor[competitor] = nu
-                innovations.append(nu)
-
-            innovation_var = float(np.var(np.array(innovations, dtype=float), ddof=0)) if innovations else 0.0
-            # Requested behavior: use race variance directly as R_t.
-            # This may double-count state uncertainty, but keeps update strength intuitive.
-            r_t = max(EPS, innovation_var)
-
-            gain_by_competitor = {}
-            for _, row in observed.iterrows():
-                competitor = str(row["competitor"])
-                _, p_prior, _ = prior_by_competitor[competitor]
-                gain_by_competitor[competitor] = float(p_prior / (p_prior + r_t))
-
-            for _, row in observed.iterrows():
-                competitor = str(row["competitor"])
-                nu = float(innovation_by_competitor[competitor])
-                _, p_prior, _ = prior_by_competitor[competitor]
-                s_val = max(EPS, float(p_prior + r_t))
-                nll_sum += 0.5 * (math.log(2.0 * math.pi * s_val) + (nu * nu) / s_val)
-                observed_count += 1
+        observed_step = _compute_observation_step(observed, prior_by_competitor)
+        b_hat = float(observed_step["b_hat"])
+        r_t = float(observed_step["r_t"])
+        innovation_by_competitor = observed_step["innovation_by_competitor"]
+        gain_by_competitor = observed_step["gain_by_competitor"]
+        y_pred_loo_by_competitor = observed_step["y_pred_loo_by_competitor"]
+        nll_sum += float(observed_step["nll_sum"])
+        observed_count += int(observed_step["observed_count"])
+        loo_sq_error_sum += float(observed_step["loo_sq_error_sum"])
+        loo_error_count += int(observed_step["loo_error_count"])
 
         observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
 
         for competitor in competitors:
             x_prior, p_prior, delta_days = prior_by_competitor[competitor]
-            status_row = race_rows[race_rows["competitor"].astype(str) == competitor]
             status = ""
             sailed_seconds: float | None = None
             beregnet_seconds: float | None = None
-            if not status_row.empty:
-                status = str(status_row.iloc[0].get("race_status_code") or "").strip()
-                raw_sailed = status_row.iloc[0].get("sailed_seconds")
-                raw_beregnet = status_row.iloc[0].get("beregnet_seconds")
-                sailed_seconds = float(raw_sailed) if pd.notna(raw_sailed) else None
-                beregnet_seconds = float(raw_beregnet) if pd.notna(raw_beregnet) else None
-            else:
-                status = "IKKE MED"
+            race_local_value = race_label
+            series_value = ""
+            if collect_history:
+                status_row = race_lookup.get(competitor)
+                if status_row is not None:
+                    status = str(status_row.get("race_status_code") or "").strip()
+                    raw_sailed = status_row.get("sailed_seconds")
+                    raw_beregnet = status_row.get("beregnet_seconds")
+                    raw_race_local = status_row.get("race_local")
+                    raw_series = status_row.get("series")
+                    sailed_seconds = float(raw_sailed) if pd.notna(raw_sailed) else None
+                    beregnet_seconds = float(raw_beregnet) if pd.notna(raw_beregnet) else None
+                    if pd.notna(raw_race_local):
+                        race_local_value = str(raw_race_local).strip() or race_label
+                    if pd.notna(raw_series):
+                        series_value = str(raw_series).strip()
+                else:
+                    status = "IKKE MED"
 
             if competitor in observed_competitors and competitor in innovation_by_competitor and not np.isnan(r_t):
                 nu = float(innovation_by_competitor[competitor])
                 k = float(gain_by_competitor[competitor])
-                # Observation model is y = a - x + v, so H = -1 and update uses minus sign.
-                x_post = float(x_prior - k * nu)
+                x_post = float(x_prior + k * nu)
                 p_post = float((1.0 - k) * p_prior)
                 observed_flag = True
                 y_pred_loo = float(y_pred_loo_by_competitor.get(competitor, float("nan")))
@@ -635,6 +895,8 @@ def _run_group_filter(
                     {
                         "group": group_label,
                         "race": race_label,
+                        "race_local": race_local_value,
+                        "series": series_value,
                         "race_date": race_date.date().isoformat(),
                         "year": int(race_date.year),
                         "competitor": competitor,
@@ -642,7 +904,7 @@ def _run_group_filter(
                         "status": status,
                         "sailed_seconds": sailed_seconds,
                         "beregnet_seconds": beregnet_seconds,
-                        "a_t_hat": a_hat,
+                        "b_t_hat": b_hat,
                         "delta_t_days": delta_days,
                         "global_q": global_q,
                         "x_prior": x_prior,
@@ -657,37 +919,254 @@ def _run_group_filter(
                 )
 
     history = pd.DataFrame(history_rows) if collect_history else pd.DataFrame()
-    return history, nll_sum, observed_count
+    return GroupFilterResult(
+        history=history,
+        nll_sum=nll_sum,
+        observed_count=observed_count,
+        loo_sq_error_sum=loo_sq_error_sum,
+        loo_error_count=loo_error_count,
+    )
+
+
+def _run_all_groups_with_transfer(
+    groups: list[dict[str, Any]],
+    q_by_group: dict[str, float],
+    competitor_year_group: dict[tuple[str, int], str],
+    *,
+    collect_history: bool = True,
+) -> tuple[pd.DataFrame, dict[str, float], dict[str, int]]:
+    if not groups:
+        return pd.DataFrame(), {}, {}
+
+    groups_by_name = {str(group["group"]): group for group in groups}
+    p_cap_by_group = {
+        group_name: float(P_CAP_FACTOR * q_by_group[group_name])
+        for group_name in groups_by_name
+    }
+    states: dict[str, dict[str, BoatState]] = {}
+    competitors_by_group: dict[str, list[str]] = {}
+    events: list[dict[str, Any]] = []
+
+    for group_name, group in groups_by_name.items():
+        runtime = _prepare_group_runtime(group)
+        combined = runtime["combined"]
+        competitors = runtime["competitors"]
+        competitors_by_group[group_name] = competitors
+        states[group_name] = {
+            competitor: BoatState(x=0.0, p=p_cap_by_group[group_name], last_state_date=None)
+            for competitor in competitors
+        }
+
+        selected_races: list[str] = list(group["selected_races"])
+        race_dates: dict[str, datetime] = dict(group["race_dates"])
+        for race_label in selected_races:
+            race_date = race_dates.get(race_label)
+            if race_date is None:
+                continue
+            events.append(
+                {
+                    "group": group_name,
+                    "race": race_label,
+                    "race_date": race_date,
+                    "year": int(race_date.year),
+                    "race_num": _race_num(race_label),
+                }
+            )
+
+    events = sorted(events, key=lambda item: (item["race_date"], item["race_num"], item["group"], item["race"]))
+    first_race_by_group_year: set[tuple[str, int, str]] = set()
+    last_race_by_group_year: set[tuple[str, int, str]] = set()
+    for group_name in sorted(groups_by_name):
+        gevents = [event for event in events if event["group"] == group_name]
+        by_year: dict[int, list[dict[str, Any]]] = {}
+        for event in gevents:
+            by_year.setdefault(int(event["year"]), []).append(event)
+        for year, year_events in by_year.items():
+            ordered = sorted(year_events, key=lambda item: (item["race_date"], item["race_num"], item["race"]))
+            first_race_by_group_year.add((group_name, year, str(ordered[0]["race"])))
+            last_race_by_group_year.add((group_name, year, str(ordered[-1]["race"])))
+
+    end_of_year_state: dict[tuple[str, int, str], BoatState] = {}
+    nll_by_group: dict[str, float] = {group_name: 0.0 for group_name in groups_by_name}
+    obs_by_group: dict[str, int] = {group_name: 0 for group_name in groups_by_name}
+    history_rows: list[dict[str, Any]] = []
+
+    for event in events:
+        group_name = str(event["group"])
+        race_label = str(event["race"])
+        race_date = event["race_date"]
+        year = int(event["year"])
+        global_q = float(q_by_group[group_name])
+        p_cap = float(p_cap_by_group[group_name])
+        group_states = states[group_name]
+        competitors = competitors_by_group[group_name]
+        group = groups_by_name[group_name]
+        runtime = _prepare_group_runtime(group)
+        race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
+        race_lookup_by_label: dict[str, dict[str, dict[str, Any]]] = runtime["race_lookup_by_label"]
+
+        if (group_name, year, race_label) in first_race_by_group_year:
+            for competitor in competitors:
+                assigned_group = competitor_year_group.get((competitor, year))
+                prev_group = competitor_year_group.get((competitor, year - 1))
+                if assigned_group != group_name or not prev_group or prev_group == group_name:
+                    continue
+                snapshot = end_of_year_state.get((prev_group, year - 1, competitor))
+                if snapshot is None:
+                    continue
+                group_states[competitor] = BoatState(
+                    x=float(snapshot.x),
+                    p=float(snapshot.p),
+                    last_state_date=snapshot.last_state_date,
+                )
+
+        race_rows = race_rows_by_label.get(race_label)
+        if race_rows is None:
+            continue
+        race_lookup = race_lookup_by_label.get(race_label, {})
+
+        prior_by_competitor: dict[str, tuple[float, float, int]] = {}
+        for competitor in competitors:
+            state = group_states[competitor]
+            if state.last_state_date is None:
+                delta_days = 0
+            else:
+                delta_days = max(0, (race_date - state.last_state_date).days)
+            x_prior = state.x
+            p_prior = min(p_cap, state.p + delta_days * global_q)
+            prior_by_competitor[competitor] = (x_prior, p_prior, delta_days)
+
+        obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
+        observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
+        observed_step = _compute_observation_step(observed, prior_by_competitor)
+        b_hat = float(observed_step["b_hat"])
+        r_t = float(observed_step["r_t"])
+        innovation_by_competitor = observed_step["innovation_by_competitor"]
+        gain_by_competitor = observed_step["gain_by_competitor"]
+        y_pred_loo_by_competitor = observed_step["y_pred_loo_by_competitor"]
+        nll_by_group[group_name] += float(observed_step["nll_sum"])
+        obs_by_group[group_name] += int(observed_step["observed_count"])
+
+        observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
+
+        for competitor in competitors:
+            x_prior, p_prior, delta_days = prior_by_competitor[competitor]
+            status = ""
+            sailed_seconds: float | None = None
+            beregnet_seconds: float | None = None
+            race_local_value = race_label
+            series_value = ""
+            if collect_history:
+                status_row = race_lookup.get(competitor)
+                if status_row is not None:
+                    status = str(status_row.get("race_status_code") or "").strip()
+                    raw_sailed = status_row.get("sailed_seconds")
+                    raw_beregnet = status_row.get("beregnet_seconds")
+                    raw_race_local = status_row.get("race_local")
+                    raw_series = status_row.get("series")
+                    sailed_seconds = float(raw_sailed) if pd.notna(raw_sailed) else None
+                    beregnet_seconds = float(raw_beregnet) if pd.notna(raw_beregnet) else None
+                    if pd.notna(raw_race_local):
+                        race_local_value = str(raw_race_local).strip() or race_label
+                    if pd.notna(raw_series):
+                        series_value = str(raw_series).strip()
+                else:
+                    status = "IKKE MED"
+
+            if competitor in observed_competitors and competitor in innovation_by_competitor and not np.isnan(r_t):
+                nu = float(innovation_by_competitor[competitor])
+                k = float(gain_by_competitor[competitor])
+                x_post = float(x_prior + k * nu)
+                p_post = float((1.0 - k) * p_prior)
+                observed_flag = True
+                y_pred_loo = float(y_pred_loo_by_competitor.get(competitor, float("nan")))
+            else:
+                nu = float("nan")
+                k = float("nan")
+                x_post = float(x_prior)
+                p_post = float(p_prior)
+                observed_flag = False
+                y_pred_loo = float("nan")
+
+            group_states[competitor] = BoatState(x=x_post, p=p_post, last_state_date=race_date)
+
+            if collect_history:
+                history_rows.append(
+                    {
+                        "group": group_name,
+                        "race": race_label,
+                        "race_local": race_local_value,
+                        "series": series_value,
+                        "race_date": race_date.date().isoformat(),
+                        "year": int(year),
+                        "competitor": competitor,
+                        "observed": observed_flag,
+                        "status": status,
+                        "sailed_seconds": sailed_seconds,
+                        "beregnet_seconds": beregnet_seconds,
+                        "b_t_hat": b_hat,
+                        "delta_t_days": delta_days,
+                        "global_q": global_q,
+                        "x_prior": x_prior,
+                        "p_prior": p_prior,
+                        "r_t": r_t,
+                        "innovation": nu,
+                        "kalman_gain": k,
+                        "y_pred_loo": y_pred_loo,
+                        "x_post": x_post,
+                        "p_post": p_post,
+                    }
+                )
+
+        if (group_name, year, race_label) in last_race_by_group_year:
+            for competitor, state in group_states.items():
+                end_of_year_state[(group_name, year, competitor)] = BoatState(
+                    x=float(state.x),
+                    p=float(state.p),
+                    last_state_date=state.last_state_date,
+                )
+
+    history = pd.DataFrame(history_rows) if collect_history else pd.DataFrame()
+    return history, nll_by_group, obs_by_group
 
 
 def _q_objective(groups: list[dict[str, Any]], q_value: float) -> tuple[float, int]:
-    frames: list[pd.DataFrame] = []
+    sq_error_sum = 0.0
+    obs_count = 0
     for group in groups:
-        history, _, _ = _run_group_filter(group, q_value, collect_history=True)
-        if not history.empty:
-            frames.append(history)
-    if not frames:
-        return float("inf"), 0
-    history = pd.concat(frames, ignore_index=True)
-    obs = history[history["observed"] == True].copy()  # noqa: E712
-    if obs.empty:
+        result = _run_group_filter(group, q_value, collect_history=False)
+        sq_error_sum += float(result.loo_sq_error_sum)
+        obs_count += int(result.loo_error_count)
+    if obs_count == 0:
         return float("inf"), 0
 
-    obs["pred_beregnet_seconds_loo"] = np.exp(obs["y_pred_loo"])
-    obs.loc[~np.isfinite(obs["pred_beregnet_seconds_loo"]), "pred_beregnet_seconds_loo"] = np.nan
-    obs = obs.dropna(subset=["beregnet_seconds", "pred_beregnet_seconds_loo"])
-    if obs.empty:
-        return float("inf"), 0
-
-    errors = obs["beregnet_seconds"].astype(float) - obs["pred_beregnet_seconds_loo"].astype(float)
-    rmse = float(np.sqrt(np.mean(np.square(errors))))
-    return rmse, int(len(obs))
+    rmse = float(np.sqrt(sq_error_sum / obs_count))
+    return rmse, obs_count
 
 
-def _q_diagnostics(groups: list[dict[str, Any]], q_values: np.ndarray) -> pd.DataFrame:
+def _evaluate_q_score(
+    groups: list[dict[str, Any]],
+    q_value: float,
+    score_cache: dict[float, tuple[float, int]] | None = None,
+) -> tuple[float, int]:
+    key = float(q_value)
+    if score_cache is not None and key in score_cache:
+        return score_cache[key]
+
+    result = _q_objective(groups, key)
+    if score_cache is not None:
+        score_cache[key] = result
+    return result
+
+
+def _q_diagnostics(
+    groups: list[dict[str, Any]],
+    q_values: np.ndarray,
+    score_cache: dict[float, tuple[float, int]] | None = None,
+) -> pd.DataFrame:
     rows: list[dict[str, float | int]] = []
     for q_value in q_values:
-        score, obs = _q_objective(groups, float(q_value))
+        score, obs = _evaluate_q_score(groups, float(q_value), score_cache=score_cache)
         rows.append(
             {
                 "q_value": float(q_value),
@@ -698,7 +1177,12 @@ def _q_diagnostics(groups: list[dict[str, Any]], q_values: np.ndarray) -> pd.Dat
     return pd.DataFrame(rows).sort_values("q_value").reset_index(drop=True)
 
 
-def _fit_global_q(groups: list[dict[str, Any]], initial_q: float) -> tuple[float, float, int]:
+def _fit_global_q(
+    groups: list[dict[str, Any]],
+    initial_q: float,
+    *,
+    score_cache: dict[float, tuple[float, int]] | None = None,
+) -> tuple[float, float, int]:
     search_min = Q_SEARCH_MIN
     candidates = np.logspace(math.log10(search_min), math.log10(Q_SEARCH_MAX), 61, dtype=float)
     candidate_values = sorted(
@@ -711,7 +1195,7 @@ def _fit_global_q(groups: list[dict[str, Any]], initial_q: float) -> tuple[float
     best_obs = 0
 
     for q_value in candidate_values:
-        score, obs = _q_objective(groups, q_value)
+        score, obs = _evaluate_q_score(groups, q_value, score_cache=score_cache)
         if score < best_score:
             best_q = q_value
             best_score = score
@@ -721,7 +1205,7 @@ def _fit_global_q(groups: list[dict[str, Any]], initial_q: float) -> tuple[float
         local = [float(best_q * factor) for factor in np.logspace(-0.7, 0.7, 21)]
         local = sorted(set(max(search_min, min(Q_SEARCH_MAX, value)) for value in local))
         for q_value in local:
-            score, obs = _q_objective(groups, q_value)
+            score, obs = _evaluate_q_score(groups, q_value, score_cache=score_cache)
             if score < best_score:
                 best_q = q_value
                 best_score = score
@@ -730,368 +1214,297 @@ def _fit_global_q(groups: list[dict[str, Any]], initial_q: float) -> tuple[float
     return best_q, best_score, best_obs
 
 
-def _coords_scatter(obs: pd.DataFrame) -> str:
-    if obs.empty:
-        return ""
-    rows = []
-    for _, row in obs.iterrows():
-        x = row.get("beregnet_seconds")
-        y = row.get("pred_cf_beregnet_seconds")
-        if pd.isna(x) or pd.isna(y):
-            continue
-        rows.append(f"({float(x):.3f},{float(y):.3f})")
-    return " ".join(rows)
-
-
-def _coords_line(frame: pd.DataFrame, y_col: str) -> str:
-    rows = []
-    for _, row in frame.iterrows():
-        x = row.get("race_num")
-        y = row.get(y_col)
-        if pd.isna(x) or pd.isna(y):
-            continue
-        rows.append(f"({int(x)},{float(y):.6f})")
-    return " ".join(rows)
-
-
-def _boat_prediction_plots_latex(frame: pd.DataFrame) -> str:
+def _export_boat_plot_data(
+    frame: pd.DataFrame,
+    *,
+    allowed_competitors: set[str] | None,
+    output_dir: Path,
+) -> Path:
+    required_columns = [
+        "competitor",
+        "group",
+        "series",
+        "race",
+        "race_local",
+        "race_date",
+        "year",
+        "observed",
+        "x_prior",
+        "x_post",
+        "x_obs",
+        "x_q25",
+        "x_q75",
+    ]
+    missing = [column for column in required_columns if column not in frame.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for boat-plot export: {', '.join(missing)}")
     if frame.empty:
-        return ""
+        raise ValueError("Cannot export boat-plot data from empty frame.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     work = frame.copy()
     work["race_num"] = work["race"].map(_race_num)
     work = work.dropna(subset=["race_num"])
     if work.empty:
-        return ""
+        raise ValueError("No valid race labels found after parsing race numbers.")
 
-    global_q_series = work["global_q"].dropna().astype(float)
-    if global_q_series.empty:
-        return ""
-    global_q_value = float(global_q_series.iloc[0])
-    prior_sigma = math.sqrt(max(EPS, P_CAP_FACTOR * global_q_value))
-    prior_mean = 100.0 * (math.exp(0.5 * prior_sigma * prior_sigma) - 1.0)
-    prior_q25 = 100.0 * (math.exp(-Z50 * prior_sigma) - 1.0)
-    prior_q75 = 100.0 * (math.exp(+Z50 * prior_sigma) - 1.0)
-
-    x_max = int(work["race_num"].max())
-    y_values: list[float] = [prior_q25, prior_q75, prior_mean]
-    for col in ["pred_cf_expect_pct_baseline", "pred_cf_q25_pct_baseline", "pred_cf_q75_pct_baseline", "obs_pct_baseline"]:
-        values = work[col].dropna().astype(float).tolist()
-        y_values.extend(values)
-
-    if y_values:
-        y_min = min(y_values)
-        y_max = max(y_values)
-    else:
-        y_min = -1.0
-        y_max = 1.0
-    span = y_max - y_min
-    pad = 0.06 * span if span > 0 else 1.0
-    y_min -= pad
-    y_max += pad
-
-    sections: list[str] = []
     competitors = sorted(work["competitor"].dropna().astype(str).unique().tolist())
-    if "year" in work.columns and "status" in work.columns:
-        latest_year = int(work["year"].dropna().astype(int).max())
-        active_latest_year = set(
-            work[
-                (work["year"].astype(int) == latest_year)
-                & (work["status"].fillna("").astype(str).str.strip().str.upper() != "IKKE MED")
-            ]["competitor"].dropna().astype(str).tolist()
+    if allowed_competitors is not None:
+        competitors = [name for name in competitors if name in allowed_competitors]
+    if not competitors:
+        raise ValueError("No competitors matched allowed_competitors for boat-plot export.")
+
+    manifest_rows: list[dict[str, Any]] = []
+    for idx, competitor in enumerate(competitors, start=1):
+        c = work[work["competitor"].astype(str) == competitor].copy()
+        if c.empty:
+            raise ValueError(f"No rows for competitor '{competitor}' during plot export.")
+        c["race_date_dt"] = pd.to_datetime(c["race_date"], errors="coerce")
+        c = c.dropna(subset=["race_date_dt"])
+        if c.empty:
+            raise ValueError(f"No valid race_date values for competitor '{competitor}'.")
+        c = c.sort_values(["race_date_dt", "year", "race_num", "race", "group"]).reset_index(drop=True)
+        c["race_local_display"] = c["race_local"].astype(str)
+        event_cols = ["year", "race", "race_local_display", "race_date", "group", "race_num", "race_date_dt"]
+        events = (
+            c.loc[:, event_cols]
+            .drop_duplicates()
+            .sort_values(["race_date_dt", "year", "race_num", "race_local_display", "race", "group"], na_position="last")
+            .reset_index(drop=True)
         )
-        competitors = [name for name in competitors if name in active_latest_year]
-    for idx, competitor in enumerate(competitors):
-        c = work[work["competitor"].astype(str) == competitor].sort_values(["race_num", "race_date", "race"])
-        mean_coords: list[str] = [f"(0,{prior_mean:.6f})"]
-        q25_coords: list[str] = [f"(0,{prior_q25:.6f})"]
-        q75_coords: list[str] = [f"(0,{prior_q75:.6f})"]
-        for _, row in c.iterrows():
-            y_mean = row.get("pred_cf_expect_pct_baseline")
-            y_q25 = row.get("pred_cf_q25_pct_baseline")
-            y_q75 = row.get("pred_cf_q75_pct_baseline")
-            if pd.isna(y_mean) or pd.isna(y_q25) or pd.isna(y_q75):
-                continue
-            x_race = int(row["race_num"])
-            mean_coords.append(f"({x_race},{float(y_mean):.6f})")
-            q25_coords.append(f"({x_race},{float(y_q25):.6f})")
-            q75_coords.append(f"({x_race},{float(y_q75):.6f})")
-        if not mean_coords:
-            continue
+        if events.empty:
+            raise ValueError(f"No race events could be formed for competitor '{competitor}'.")
+        events["x_pos"] = np.arange(1, len(events) + 1, dtype=int)
+        c = c.merge(
+            events.loc[:, ["year", "race", "race_date", "group", "x_pos", "race_local_display"]],
+            on=["year", "race", "race_date", "group"],
+            how="left",
+        )
+        c = c.dropna(subset=["x_pos"]).copy()
+        c["x_pos"] = c["x_pos"].astype(int)
+        c = c.sort_values(["x_pos"]).reset_index(drop=True)
 
-        obs_coords = []
-        obs_rows = c[(c["observed"] == True) & c["beregnet_seconds"].notna()]  # noqa: E712
-        for _, row in obs_rows.iterrows():
-            y_obs = row.get("obs_pct_baseline")
-            if pd.isna(y_obs):
-                continue
-            obs_coords.append(f"({int(row['race_num'])},{float(y_obs):.6f})")
+        base = (
+            events.loc[:, ["x_pos", "year", "race_local_display", "group"]]
+            .rename(columns={"race_local_display": "race_local"})
+            .copy()
+        )
+        base["race_display"] = base.apply(
+            lambda row: f"'{int(row['year']) % 100:02d}-{str(row['race_local'])}",
+            axis=1,
+        )
+        base = base.drop(columns=["year"])
+        series_values = (
+            c.loc[:, ["x_pos", "series"]]
+            .drop_duplicates(subset=["x_pos"], keep="first")
+            .copy()
+        )
+        values = c.loc[:, ["x_pos", "observed", "x_prior", "x_post", "x_obs", "x_q25", "x_q75"]].drop_duplicates(
+            subset=["x_pos"],
+            keep="first",
+        )
+        values["x_post"] = np.where(values["observed"].astype(bool), values["x_post"], np.nan)
+        values = values.drop(columns=["observed"])
+        plot_data = (
+            base.merge(series_values, on="x_pos", how="left")
+            .merge(values, on="x_pos", how="left")
+            .sort_values("x_pos")
+            .reset_index(drop=True)
+        )
+        local_y_values: list[float] = (
+            plot_data["x_prior"].dropna().astype(float).tolist()
+            + plot_data["x_q25"].dropna().astype(float).tolist()
+            + plot_data["x_q75"].dropna().astype(float).tolist()
+            + plot_data["x_obs"].dropna().astype(float).tolist()
+        )
+        if not local_y_values:
+            raise ValueError(f"No y-values found for competitor '{competitor}' during plot export.")
+        local_y_min = float(min(local_y_values))
+        local_y_max = float(max(local_y_values))
+        local_span = local_y_max - local_y_min
+        local_pad = 0.06 * local_span if local_span > 0 else max(abs(local_y_min) * 0.1, 0.05)
+        local_y_min -= local_pad
+        local_y_max += local_pad
 
-        cname = f"b{idx}"
-        obs_plot = ""
-        if obs_coords:
-            obs_plot = (
-                "\\addplot[only marks, mark=*, mark size=1.4pt, opacity=0.95, color=gray!70!black] "
-                f"coordinates {{{' '.join(obs_coords)}}};\n"
-                "\\addlegendentry{Målt}"
-            )
-        section = f"""
-\\subsubsection*{{{_latex_escape(competitor)}}}
-\\begin{{tikzpicture}}
-\\begin{{axis}}[
-width=0.92\\textwidth,
-height=5.6cm,
-xlabel=Race,
-ylabel=\\% afvigelse fra race-baseline,
-grid=major,
-xmin=0,
-xmax={x_max},
-ymin={y_min:.6f},
-ymax={y_max:.6f},
-xtick distance=1,
-legend pos=north west,
-]
-\\addplot[name path={cname}low, draw=none] coordinates {{{' '.join(q25_coords)}}};
-\\addplot[name path={cname}high, draw=none] coordinates {{{' '.join(q75_coords)}}};
-\\addplot[fill=gray!35, fill opacity=0.45, draw=none] fill between[of={cname}high and {cname}low];
-\\addplot[solid, mark=none, line width=1.0pt, color=black] coordinates {{{' '.join(mean_coords)}}};
-\\addlegendentry{{1-step forventning}}
-{obs_plot}
-\\end{{axis}}
-\\end{{tikzpicture}}
-"""
-        sections.append(section)
+        slug = _slugify_filename(competitor)
+        data_name = f"boat_plot_{idx:02d}_{slug}.csv"
+        data_path = output_dir / data_name
+        plot_data.to_csv(data_path, index=False)
 
-    return "\n".join(sections)
+        if plot_data["group"].dropna().empty:
+            raise ValueError(f"Missing group values for competitor '{competitor}'.")
+        group_for_competitor = str(plot_data["group"].dropna().astype(str).iloc[0])
+        competitor_display = _display_name(competitor)
+        group_display = _display_name(group_for_competitor)
+        manifest_rows.append(
+            {
+                "competitor": competitor,
+                "competitor_display": competitor_display,
+                "group": group_for_competitor,
+                "group_display": group_display,
+                "data_csv": data_name,
+                "x_max": int(plot_data["x_pos"].max()),
+                "y_min": float(local_y_min),
+                "y_max": float(local_y_max),
+            }
+        )
+
+    if not manifest_rows:
+        raise ValueError("No competitor plot data exported.")
+
+    manifest = pd.DataFrame(manifest_rows)
+    manifest_path = output_dir / "boat_plot_manifest.csv"
+    manifest.to_csv(manifest_path, index=False)
+    return manifest_path
 
 
-def _race_tables_latex(obs: pd.DataFrame) -> str:
-    if obs.empty:
-        return "Ingen observerede rækker."
-
-    cols = [
-        "race",
-        "race_date",
+def _export_latest_race_table(
+    frame: pd.DataFrame,
+    *,
+    output_path: Path,
+    year: int,
+    race_local: str,
+    group_filter: str | None = None,
+    series_filter: str | None = None,
+) -> Path:
+    required_columns = [
         "competitor",
-        "status",
+        "group",
+        "series",
+        "race_local",
+        "year",
         "observed",
         "beregnet_seconds",
-        "pred_cf_beregnet_seconds",
-        "x_prior",
-        "r_t",
-        "p_prior",
-        "kalman_gain",
-        "error_seconds",
+        "y_pred_loo",
     ]
-    frame = obs.loc[:, cols].copy()
-    frame["race_num"] = frame["race"].map(_race_num)
-    frame = frame.sort_values(["race_num", "race", "competitor", "race_date"]).reset_index(drop=True)
+    missing = [column for column in required_columns if column not in frame.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for latest-race table export: {', '.join(missing)}")
 
-    sections: list[str] = []
-    for race_label, race_frame in frame.groupby("race", sort=False):
-        race_frame = race_frame.copy()
-        race_frame["_measured_sort"] = race_frame["beregnet_seconds"].astype(float)
-        race_frame["_measured_sort"] = race_frame["_measured_sort"].where(race_frame["_measured_sort"].notna(), float("inf"))
-        race_frame = race_frame.sort_values(["_measured_sort", "competitor", "race_date"]).reset_index(drop=True)
-        race_dates = sorted({str(v) for v in race_frame["race_date"].dropna().astype(str).tolist() if str(v).strip()})
-        race_date_text = race_dates[0] if len(race_dates) == 1 else ", ".join(race_dates[:2]) + ("..." if len(race_dates) > 2 else "")
+    work = frame.copy()
+    work["year_num"] = pd.to_numeric(work["year"], errors="coerce")
+    if work["year_num"].isna().any():
+        raise ValueError("Missing year values in latest-race table export frame.")
+    work["race_local_norm"] = work["race_local"].astype(str).str.strip()
 
-        lines: list[str] = []
-        for _, row in race_frame.iterrows():
-            observed_flag = bool(row.get("observed", False))
-            measured = _format_seconds(row["beregnet_seconds"]) if (observed_flag and pd.notna(row["beregnet_seconds"])) else ""
-            predicted = _format_seconds(row["pred_cf_beregnet_seconds"]) if pd.notna(row["pred_cf_beregnet_seconds"]) else ""
-            status_text = str(row["status"]).strip() if pd.notna(row["status"]) else ""
-            parts = [
-                _latex_escape(row["competitor"]),
-                _latex_escape(status_text),
-                _latex_escape(measured),
-                _latex_escape(predicted),
-                f"{float(row['x_prior']):.4f}" if pd.notna(row["x_prior"]) else "",
-                f"{float(row['r_t']):.5f}" if pd.notna(row["r_t"]) else "",
-                f"{float(row['p_prior']):.5f}" if pd.notna(row["p_prior"]) else "",
-                f"{float(row['kalman_gain']):.4f}" if (observed_flag and pd.notna(row["kalman_gain"])) else "",
-                f"{float(row['error_seconds']):.1f}" if (observed_flag and pd.notna(row["error_seconds"])) else "",
-            ]
-            lines.append(" & ".join(parts) + r" \\")
+    race_rows = work[(work["year_num"].astype(int) == int(year)) & (work["race_local_norm"] == str(race_local))].copy()
+    if group_filter is not None:
+        race_rows = race_rows[race_rows["group"].astype(str) == str(group_filter)].copy()
+    if series_filter is not None:
+        race_rows = race_rows[race_rows["series"].astype(str) == str(series_filter)].copy()
+    if race_rows.empty:
+        if group_filter is None and series_filter is None:
+            raise ValueError(f"No rows found for latest-race table: year={year}, race_local={race_local}.")
+        filters: list[str] = []
+        if group_filter is not None:
+            filters.append(f"group={group_filter}")
+        if series_filter is not None:
+            filters.append(f"series={series_filter}")
+        filter_txt = ", ".join(filters)
+        raise ValueError(f"No rows found for latest-race table: year={year}, race_local={race_local}, {filter_txt}.")
 
-        table_block = f"""
-\\subsubsection*{{Race {_latex_escape(race_label)} ({_latex_escape(race_date_text)})}}
-\\begingroup
-\\scriptsize
-\\setlength{{\\tabcolsep}}{{3.5pt}}
-\\begin{{tabular}}{{llrrrrrrr}}
-\\toprule
-Båd & Status & Målt tid & Pred tid & x\\_prior & R\\_t & P\\_prior & Gain & Fejl(s) \\\\
-\\midrule
-{chr(10).join(lines)}
-\\bottomrule
-\\end{{tabular}}
-\\endgroup
-"""
-        sections.append(table_block)
+    observed_mask = race_rows["observed"] == True  # noqa: E712
+    race_rows = race_rows.loc[observed_mask].copy()
+    if race_rows.empty:
+        raise ValueError(f"No observed rows found for latest-race table: year={year}, race_local={race_local}.")
 
-    return "\n".join(sections)
-
-
-def _build_latex_report(
-    output_path: Path,
-    *,
-    initial_q: float,
-    fitted_q: float,
-    q_objective_score: float,
-    q_obs: int,
-    observed_predictions: pd.DataFrame,
-    race_metrics: pd.DataFrame,
-) -> None:
-    obs = observed_predictions.copy()
-    obs_eval = obs[obs["observed"] == True].copy()  # noqa: E712
-    if obs_eval.empty:
-        obs_eval = obs.copy()
-    active_groups = sorted(obs["group"].dropna().astype(str).unique().tolist()) if not obs.empty else []
-    group_text = ", ".join(_latex_escape(name) for name in active_groups) if active_groups else "ingen"
-    years = sorted(obs["year"].dropna().astype(int).unique().tolist()) if ("year" in obs.columns and not obs.empty) else []
-    year_span_text = f" {years[0]}--{years[-1]}" if years else ""
-
-    mae = float(obs_eval["abs_error_seconds"].mean()) if not obs_eval.empty else float("nan")
-    rmse = float(np.sqrt(np.mean(np.square(obs_eval["error_seconds"])))) if not obs_eval.empty else float("nan")
-
-    by_group = (
-        obs_eval.groupby("group", as_index=False)
-        .agg(
-            n=("competitor", "count"),
-            mae_seconds=("abs_error_seconds", "mean"),
-            rmse_seconds=("error_seconds", lambda s: float(np.sqrt(np.mean(np.square(s))))),
-        )
-        .sort_values("group")
-        .reset_index(drop=True)
+    measured_seconds = pd.to_numeric(race_rows["beregnet_seconds"], errors="coerce")
+    if measured_seconds.dropna().empty:
+        raise ValueError(f"No observed measured times found for latest-race table: year={year}, race_local={race_local}.")
+    loo_pred_seconds = pd.to_numeric(race_rows["y_pred_loo"], errors="coerce").apply(
+        lambda y: float(np.exp(y)) if pd.notna(y) and np.isfinite(y) else np.nan
     )
+    loo_time_delta_seconds = measured_seconds - loo_pred_seconds
+    loo_time_delta_pct = (loo_time_delta_seconds / loo_pred_seconds) * 100.0
+    group_series = race_rows["group"].astype(str)
+    actual_rank = measured_seconds.groupby(group_series).rank(method="min", ascending=True)
+    loo_rank = loo_pred_seconds.groupby(group_series).rank(method="min", ascending=True)
+    loo_error_rank = loo_rank - actual_rank
 
-    scatter_coords = _coords_scatter(obs)
-    scatter_axis_bounds = ""
-    scatter_diagonal_coords = ""
-    scatter_frame = obs.loc[:, ["beregnet_seconds", "pred_cf_beregnet_seconds"]].dropna()
-    if not scatter_frame.empty:
-        lo = float(min(scatter_frame["beregnet_seconds"].min(), scatter_frame["pred_cf_beregnet_seconds"].min()))
-        hi = float(max(scatter_frame["beregnet_seconds"].max(), scatter_frame["pred_cf_beregnet_seconds"].max()))
-        if math.isfinite(lo) and math.isfinite(hi):
-            span = hi - lo
-            pad = 0.02 * (span if span > 0 else max(abs(hi), 1.0))
-            lo -= pad
-            hi += pad
-            scatter_axis_bounds = f"xmin={lo:.3f}, xmax={hi:.3f}, ymin={lo:.3f}, ymax={hi:.3f},"
-            scatter_diagonal_coords = f"({lo:.3f},{lo:.3f}) ({hi:.3f},{hi:.3f})"
-    boat_prediction_plots = _boat_prediction_plots_latex(obs)
+    result = pd.DataFrame(
+        {
+            "deltager": race_rows["competitor"].astype(str).map(_display_name),
+            "malt_tid": measured_seconds.map(_format_seconds_hms),
+            "loo_prediktion": loo_pred_seconds.map(_format_seconds_hms),
+            "loo_prediktions_fejl": loo_error_rank.map(_format_rank_error),
+            "tidsafvigelse": loo_time_delta_seconds.map(_format_seconds_hms),
+            "tidsafvigelse_procent": loo_time_delta_pct.map(_format_percent_signed),
+            "_sort_tidsafvigelse_pct": loo_time_delta_pct.astype(float),
+        }
+    )
+    result = result.sort_values(["_sort_tidsafvigelse_pct", "deltager"], ascending=[True, True]).reset_index(drop=True)
+    result = result.drop(columns=["_sort_tidsafvigelse_pct"])
 
-    line_blocks: list[str] = []
-    for group_name in sorted(race_metrics["group"].unique().tolist() if not race_metrics.empty else []):
-        g = race_metrics[race_metrics["group"] == group_name].sort_values("race_num").copy()
-        mae_coords = _coords_line(g, "mae_seconds")
-        rt_coords = _coords_line(g, "r_t")
-        line_blocks.append(
-            f"""
-\\subsection*{{{_latex_escape(group_name)}}}
-\\begin{{tikzpicture}}
-\\begin{{axis}}[
-width=0.9\\textwidth,
-height=5cm,
-xlabel=Race,
-ylabel=MAE (sekunder),
-grid=major,
-legend pos=north west,
-]
-\\addplot[smooth,mark=*] coordinates {{{mae_coords}}};
-\\addlegendentry{{MAE pr. race}}
-\\end{{axis}}
-\\end{{tikzpicture}}
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(output_path, index=False)
+    return output_path
 
-\\begin{{tikzpicture}}
-\\begin{{axis}}[
-width=0.9\\textwidth,
-height=5cm,
-xlabel=Race,
-ylabel=$R_t$,
-grid=major,
-legend pos=north west,
-]
-\\addplot[smooth,mark=*] coordinates {{{rt_coords}}};
-\\addlegendentry{{$R_t$ pr. race}}
-\\end{{axis}}
-\\end{{tikzpicture}}
-"""
+
+def _export_ml_fit_example(history: pd.DataFrame, *, output_dir: Path) -> list[Path]:
+    observed = history[history["observed"] == True].copy()  # noqa: E712
+    if observed.empty:
+        raise ValueError("No observed rows available for ML-fit example export.")
+
+    race_summary_rows: list[dict[str, Any]] = []
+    for (group_name, race_label), sub in observed.groupby(["group", "race"]):
+        p_values = pd.to_numeric(sub["p_prior"], errors="coerce").dropna()
+        if p_values.empty:
+            continue
+        p_mean = float(p_values.mean())
+        p_std = float(p_values.std(ddof=0))
+        p_cv = float(p_std / p_mean) if p_mean > 0 else float("inf")
+        race_summary_rows.append(
+            {
+                "group": str(group_name),
+                "race": str(race_label),
+                "n": int(len(sub)),
+                "p_mean": p_mean,
+                "p_cv": p_cv,
+            }
         )
 
-    group_rows = "\n".join(
-        " & ".join(
-            [
-                _latex_escape(row["group"]),
-                str(int(row["n"])),
-                f"{float(row['mae_seconds']):.2f}",
-                f"{float(row['rmse_seconds']):.2f}",
-            ]
-        ) + r" \\"
-        for _, row in by_group.iterrows()
+    race_summary = pd.DataFrame(race_summary_rows)
+    if race_summary.empty:
+        raise ValueError("Could not summarize races for ML-fit example export.")
+
+    eligible = race_summary[race_summary["n"] >= 10].copy()
+    if eligible.empty:
+        eligible = race_summary.copy()
+    example_row = eligible.sort_values(["p_cv", "n", "group", "race"], ascending=[True, False, True, True]).iloc[0]
+
+    example = observed[
+        (observed["group"].astype(str) == str(example_row["group"]))
+        & (observed["race"].astype(str) == str(example_row["race"]))
+    ].copy()
+    if example.empty:
+        raise ValueError("Selected ML-fit example race unexpectedly had no observed rows.")
+
+    corrected_time_seconds = pd.to_numeric(example["beregnet_seconds"], errors="coerce") / np.exp(
+        pd.to_numeric(example["x_prior"], errors="coerce")
     )
+    corrected_time_seconds = corrected_time_seconds[np.isfinite(corrected_time_seconds) & (corrected_time_seconds > 0)]
+    if corrected_time_seconds.empty:
+        raise ValueError("No finite corrected times available for ML-fit example export.")
 
-    race_tables = _race_tables_latex(observed_predictions)
-    boundary_text = ""
-    if fitted_q <= (Q_SEARCH_MIN * 1.0000001):
-        boundary_text = " (optimum ligger ved nedre søgegrænse)."
+    mu_hat = float(pd.to_numeric(example["b_t_hat"], errors="coerce").dropna().iloc[0])
+    r_t = float(pd.to_numeric(example["r_t"], errors="coerce").dropna().iloc[0])
+    p_ref = float(pd.to_numeric(example["p_prior"], errors="coerce").dropna().mean())
+    sigma_total = math.sqrt(max(EPS, p_ref + r_t))
 
-    tex = f"""\\section{{Dataanalyse{year_span_text}}}
-Dette afsnit er automatisk genereret fra samme scraper og parser-kæde som resultatberegningen.\\\\
-Dataudsnit i denne rapport: {group_text}.
+    x_min = min(float(corrected_time_seconds.min()) * 0.92, float(np.exp(mu_hat - 4.0 * sigma_total)))
+    x_max = max(float(corrected_time_seconds.max()) * 1.08, float(np.exp(mu_hat + 4.0 * sigma_total)))
+    x_grid = np.linspace(max(EPS, x_min), x_max, 400, dtype=float)
+    z_grid = (np.log(x_grid) - mu_hat) / (sigma_total * math.sqrt(2.0))
+    model_cdf = 0.5 * (1.0 + np.array([math.erf(float(z)) for z in z_grid], dtype=float))
+    empirical_sorted = np.sort(corrected_time_seconds.to_numpy(dtype=float))
+    empirical_cdf = np.arange(1, len(empirical_sorted) + 1, dtype=float) / len(empirical_sorted)
 
-\\subsection*{{Modelparametre}}
-Initial Q (median-estimat): {initial_q:.10f}\\\\
-Fittet Q (1-step fit): {fitted_q:.3e}\\\\
-Q-søgning: [{Q_SEARCH_MIN:.1e}, {Q_SEARCH_MAX:.1e}]{boundary_text}\\\\
-1-step RMSE-mål (sejlende både, leave-one-out på $a_t$): {q_objective_score:.2f} sekunder over {q_obs} observationer\\\\
-MAE: {mae:.2f} sekunder\\\\
-RMSE: {rmse:.2f} sekunder
-
-\\subsection*{{Målt vs predikteret beregnet tid}}
-\\begin{{center}}
-\\begin{{tikzpicture}}
-\\begin{{axis}}[
-width=0.9\\textwidth,
-height=8cm,
-xlabel=Målt beregnet tid (sekunder),
-ylabel={{Predikteret beregnet tid (LOO, sekunder)}},
-grid=major,
-axis equal image,
-{scatter_axis_bounds}
-]
-\\addplot[only marks, mark=*, mark size=1.4pt, opacity=0.6] coordinates {{{scatter_coords}}};
-\\addplot[densely dashed, black, line width=0.8pt] coordinates {{{scatter_diagonal_coords}}};
-\\end{{axis}}
-\\end{{tikzpicture}}
-\\end{{center}}
-
-\\subsection*{{1-step prediktion pr. båd}}
-Skygge er centralt 50\\%-interval (Q25--Q75) fra den lineære model, transformeret til \\% afvigelse i tid via lognormal-kortlægning.
-Linjen er forventningsværdien, og punkter er målte tider.
-{boat_prediction_plots}
-
-\\subsection*{{Gruppemetrikker}}
-\\begin{{tabular}}{{lrrr}}
-\\toprule
-Gruppe & N & MAE (sek) & RMSE (sek) \\\\
-\\midrule
-{group_rows}
-\\bottomrule
-\\end{{tabular}}
-
-\\subsection*{{MAE og $R_t$ pr. race}}
-{''.join(line_blocks)}
-
-\\subsection*{{Detaljerede tabeller pr. race}}
-Kolonner: status, målt/predikteret beregnet tid, predikteret x (x\\_prior), race-støj R\\_t, prior-varians, gain og fejl i sekunder.
-Ikke-observerede både (inkl. DNS/DNF/DSQ/DNC og IKKE MED) vises med deres predikterede tid.
-{race_tables}
-"""
-
-    output_path.write_text(tex, encoding="utf-8")
+    empirical_cdf_path = output_dir / "ml_fit_example_empirical_cdf.csv"
+    model_cdf_path = output_dir / "ml_fit_example_model_cdf.csv"
+    pd.DataFrame({"time_seconds": empirical_sorted, "cdf": empirical_cdf}).to_csv(empirical_cdf_path, index=False)
+    pd.DataFrame({"time_seconds": x_grid, "cdf": model_cdf}).to_csv(model_cdf_path, index=False)
+    return [empirical_cdf_path, model_cdf_path]
 
 
 def main() -> int:
@@ -1099,22 +1512,91 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     groups, all_data = _build_group_data()
-    groups, all_data = _filter_groups(groups, all_data, TARGET_GROUP)
     if not groups:
-        raise RuntimeError(f"No group data could be built for target group: {TARGET_GROUP}.")
+        raise RuntimeError("No group data could be built.")
 
-    initial_q = _estimate_global_q(all_data)
-    global_q, q_objective_score, q_obs = _fit_global_q(groups, initial_q=initial_q)
+    q_fit_rows: list[dict[str, Any]] = []
+    q_by_group: dict[str, float] = {}
+    q_grid = np.logspace(math.log10(Q_SEARCH_MIN), math.log10(Q_SEARCH_MAX), 61, dtype=float)
+    q_diag_frames: list[pd.DataFrame] = []
+    q_cache_path = output_dir / GROUP_Q_CACHE_FILENAME
+    cached_q_map = _load_group_q_cache(q_cache_path)
+    missing_q_groups = [str(group["group"]) for group in groups if str(group["group"]) not in cached_q_map]
+    using_cached_q = bool(cached_q_map) and not missing_q_groups
 
-    histories: list[pd.DataFrame] = []
-    for group in groups:
-        history_frame, _, _ = _run_group_filter(group, global_q, collect_history=True)
-        histories.append(history_frame)
+    if using_cached_q:
+        for group in groups:
+            group_name = str(group["group"])
+            group_initial_q = _estimate_global_q(group["combined"])
+            group_q = float(cached_q_map[group_name])
+            group_score, group_obs = _q_objective([group], group_q)
+            q_by_group[group_name] = group_q
+            q_fit_rows.append(
+                {
+                    "group": group_name,
+                    "initial_q": float(group_initial_q),
+                    "fitted_q": group_q,
+                    "q_objective_score": float(group_score),
+                    "q_obs": int(group_obs),
+                    "q_source": "cache",
+                }
+            )
+            q_diag_frames.append(
+                pd.DataFrame(
+                    [
+                        {
+                            "group": group_name,
+                            "q_value": group_q,
+                            "one_step_rmse_seconds": float(group_score),
+                            "observations": int(group_obs),
+                            "source": "cache",
+                        }
+                    ]
+                )
+            )
+    else:
+        for group in groups:
+            group_name = str(group["group"])
+            group_initial_q = _estimate_global_q(group["combined"])
+            score_cache: dict[float, tuple[float, int]] = {}
+            group_q, group_score, group_obs = _fit_global_q(
+                [group],
+                initial_q=group_initial_q,
+                score_cache=score_cache,
+            )
+            q_by_group[group_name] = float(group_q)
+            q_fit_rows.append(
+                {
+                    "group": group_name,
+                    "initial_q": float(group_initial_q),
+                    "fitted_q": float(group_q),
+                    "q_objective_score": float(group_score),
+                    "q_obs": int(group_obs),
+                    "q_source": "fitted",
+                }
+            )
+            q_diag = _q_diagnostics([group], q_grid, score_cache=score_cache)
+            q_diag["group"] = group_name
+            q_diag["source"] = "fitted"
+            q_diag_frames.append(q_diag)
+        _save_group_q_cache(q_cache_path, q_by_group)
 
-    history = pd.concat(histories, ignore_index=True)
+    competitor_year_group = _build_competitor_year_group_map(all_data)
+    history, _, _ = _run_all_groups_with_transfer(
+        groups,
+        q_by_group,
+        competitor_year_group,
+        collect_history=True,
+    )
     history = history.sort_values(["group", "competitor", "race_date", "race"], ascending=[True, True, True, True]).reset_index(drop=True)
 
-    history["y_pred"] = history["a_t_hat"] - history["x_prior"]
+    scope_mask = history.apply(
+        lambda row: competitor_year_group.get((str(row["competitor"]), int(row["year"]))) == str(row["group"]),
+        axis=1,
+    )
+    history = history.loc[scope_mask].copy().reset_index(drop=True)
+
+    history["y_pred"] = history["b_t_hat"] + history["x_prior"]
     history["pred_beregnet_seconds"] = np.exp(history["y_pred"])
     history.loc[~np.isfinite(history["pred_beregnet_seconds"]), "pred_beregnet_seconds"] = np.nan
     history["y_pred_cf"] = history["y_pred"]
@@ -1130,29 +1612,13 @@ def main() -> int:
     for col in ["pred_cf_expect_seconds", "pred_cf_q25_seconds", "pred_cf_q75_seconds"]:
         history.loc[~np.isfinite(history[col]), col] = np.nan
 
-    history["baseline_beregnet_seconds"] = np.exp(history["a_t_hat"])
-    history.loc[~np.isfinite(history["baseline_beregnet_seconds"]), "baseline_beregnet_seconds"] = np.nan
-    history["pred_cf_rel_baseline_seconds"] = history["pred_cf_beregnet_seconds"] - history["baseline_beregnet_seconds"]
-    history["obs_rel_baseline_seconds"] = history["beregnet_seconds"] - history["baseline_beregnet_seconds"]
-    history["pred_cf_expect_pct_baseline"] = 100.0 * (
-        history["pred_cf_expect_seconds"] / history["baseline_beregnet_seconds"] - 1.0
-    )
-    history["pred_cf_q25_pct_baseline"] = 100.0 * (
-        history["pred_cf_q25_seconds"] / history["baseline_beregnet_seconds"] - 1.0
-    )
-    history["pred_cf_q75_pct_baseline"] = 100.0 * (
-        history["pred_cf_q75_seconds"] / history["baseline_beregnet_seconds"] - 1.0
-    )
-    history["obs_pct_baseline"] = 100.0 * (history["beregnet_seconds"] / history["baseline_beregnet_seconds"] - 1.0)
-    for col in [
-        "pred_cf_expect_pct_baseline",
-        "pred_cf_q25_pct_baseline",
-        "pred_cf_q75_pct_baseline",
-        "obs_pct_baseline",
-        "pred_cf_rel_baseline_seconds",
-        "obs_rel_baseline_seconds",
-    ]:
-        history.loc[~np.isfinite(history[col]), col] = np.nan
+    history["x_obs"] = history["x_prior"] + history["innovation"]
+    history.loc[history["observed"] != True, "x_obs"] = np.nan  # noqa: E712
+    history["x_q25"] = history["x_prior"] - Z50 * np.sqrt(history["p_prior"].clip(lower=EPS))
+    history["x_q75"] = history["x_prior"] + Z50 * np.sqrt(history["p_prior"].clip(lower=EPS))
+    history.loc[~np.isfinite(history["x_obs"]), "x_obs"] = np.nan
+    history.loc[~np.isfinite(history["x_q25"]), "x_q25"] = np.nan
+    history.loc[~np.isfinite(history["x_q75"]), "x_q75"] = np.nan
     history["z_innovation"] = history["innovation"] / np.sqrt(history["s_pred"].clip(lower=EPS))
     history["error_seconds"] = history["beregnet_seconds"] - history["pred_cf_beregnet_seconds"]
     history["abs_error_seconds"] = history["error_seconds"].abs()
@@ -1172,7 +1638,7 @@ def main() -> int:
     per_race = (
         history.groupby(["group", "race", "race_date"], as_index=False)
         .agg(
-            a_t_hat=("a_t_hat", "first"),
+            b_t_hat=("b_t_hat", "first"),
             r_t=("r_t", "first"),
             boats_observed=("observed", "sum"),
             boats_total=("competitor", "count"),
@@ -1182,27 +1648,12 @@ def main() -> int:
         .reset_index(drop=True)
     )
 
-    race_metrics = (
-        observed_predictions.groupby(["group", "race", "race_date"], as_index=False)
-        .agg(
-            n=("competitor", "count"),
-            mae_seconds=("abs_error_seconds", "mean"),
-            rmse_seconds=("error_seconds", lambda s: float(np.sqrt(np.mean(np.square(s))))),
-        )
-        .assign(race_num=lambda d: d["race"].map(_race_num))
-        .merge(per_race[["group", "race", "r_t"]], on=["group", "race"], how="left")
-        .sort_values(["group", "race_num", "race"])
-        .reset_index(drop=True)
-    )
-
     history_path = output_dir / "redress_2025_state_history.csv"
     obs_path = output_dir / "redress_2025_observed_predictions.csv"
     latest_path = output_dir / "redress_2025_latest_estimates.csv"
     race_path = output_dir / "redress_2025_race_effects.csv"
     q_diag_path = output_dir / "redress_2025_q_diagnostics.csv"
-    report_tex_path = Path("../redress-algorithm-paper/sections/D-2025-dataanalyse.tex")
-    q_grid = np.logspace(math.log10(Q_SEARCH_MIN), math.log10(Q_SEARCH_MAX), 61, dtype=float)
-    q_diag = _q_diagnostics(groups, q_grid)
+    q_diag = pd.concat(q_diag_frames, ignore_index=True) if q_diag_frames else pd.DataFrame()
 
     history.to_csv(history_path, index=False)
     observed_predictions.to_csv(obs_path, index=False)
@@ -1210,25 +1661,77 @@ def main() -> int:
     per_race.to_csv(race_path, index=False)
     q_diag.to_csv(q_diag_path, index=False)
 
-    _build_latex_report(
-        report_tex_path,
-        initial_q=initial_q,
-        fitted_q=global_q,
-        q_objective_score=q_objective_score,
-        q_obs=q_obs,
-        observed_predictions=all_predictions,
-        race_metrics=race_metrics,
-    )
+    active_2026_competitors = {
+        competitor
+        for (competitor, year), _group in competitor_year_group.items()
+        if int(year) == int(PLOT_ACTIVE_YEAR)
+    }
 
-    print(f"Initial Q (median-increment estimate): {initial_q:.3e}")
-    print(f"Fitted Q (1-step predictive RMSE fit): {global_q:.3e}")
-    print(f"1-step RMSE objective: {q_objective_score:.3f} across {q_obs} observations")
+    plot_data_dir = output_dir / "boat_plot_data"
+    manifest_path = _export_boat_plot_data(
+        all_predictions,
+        allowed_competitors=active_2026_competitors,
+        output_dir=plot_data_dir,
+    )
+    latest_race_table_stor_bane1_r2_path = _export_latest_race_table(
+        all_predictions,
+        output_path=output_dir / "latest_race_2026_r2_stor_bane1_table.csv",
+        year=int(PLOT_ACTIVE_YEAR),
+        race_local="R2",
+        group_filter="Stor Bane",
+        series_filter="Stor bane 1",
+    )
+    latest_race_table_stor_bane2_r2_path = _export_latest_race_table(
+        all_predictions,
+        output_path=output_dir / "latest_race_2026_r2_stor_bane2_table.csv",
+        year=int(PLOT_ACTIVE_YEAR),
+        race_local="R2",
+        group_filter="Stor Bane",
+        series_filter="Stor bane 2",
+    )
+    latest_race_table_lille_bane1_r2_path = _export_latest_race_table(
+        all_predictions,
+        output_path=output_dir / "latest_race_2026_r2_lille_bane1_table.csv",
+        year=int(PLOT_ACTIVE_YEAR),
+        race_local="R2",
+        group_filter="Lille Bane",
+        series_filter="Lille bane 1",
+    )
+    latest_race_table_lille_bane2_r2_path = _export_latest_race_table(
+        all_predictions,
+        output_path=output_dir / "latest_race_2026_r2_lille_bane2_table.csv",
+        year=int(PLOT_ACTIVE_YEAR),
+        race_local="R2",
+        group_filter="Lille Bane",
+        series_filter="Lille bane 2",
+    )
+    ml_fit_example_paths = _export_ml_fit_example(history, output_dir=output_dir)
+
+    if using_cached_q:
+        print(f"Loaded group Q from cache: {q_cache_path}")
+    else:
+        print(f"Saved fitted group Q to cache: {q_cache_path}")
+
+    for row in q_fit_rows:
+        print(
+            f"{row['group']}: initial Q={row['initial_q']:.3e}, "
+            f"fitted Q={row['fitted_q']:.3e}, "
+            f"1-step RMSE={row['q_objective_score']:.3f} over {row['q_obs']} observations "
+            f"({row.get('q_source', 'unknown')})"
+        )
     print(f"Wrote: {history_path}")
     print(f"Wrote: {obs_path}")
     print(f"Wrote: {latest_path}")
     print(f"Wrote: {race_path}")
     print(f"Wrote: {q_diag_path}")
-    print(f"Wrote: {report_tex_path}")
+    print(f"Wrote: {manifest_path}")
+    print(f"Wrote: {latest_race_table_stor_bane1_r2_path}")
+    print(f"Wrote: {latest_race_table_stor_bane2_r2_path}")
+    print(f"Wrote: {latest_race_table_lille_bane1_r2_path}")
+    print(f"Wrote: {latest_race_table_lille_bane2_r2_path}")
+    for path in ml_fit_example_paths:
+        print(f"Wrote: {path}")
+    print("Note: This script now exports plot data only and does not generate LaTeX.")
 
     return 0
 
