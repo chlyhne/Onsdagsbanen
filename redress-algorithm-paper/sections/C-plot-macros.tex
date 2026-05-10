@@ -1,0 +1,177 @@
+\newcommand{\BoatPlotDataDir}{../analysis/boat_plot_data}
+\newcommand{\LatestRaceTableStorBaneOneRtwoCsv}{../analysis/latest_race_2026_r2_stor_bane1_table.csv}
+\newcommand{\LatestRaceTableStorBaneTwoRtwoCsv}{../analysis/latest_race_2026_r2_stor_bane2_table.csv}
+\newcommand{\LatestRaceTableLilleBaneOneRtwoCsv}{../analysis/latest_race_2026_r2_lille_bane1_table.csv}
+\newcommand{\LatestRaceTableLilleBaneTwoRtwoCsv}{../analysis/latest_race_2026_r2_lille_bane2_table.csv}
+\newcommand{\UncertaintyFillOpacity}{0.65}
+
+\newcommand{\AddBoatStateSeriesToAxis}[4]{%
+\addplot[name path=#4low, draw=none, forget plot] table[x=x_pos,y=x_q25] {#1};
+\addplot[name path=#4high, draw=none, forget plot] table[x=x_pos,y=x_q75] {#1};
+\addplot[fill=#3, fill opacity=\UncertaintyFillOpacity, draw=none, forget plot] fill between[of=#4high and #4low];
+\addplot[solid, mark=none, line width=1.0pt, color=#2, forget plot] table[x=x_pos,y=x_prior] {#1};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#2, mark options={fill=#2,draw=#2}, forget plot] table[x=x_pos,y=x_obs] {#1};
+}
+
+\newcommand{\SingleBoatLegend}{%
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=red,draw=red] at (0.3cm,0cm) {};}}
+\addlegendentry{Data}
+\addlegendimage{legend image code/.code={\draw[black,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{Forudsigelse}
+\addlegendimage{legend image code/.code={\fill[gray!35,fill opacity=\UncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{Usikkerhed}
+}
+
+\newcommand{\BoatPlotFromCsv}[5]{%
+\subsubsection*{#1}
+\pgfplotstableread[col sep=comma]{#2}\boatplotdata
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=5.6cm,
+xlabel=Race,
+ylabel={$x$ i log-space},
+grid=major,
+clip=false,
+xmin=0.5,
+xmax=#3.5,
+ymin=#4,
+ymax=#5,
+xtick=data,
+xticklabels from table={\boatplotdata}{race_display},
+x tick label style={rotate=90, anchor=east, font=\scriptsize},
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=3,
+unbounded coords=discard,
+filter discard warning=false,
+]
+\addplot[name path=low, draw=none, forget plot] table[x=x_pos,y=x_q25] {\boatplotdata};
+\addplot[name path=high, draw=none, forget plot] table[x=x_pos,y=x_q75] {\boatplotdata};
+\addplot[fill=gray!35, fill opacity=\UncertaintyFillOpacity, draw=none, forget plot] fill between[of=high and low];
+\addplot[solid, mark=none, line width=1.0pt, color=black, forget plot] table[x=x_pos,y=x_prior] {\boatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=red, mark options={fill=red,draw=red}, forget plot] table[x=x_pos,y=x_obs] {\boatplotdata};
+\SingleBoatLegend
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+}
+
+\newcommand{\DualBoatStatePlotFromCsv}[9]{%
+\pgfplotstableread[col sep=comma]{#2}\firstboatplotdata
+\pgfplotstableread[col sep=comma]{#5}\secondboatplotdata
+\pgfplotstablegetrowsof{\firstboatplotdata}%
+\pgfmathtruncatemacro{\dualplotxmax}{\pgfplotsretval}%
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=7.0cm,
+xlabel=Race,
+ylabel={$x$ i log-space},
+grid=major,
+clip=false,
+xmin=0.5,
+xmax=\dualplotxmax+0.5,
+ymin=#8,
+ymax=#9,
+xtick=data,
+xticklabels from table={\firstboatplotdata}{race_display},
+x tick label style={rotate=90, anchor=east, font=\scriptsize},
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=3,
+unbounded coords=discard,
+filter discard warning=false,
+]
+\AddBoatStateSeriesToAxis{\firstboatplotdata}{#3}{#3!20}{firstseries}
+\AddBoatStateSeriesToAxis{\secondboatplotdata}{#6}{#6!20}{secondseries}
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
+\addlegendentry{#1 data}
+\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#1 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\UncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 usikkerhed}
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
+\addlegendentry{#4 data}
+\addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#4 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\UncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#4 usikkerhed}
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+}
+
+\newcommand{\DualBoatPercentPlotFromCsv}[8]{%
+\pgfplotstableread[col sep=comma]{#2}\firstboatplotdata
+\pgfplotstableread[col sep=comma]{#5}\secondboatplotdata
+\pgfplotstablegetrowsof{\firstboatplotdata}%
+\pgfmathtruncatemacro{\dualplotxmax}{\pgfplotsretval}%
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=7.0cm,
+xlabel=Race,
+ylabel={Tidsafvigelse (\%)},
+grid=major,
+clip=false,
+xmin=0.5,
+xmax=\dualplotxmax+0.5,
+ymin=#7,
+ymax=#8,
+xtick=data,
+xticklabels from table={\firstboatplotdata}{race_display},
+x tick label style={rotate=90, anchor=east, font=\scriptsize},
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=3,
+unbounded coords=discard,
+filter discard warning=false,
+]
+\addplot[name path=firstpctlow, draw=none, forget plot] table[x=x_pos,y=q25_pct] {\firstboatplotdata};
+\addplot[name path=firstpcthigh, draw=none, forget plot] table[x=x_pos,y=q75_pct] {\firstboatplotdata};
+\addplot[fill=#3!20, fill opacity=\UncertaintyFillOpacity, draw=none, forget plot] fill between[of=firstpcthigh and firstpctlow];
+\addplot[solid, mark=none, line width=1.0pt, color=#3, forget plot] table[x=x_pos,y=prior_pct] {\firstboatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#3, mark options={fill=#3,draw=#3}, forget plot] table[x=x_pos,y=obs_pct] {\firstboatplotdata};
+\addplot[name path=secondpctlow, draw=none, forget plot] table[x=x_pos,y=q25_pct] {\secondboatplotdata};
+\addplot[name path=secondpcthigh, draw=none, forget plot] table[x=x_pos,y=q75_pct] {\secondboatplotdata};
+\addplot[fill=#6!20, fill opacity=\UncertaintyFillOpacity, draw=none, forget plot] fill between[of=secondpcthigh and secondpctlow];
+\addplot[solid, mark=none, line width=1.0pt, color=#6, forget plot] table[x=x_pos,y=prior_pct] {\secondboatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#6, mark options={fill=#6,draw=#6}, forget plot] table[x=x_pos,y=obs_pct] {\secondboatplotdata};
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
+\addlegendentry{#1 data}
+\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#1 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\UncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 usikkerhed}
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
+\addlegendentry{#4 data}
+\addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#4 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\UncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#4 usikkerhed}
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+}
+
+\newcommand{\LatestRaceTableFromCsv}[1]{%
+\scriptsize
+\pgfplotstabletypeset[
+col sep=comma,
+string type,
+every head row/.style={before row=\toprule,after row=\midrule},
+every last row/.style={after row=\bottomrule},
+columns={deltager,malt_tid,loo_prediktion,loo_prediktions_fejl,tidsafvigelse,tidsafvigelse_procent},
+columns/deltager/.style={column name=Deltager,column type=l},
+columns/malt_tid/.style={column name=Målt,column type={>{\raggedleft\arraybackslash}p{1.35cm}}},
+columns/loo_prediktion/.style={column name=Forudsigelse,column type={>{\raggedleft\arraybackslash}p{1.6cm}}},
+columns/loo_prediktions_fejl/.style={column name=Pointfejl,column type={>{\raggedleft\arraybackslash}p{1.5cm}}},
+columns/tidsafvigelse/.style={column name=Tidsfejl,column type={>{\raggedleft\arraybackslash}p{1.45cm}}},
+columns/tidsafvigelse_procent/.style={column name=Tidsfejl (\%),column type={>{\raggedleft\arraybackslash}p{1.6cm}}},
+]{#1}
+\normalsize
+}

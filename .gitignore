@@ -15,3 +15,9 @@ cloudflare-email-worker/node_modules/
 cloudflare-email-worker/.wrangler/
 Results*.pdf
 analysis/*.csv
+redress-algorithm-paper/*.aux
+redress-algorithm-paper/*.fdb_latexmk
+redress-algorithm-paper/*.fls
+redress-algorithm-paper/*.log
+redress-algorithm-paper/*.out
+redress-algorithm-paper/*.pdf

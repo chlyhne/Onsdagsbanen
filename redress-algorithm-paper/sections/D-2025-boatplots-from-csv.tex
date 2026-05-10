@@ -1,0 +1,21 @@
+\appendix
+\clearpage
+\section{CSV-Baserede Bådplots}
+Denne appendix-sektion indeholder alle individuelle bådplots læst direkte fra CSV-filer.
+Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX-fil kun renderer.
+
+\pgfplotstableread[col sep=comma]{\BoatPlotDataDir/boat_plot_manifest.csv}\boatplotmanifest
+\pgfplotstableforeachcolumnelement{competitor_display}\of\boatplotmanifest\as\displayname{%
+  \pgfplotstablegetelem{\pgfplotstablerow}{group_display}\of\boatplotmanifest
+  \let\groupdisplay\pgfplotsretval
+  \pgfplotstablegetelem{\pgfplotstablerow}{data_csv}\of\boatplotmanifest
+  \let\datacsv\pgfplotsretval
+  \pgfplotstablegetelem{\pgfplotstablerow}{x_max}\of\boatplotmanifest
+  \let\xmax\pgfplotsretval
+  \pgfplotstablegetelem{\pgfplotstablerow}{y_min}\of\boatplotmanifest
+  \let\ymin\pgfplotsretval
+  \pgfplotstablegetelem{\pgfplotstablerow}{y_max}\of\boatplotmanifest
+  \let\ymax\pgfplotsretval
+  \edef\boatdatapath{\BoatPlotDataDir/\datacsv}
+  \BoatPlotFromCsv{\displayname\space(\groupdisplay)}{\boatdatapath}{\xmax}{\ymin}{\ymax}
+}

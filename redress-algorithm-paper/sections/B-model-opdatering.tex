@@ -1,0 +1,137 @@
+\section{Modellering af Færdighedsniveau}
+Først laver jeg en simpel model af sejltid (beregnet efter handicap):
+\begin{flalign}
+\hspace{2cm} T_{i,t} &= \alpha_t\,z_{i,t}\,\eta_{i,t}. &&
+\end{flalign}
+Her er $T_{i,t}$ den beregnede tid for deltager $i$ i ræs $t$. Faktoren $\alpha_t$ beskriver dagens generelle niveau, altså hvor hurtigt banen blev sejlet den dag. Det er denne størrelse, jeg senere kalder race-effekten. Den skal forstås som en fælles faktor, der rammer alle både i samme ræs: hvis vinden er let, banen er vanskelig, eller feltet generelt sejler langsomt den dag, bliver $\alpha_t$ højere; hvis forholdene giver hurtige tider, bliver $\alpha_t$ lavere. Jeg estimerer konkret $\alpha_t$ på dagen ud fra de observerede beregnede tider, samtidig med at modellen tager højde for de enkelte bådes forventede niveau og usikkerhed. Størrelsen $z_{i,t}$ er bådens færdighedsniveau. Hvis $z_{i,t}$ er lav, forventes båden at sejle hurtigt relativt til feltet, og hvis $z_{i,t}$ er høj, forventes båden at sejle langsommere. Til sidst er $\eta_{i,t}$ et multiplikativt støjled, som dækker over de mange forhold, der gør at en båd ikke sejler præcis som forventet hver onsdag.
+
+Det er netop $z_{i,t}$, jeg gerne vil estimere ud fra historiske resultater. Når det er gjort, kan modellen bruges til at forudsige, hvilken tid en båd sandsynligvis ville have sejlet i et konkret ræs.
+
+\section{Transformation til Log-space}
+Kalman filtrering arbejder naturligt med additive modeller. Derfor transformerer jeg modellen ved at tage logaritmen af begge sider og indfører nye variable:
+\begin{flalign}
+\hspace{2cm} y_{i,t} &= \log(T_{i,t}), \qquad \mu_{y,t} = \log(\alpha_t), \qquad x_{i,t} = \log(z_{i,t}), \qquad v_{i,t} = \log(\eta_{i,t}). &&
+\end{flalign}
+Dermed fås
+\begin{flalign}
+\hspace{2cm} y_{i,t} &= \mu_{y,t}+x_{i,t}+v_{i,t}. &&
+\end{flalign}
+
+Denne omskrivning er mere end bare et matematisk trick. For det første bliver race-effekten nu til $\mu_{y,t}=\log(\alpha_t)$, altså præcis den samme idé som ovenfor, bare på logskalaen. For det andet svarer en additiv ændring $\delta$ i log-space til en multiplikativ faktor $\exp(\delta)$ i den oprindelige tidsmodel. Når modellen derfor justerer et estimat lidt op eller ned i log-space, svarer det i praksis til en procentvis justering i tidsskala, ikke til at lægge et fast antal sekunder til eller fra. Det passer godt til sejltider, hvor afvigelser ofte opleves relativt snarere end absolut.
+
+Denne gang vælger jeg bevidst $x_{i,t}=\log(z_{i,t})$, så bådens niveau peger samme vej som tiden. Når en båd er hurtig, er $z_{i,t}$ lav, og dermed bliver også $x_{i,t}$ lav. Lavere $x_{i,t}$ betyder altså en bedre båd. Det gør modellen lettere at læse, fordi både observationen $y_{i,t}$ og den skjulte tilstand $x_{i,t}$ nu har samme retning: højere værdi betyder langsommere sejltid, lavere værdi betyder hurtigere sejltid.
+
+Jeg antager nu
+\begin{flalign}
+\hspace{2cm} v_{i,t} &\sim \mathcal{N}(0,\sigma_{y,t}^2). &&
+\end{flalign}
+I den oprindelige model svarer det til, at $\eta_{i,t}=\exp(v_{i,t})$ bliver et multiplikativt støjled. Dermed er $\eta_{i,t}$ altid positiv, og alle forudsagte tider bliver automatisk positive. Samtidig betyder det, at usikkerhed i log-space bliver til asymmetrisk, multiplicativ usikkerhed i tidsskala.
+
+\section{Estimering af Færdighedsniveau vha. Kalman Filtrering}
+Et Kalman-filter kan ses som en systematisk måde at kombinere to ting på:
+\begin{enumerate}
+    \item hvad modellen forventede før dagens måling,
+    \item hvad dagens måling faktisk siger.
+\end{enumerate}
+Her bruger jeg et 1D Kalman-filter. Med tidsindeks $k$ består det af en tilstandsligning og en måleligning:
+\begin{flalign}
+\hspace{2cm} x_{k+1} &= x_k + w_{k+1}, \qquad w_{k+1} \sim \mathcal{N}(0,\Delta T_{k+1}\sigma_x^2). &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} y_{k+1} &= x_{k+1} + \mu_{y,k+1} + v_{k+1}, \qquad v_{k+1} \sim \mathcal{N}(0,\sigma_y^2). &&
+\end{flalign}
+Tilstandsligningen beskriver, hvordan det skjulte niveau udvikler sig over tid. Måleligningen beskriver, hvordan den skjulte tilstand viser sig i de data, man kan observere.
+
+Ud fra de to ligninger består selve filteret af et prediktionsstep og et måleopdateringsstep:
+\begin{flalign}
+\hspace{2cm}& \text{Prediktion}\notag &&\\
+\hspace{2cm} \hat{x}_{k+1}^- &= \hat{x}_k^+, &&\\
+\hspace{2cm} p_{k+1}^- &= p_k^+ + \Delta T_{k+1}\sigma_x^2, &&\\
+\end{flalign}
+\begin{flalign}
+\hspace{2cm}& \text{På dagen}\notag &&\\
+\hspace{2cm} (\hat{\mu}_{y,k+1}, \hat{\sigma}_{y,k+1}^2) &= \text{ML-estimér ud fra dagens observationer}, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm}& \text{Innovation}\notag &&\\
+\hspace{2cm} \hat{y}_{k+1}^- &= \hat{x}_{k+1}^- + \hat{\mu}_{y,k+1}, &&\\
+\hspace{2cm} e_{k+1} &= y_{k+1} - \hat{y}_{k+1}^-, &&\\
+\hspace{2cm} s_{k+1} &= p_{k+1}^- + \hat{\sigma}_{y,k+1}^2, &&\\
+\hspace{2cm} k_{k+1} &= \frac{p_{k+1}^-}{s_{k+1}}, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm}& \text{Opdatering}\notag &&\\
+\hspace{2cm} \hat{x}_{k+1}^+ &= \hat{x}_{k+1}^- + k_{k+1}e_{k+1}, &&\\
+\hspace{2cm} p_{k+1}^+ &= (1-k_{k+1})p_{k+1}^-. &&
+\end{flalign}
+Her betyder $^-$ den predikterede værdi før dagens observation, mens $^+$ betyder den opdaterede værdi efter observationen. I vores problem antages $\hat{\mu}_{y,k+1}$ og $\hat{\sigma}_{y,k+1}^2$ at være estimeret ud fra dagens observationer, før innovation og opdatering beregnes.
+
+I vores problem er den skjulte tilstand bådens færdighedsniveau i log-space, mens den observerede størrelse er den log-transformerede beregnede tid. Kalman-filteret bruges altså til at holde et løbende estimat af hver båds niveau, efterhånden som nye resultater kommer ind. Her er $\Delta T_{k+1}$ tiden siden forrige observation, og $\sigma_x^2$ er den globale procesvarians pr. dag. Det betyder, at jeg ikke lægger nogen systematisk dynamik ind i færdighedsniveauet fra én observation til den næste. Niveauet får i stedet lov til at drive lidt, og usikkerheden vokser jo længere tid der går.
+
+Værdien af $\sigma_x^2$ sættes ikke på forhånd ud fra mavefornemmelse. Den findes ved at iterere over kandidatværdier og vælge den værdi, som får modellen til at passe bedst muligt i en 1-step prediktionssammenhæng på de historiske data. Intuitionen er enkel: hvis $\sigma_x^2$ vælges for lille, bliver modellen for træg og reagerer for lidt på reelle ændringer i bådenes niveau; hvis den vælges for stor, bliver modellen for nervøs og kommer til at jagte støj. Den valgte værdi er derfor den, som giver den bedste balance mellem stabilitet og tilpasningsevne i de løbende one-step forudsigelser.
+
+\par
+Når $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$ er fundet, opdateres de både, der faktisk sejlede, ved
+\begin{flalign}
+\hspace{2cm} s_{i,t} &= p_{i,t}^- + \hat{\sigma}_{y,t}^2, \qquad
+k_{i,t} = \frac{p_{i,t}^-}{s_{i,t}}, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} \hat{x}_{i,t}^+ &= \hat{x}_{i,t}^- + k_{i,t}e_{i,t}, \qquad
+p_{i,t}^+ = (1-k_{i,t})p_{i,t}^-. &&
+\end{flalign}
+
+For både, der ikke sejlede race $t$, anvendes kun prediktionssteppet. De får altså en prior $(\hat{x}_{m,t}^-, p_{m,t}^-)$, men ingen posterior i den race. Når dagens fælles niveau er estimeret ud fra de andre både, sættes godtgørelsestiden derfor til
+\begin{flalign}
+\hspace{2cm} \hat{T}_{m,t} &= \exp\!\left(\hat{\mu}_{y,t}+\hat{x}_{m,t}^-\right). &&
+\end{flalign}
+
+\section{ML-estimering på dagen}
+Når dagens prior $(\hat{x}_{i,t}^-, p_{i,t}^-)$ er beregnet, mangler stadig to størrelser, før observationerne kan bruges i Kalman-opdateringen: dagens fælles niveau $\mu_{y,t}$ og dagens målevarians $\sigma_{y,t}^2$. De estimeres samlet ud fra de både, der faktisk sejlede den dag.
+
+Idéen er, at den observerede log-tid for båd $i$ skrives som
+\begin{flalign}
+\hspace{2cm} y_{i,t} - \hat{x}_{i,t}^- &= \mu_{y,t} + e_{i,t}, \qquad e_{i,t}\sim \mathcal{N}(0,p_{i,t}^-+\sigma_{y,t}^2). &&
+\end{flalign}
+Dermed får både med høj prior-usikkerhed automatisk større samlet residualvarians, og de tæller derfor mindre med i estimeringen af dagens fælles niveau. For en fast værdi af $\sigma_{y,t}^2$ bliver maksimum likelihood-estimatet for $\mu_{y,t}$ det vægtede gennemsnit
+\begin{flalign}
+\hspace{2cm} \hat{\mu}_{y,t}(\sigma^2) &= \frac{\sum_{i\in\mathcal{S}_t} \frac{y_{i,t}-\hat{x}_{i,t}^-}{p_{i,t}^-+\sigma^2}}{\sum_{i\in\mathcal{S}_t} \frac{1}{p_{i,t}^-+\sigma^2}}. &&
+\end{flalign}
+Det er netop her, bådenes forskellige færdighedsniveauer automatisk tages med. I log-space trækkes den forventede båd-effekt fra, før dagens fælles niveau estimeres. I den oprindelige multiplicative model svarer det til, at den observerede tid divideres med bådens forventede tidsfaktor. Både med stor prior-usikkerhed vægter samtidig mindre.
+
+Indsættes dette i likelihooden, står kun én ukendt størrelse tilbage, nemlig $\sigma_{y,t}^2$. Den findes derfor ved en endimensional søgning:
+\begin{flalign}
+\hspace{2cm} \hat{\sigma}_{y,t}^2 &= \arg\min_{\sigma^2\geq\varepsilon} \frac{1}{2}\sum_{i\in\mathcal{S}_t}\left[\log\!\left(p_{i,t}^-+\sigma^2\right)+\frac{\left(y_{i,t}-\hat{x}_{i,t}^- - \hat{\mu}_{y,t}(\sigma^2)\right)^2}{p_{i,t}^-+\sigma^2}\right]. &&
+\end{flalign}
+Udtrykket kommer direkte fra den negative log-likelihood for normalfordelingen
+\begin{flalign}
+\hspace{2cm} y_{i,t} - \hat{x}_{i,t}^- &\sim \mathcal{N}\!\left(\mu_{y,t},\,p_{i,t}^-+\sigma_{y,t}^2\right). &&
+\end{flalign}
+Log-leddet stammer fra normalfordelingens normaliseringskonstant, mens kvotientleddet stammer fra den kvadrerede residual i eksponenten. Fordi variansen her er $p_{i,t}^-+\sigma_{y,t}^2$, optræder netop denne størrelse begge steder i likelihooden.
+
+For at se denne model i tidsskalaen kan man i et konkret ræs først korrigere de observerede tider for bådens forventede niveau, altså betragte $T_{i,t}/\exp(\hat{x}_{i,t}^-)$. I eksemplet nedenfor er $p_{i,t}^-$ ens på tværs af bådene, så modellen i tidsskalaen bliver en ren log-normal fordeling. Den grå kurve viser den empiriske fordelingsfunktion for de korrigerede tider, og den sorte kurve viser den log-normalfordeling, der svarer til de fundne værdier af $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=7.0cm,
+xlabel={Korrigeret tid (sekunder)},
+ylabel={Kumulativ sandsynlighed},
+ymin=0,
+ymax=1,
+grid=major,
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=2,
+]
+\addplot[gray!70, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/ml_fit_example_empirical_cdf.csv};
+\addlegendentry{Empirisk CDF}
+\addplot[black, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/ml_fit_example_model_cdf.csv};
+\addlegendentry{Fittet log-normal}
+\end{axis}
+\end{tikzpicture}
+\caption{Empirisk fordelingsfunktion for korrigerede tider i et konkret ræs og den log-normalfordeling, der følger af den estimerede dagsmodel.}
+\end{figure}
+
+Hvis et ræs ser usædvanligt uroligt ud, bliver $\hat{\sigma}_{y,t}^2$ høj, og så bliver Kalman-forstærkningen automatisk lav. Modellen lærer altså kun lidt af et mærkeligt ræs.
