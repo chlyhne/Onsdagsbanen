@@ -1,6 +1,6 @@
-deltager,malt_tid,loo_prediktion,loo_prediktions_fejl,tidsafvigelse,tidsafvigelse_procent
-Anna Kiel Grud,1:23:40,1:28:37,+3,-0:04:57,-5.6\%
-Christian Løvgren Persson,1:27:30,1:32:29,+1,-0:04:59,-5.4\%
-John Amby,1:24:23,1:28:35,+1,-0:04:12,-4.7\%
-Esben Harder,1:25:56,1:24:00,-2,0:01:56,+2.3\%
-Per Brøker Kristensen,1:31:54,1:27:54,-3,0:04:00,+4.5\%
+deltager,malt_tid,loo_prediktion,loo_sejletid,loo_prediktions_fejl,tidsafvigelse,tidsafvigelse_procent
+Anna Kiel Grud,1:23:40,1:28:37,1:20:10,+3,-0:04:57,-5.6\%
+Christian Løvgren Persson,1:27:30,1:32:29,1:24:56,+1,-0:04:59,-5.4\%
+John Amby,1:24:23,1:28:35,1:19:22,+1,-0:04:12,-4.7\%
+Esben Harder,1:25:56,1:24:00,1:20:05,-2,0:01:56,+2.3\%
+Per Brøker Kristensen,1:31:54,1:27:54,1:20:16,-3,0:04:00,+4.5\%

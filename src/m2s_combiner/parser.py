@@ -131,6 +131,23 @@ def parse_discard_after_races_from_result_payload(
     return sorted({value for value in numbers if _is_in_allowed_race_range(value, max_race)})
 
 
+def _race_length_nm_by_index(payload: dict[str, object]) -> dict[int, float | None]:
+    race_infos = payload.get("RaceInfos")
+    if not isinstance(race_infos, list):
+        return {}
+
+    lengths: dict[int, float | None] = {}
+    for item in race_infos:
+        if not isinstance(item, dict):
+            continue
+        race_index = item.get("RaceIndex")
+        if not isinstance(race_index, int):
+            continue
+        length_value = item.get("LengthNM")
+        lengths[race_index] = float(length_value) if isinstance(length_value, (int, float)) else None
+    return lengths
+
+
 def parse_race_rows_from_result_payload(
     payload: dict[str, object],
     series_label: str,
@@ -142,6 +159,7 @@ def parse_race_rows_from_result_payload(
         return {}
 
     requested_indices = {int(label[1:]): label for label in requested_labels}
+    length_nm_by_index = _race_length_nm_by_index(payload)
     rows_by_label: dict[str, list[dict[str, object]]] = {label: [] for label in requested_labels}
 
     entries = payload.get("EntryResults")
@@ -218,6 +236,7 @@ def parse_race_rows_from_result_payload(
                     "sail_number_country": sail_number_country,
                     "skipper": skipper,
                     "hdcp": hdcp,
+                    "length_nm": length_nm_by_index.get(race_index),
                     "beregnet_seconds": beregnet_seconds,
                     "sailed_seconds": sailed_seconds,
                     "race_status_code": race_status_code,

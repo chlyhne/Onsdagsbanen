@@ -134,6 +134,42 @@ python run_2025.py --scoring-rule fractional-point
 python run_2025.py --scoring-rule bayesian-point
 ```
 
+## Redress Pipeline
+
+The redress workflow now lives under `src/m2s_combiner/redress/` as a proper package split into:
+
+- collection (`collect.py`)
+- model/filter fitting (`model.py`)
+- artifact exports (`exports.py`)
+- orchestration (`pipeline.py`)
+
+Run it through the packaged entrypoint:
+
+```bash
+python -m m2s_combiner.redress
+```
+
+Or through the installed console script:
+
+```bash
+m2s-redress
+```
+
+The legacy wrapper is still available and forwards to the packaged CLI:
+
+```bash
+python scripts/redress_2025_evolution.py
+```
+
+Useful options:
+
+```bash
+python -m m2s_combiner.redress --q-objective mle
+python -m m2s_combiner.redress --q-objective rmse --output-dir analysis
+```
+
+Generated artifacts are written to `analysis/`, including state history, prediction tables, boat plot CSVs, q diagnostics, and the LaTeX fragment consumed by `redress-algorithm-paper/`.
+
 ## Email Results (Gmail)
 
 Use the script `send_results_gmail.py` to email result PDFs to multiple recipients.

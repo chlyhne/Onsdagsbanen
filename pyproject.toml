@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 m2s-combine = "m2s_combiner.cli:main"
+m2s-redress = "m2s_combiner.redress.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

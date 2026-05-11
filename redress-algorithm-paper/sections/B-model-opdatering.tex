@@ -68,7 +68,31 @@ Her betyder $^-$ den predikterede værdi før dagens observation, mens $^+$ bety
 
 I vores problem er den skjulte tilstand bådens færdighedsniveau i log-space, mens den observerede størrelse er den log-transformerede beregnede tid. Kalman-filteret bruges altså til at holde et løbende estimat af hver båds niveau, efterhånden som nye resultater kommer ind. Her er $\Delta T_{k+1}$ tiden siden forrige observation, og $\sigma_x^2$ er den globale procesvarians pr. dag. Det betyder, at jeg ikke lægger nogen systematisk dynamik ind i færdighedsniveauet fra én observation til den næste. Niveauet får i stedet lov til at drive lidt, og usikkerheden vokser jo længere tid der går.
 
-Værdien af $\sigma_x^2$ sættes ikke på forhånd ud fra mavefornemmelse. Den findes ved at iterere over kandidatværdier og vælge den værdi, som får modellen til at passe bedst muligt i en 1-step prediktionssammenhæng på de historiske data. Intuitionen er enkel: hvis $\sigma_x^2$ vælges for lille, bliver modellen for træg og reagerer for lidt på reelle ændringer i bådenes niveau; hvis den vælges for stor, bliver modellen for nervøs og kommer til at jagte støj. Den valgte værdi er derfor den, som giver den bedste balance mellem stabilitet og tilpasningsevne i de løbende one-step forudsigelser.
+\section{ML-estimering af procesvariansen}
+Værdien af $\sigma_x^2$ estimeres ved maximum likelihood i en one-step prediktionsramme, hvor $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$ på hver dag profileres ud via dags-likelihooden.
+
+Likelihooden følger Kalman-recursionen og skrives via kædereglen som en sekvens af betingede one-step bidrag:
+\begin{flalign}
+\hspace{2cm} p(y_{1:T}\mid \sigma_x^2) &= \prod_{t=1}^{T} p(y_t\mid y_{1:t-1}, \sigma_x^2), \qquad
+-\log p(y_{1:T}\mid \sigma_x^2) = \sum_{t=1}^{T} -\log p(y_t\mid y_{1:t-1}, \sigma_x^2). &&
+\end{flalign}
+
+For en given kandidatværdi af $\sigma_x^2$ køres filteret frem gennem data, og den samlede negative log-likelihood summeres over alle observerede både og ræs:
+\begin{flalign}
+\hspace{2cm} \mathcal{L}(\sigma_x^2) &= \sum_t \sum_{i\in\mathcal{S}_t} \frac{1}{2}\left[\log\!\left(2\pi s_{i,t}(\sigma_x^2)\right)+\frac{e_{i,t}(\sigma_x^2)^2}{s_{i,t}(\sigma_x^2)}\right], &&
+\end{flalign}
+hvor
+\begin{flalign}
+\hspace{2cm} s_{i,t}(\sigma_x^2) &= p_{i,t}^-(\sigma_x^2)+\hat{\sigma}_{y,t}^2(\sigma_x^2), \qquad e_{i,t}(\sigma_x^2)=y_{i,t}-\hat{y}_{i,t}^-(\sigma_x^2). &&
+\end{flalign}
+
+MLE-estimatet for procesvariansen vælges derefter som
+\begin{flalign}
+\hspace{2cm} \hat{\sigma}_x^2 &= \arg\min_{\sigma_x^2\in[\sigma_{x,\min}^2,\sigma_{x,\max}^2]} \mathcal{L}(\sigma_x^2). &&
+\end{flalign}
+I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$, hvor målfunktionen evalueres for kandidatværdier, og den bedste vælges.
+
+Intuitionen er den samme som før: en for lille $\sigma_x^2$ gør modellen for træg, mens en for stor $\sigma_x^2$ gør den for nervøs. Forskellen er, at balancen nu bestemmes af den samlede sandsynlighed under modellen i stedet for et rent fejlmål i sekunder.
 
 \par
 Når $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$ er fundet, opdateres de både, der faktisk sejlede, ved
