@@ -14,6 +14,10 @@ Subjects are matched exactly (trimmed + case-insensitive):
 - `delete`
 - `afmeld resultater`
 
+Subject with fixed format:
+
+- `dommertjans r<m> <n>`
+
 Sender and mode rules:
 
 - `resultater`
@@ -32,6 +36,13 @@ Sender and mode rules:
 	- Allowed for any sender except `hummesse@gmail.com`.
 	- Removes sender address from recipients list.
 	- Triggers unsubscribe confirmation email.
+- `dommertjans r<m> <n>`
+	- Only `hummesse@gmail.com` can use this.
+	- Example: `dommertjans r3 4`
+	- Means: set redress in `R3` 2026 for participant number `4` from `participant_registry_2026.csv`.
+	- There can only be one dommertjans entry per race, so a new `n>0` replaces the old one for that race.
+	- Special case: `dommertjans r3 0` removes all dommertjans-redress rows for `R3` 2026.
+	- Updates the existing `redress_duty_assignments.csv` file and sends a confirmation email with the resolved participant name.
 
 ## Required Worker configuration
 
@@ -77,6 +88,8 @@ JSON fields:
 - `body_text` or `body` (optional; used to extract emails)
 - `recipients_override` (optional string or array)
 
+For dommertjans commands, the worker uses the subject format itself and does not require body content.
+
 Example:
 
 ```json
@@ -101,6 +114,7 @@ One-time setup:
 Bridge behavior:
 
 - Polls unread messages for subjects: `resultater`, `append`, `delete`, `afmeld resultater`.
+- Also polls unread messages beginning with `dommertjans` and expects the exact format `dommertjans r<m> <n>`.
 - Applies sender restrictions consistent with Worker rules.
 - Labels processed threads with `m2s-processed` and can archive them.
 

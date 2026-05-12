@@ -9,6 +9,7 @@ const M2S_CONFIG = {
   appendSubjectToken: "append",
   deleteSubjectToken: "delete",
   unsubscribeSubjectToken: "afmeld resultater",
+  dutySubjectPrefix: "dommertjans",
   // Allow every sender to request result emails (subject=resultater).
   allowAnySenderForResultater: true,
   // Optional sender allow-list when allowAnySenderForResultater is false.
@@ -56,6 +57,9 @@ function normalizeSubject_(subject) {
 
 function getModeFromSubject_(subject) {
   const normalized = normalizeSubject_(subject);
+  if (parseDutySubject_(normalized)) {
+    return "duty";
+  }
   if (normalized === normalizeSubject_(M2S_CONFIG.resultaterSubjectToken)) {
     return "resultater";
   }
@@ -71,12 +75,27 @@ function getModeFromSubject_(subject) {
   return "";
 }
 
+function parseDutySubject_(subject) {
+  const normalized = String(subject || "").trim().toLowerCase();
+  const match = normalized.match(/^dommertjans\s+r(\d+)\s+(\d+)$/i);
+  if (!match) {
+    return null;
+  }
+  return {
+    raceLabel: `R${match[1]}`,
+    participantNumber: String(Number(match[2])),
+  };
+}
+
 function isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders) {
   if (mode === "append") {
     return fromAddress === normalizeSubject_(M2S_CONFIG.appendSender);
   }
   if (mode === "delete") {
     return fromAddress === normalizeSubject_(M2S_CONFIG.deleteSender);
+  }
+  if (mode === "duty") {
+    return fromAddress === normalizeSubject_(M2S_CONFIG.appendSender);
   }
   if (mode === "unsubscribe") {
     return fromAddress !== normalizeSubject_(M2S_CONFIG.unsubscribeDisallowedSender);
@@ -96,6 +115,7 @@ function collectCandidateThreads_() {
     buildSearchQueryForToken_(M2S_CONFIG.appendSubjectToken),
     buildSearchQueryForToken_(M2S_CONFIG.deleteSubjectToken),
     buildSearchQueryForToken_(M2S_CONFIG.unsubscribeSubjectToken),
+    buildSearchQueryForToken_(M2S_CONFIG.dutySubjectPrefix),
   ];
 
   const byId = new Map();
@@ -179,6 +199,7 @@ function pollAndTrigger() {
     const fromAddress = extractEmailAddress(message.getFrom());
     const subject = String(message.getSubject() || "").trim();
     const mode = getModeFromSubject_(subject);
+    const dutyCommand = parseDutySubject_(subject);
     const plainBody = String(message.getPlainBody() || "");
     const recipientsOverride =
       mode === "unsubscribe" ? [fromAddress] : extractEmailsFromBody_(plainBody);
@@ -203,6 +224,12 @@ function pollAndTrigger() {
 
     if ((mode === "append" || mode === "delete") && recipientsOverride.length === 0) {
       console.log("Append/delete mode requires at least one email in body. Marking as processed.");
+      markThreadProcessed_(thread, processed);
+      continue;
+    }
+
+    if (mode === "duty" && !dutyCommand) {
+      console.log("Duty subject did not match expected format. Marking as processed.");
       markThreadProcessed_(thread, processed);
       continue;
     }

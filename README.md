@@ -108,9 +108,15 @@ Judge-duty redress input:
 - The CLI can inject synthetic redress times for boats with judge duty.
 - By default it auto-loads `redress_duty_assignments.csv` from the repo root when that file exists.
 - You can override the file path with `--duty-assignments path/to/file.csv`.
+- `redress_duty_assignments.csv` remains the authoritative redress input file.
+- `participant_registry_2026.csv` is a separate helper file used only to map mail command numbers to participant names.
 - Expected columns are: `year`, `race_local`, `group`, `series`, `competitor`, `note`.
 - Rows are matched strictly on normalized year/race/group/series/competitor and fail fast on duplicates or unknown matches.
+- There can only be one dommertjans entry per race; setting a new participant number for the same race replaces the old row.
 - Synthetic rows are marked in the PDF with `*` and the note `Redress-tildelt tid pga. dommertjans.`
+- To update duty redress by participant number, use `python scripts/update_duty_redress.py --race R3 --participant-number 4`.
+- Special case: `python scripts/update_duty_redress.py --race R3 --participant-number 0` removes all dommertjans-redress rows for `R3` 2026.
+- The email bridge/worker uses the same mapping with subject format `dommertjans r<m> <n>`.
 
 Example:
 

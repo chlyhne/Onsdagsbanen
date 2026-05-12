@@ -4,6 +4,8 @@ const RESULTS_SUBJECT = "resultater";
 const APPEND_SUBJECT = "append";
 const DELETE_SUBJECT = "delete";
 const UNSUBSCRIBE_SUBJECT = "afmeld resultater";
+const DUTY_SUBJECT_PREFIX = "dommertjans";
+const DUTY_SUBJECT_PATTERN = /^dommertjans\s+r(\d+)\s+(\d+)$/i;
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -65,6 +67,18 @@ function isExactUnsubscribeSubject(subject) {
   return String(subject || "").trim().toLowerCase() === UNSUBSCRIBE_SUBJECT;
 }
 
+function parseDutySubject(subject) {
+  const normalized = String(subject || "").trim();
+  const match = normalized.match(DUTY_SUBJECT_PATTERN);
+  if (!match) {
+    return null;
+  }
+  return {
+    raceLabel: `R${match[1]}`,
+    participantNumber: String(Number(match[2])),
+  };
+}
+
 function tokenMatches(request, env) {
   const expected = requireEnv(env, "TRIGGER_TOKEN");
   const headerToken = String(request.headers.get("x-trigger-token") || "").trim();
@@ -95,6 +109,9 @@ async function dispatchWorkflow({
   deleteMode = false,
   sendUnsubscribeConfirmation = false,
   unsubscribeRecipient = "",
+  dutyMode = false,
+  dutyRace = "",
+  dutyParticipantNumber = "",
 }) {
   const owner = requireEnv(env, "GH_OWNER");
   const repo = requireEnv(env, "GH_REPO");
@@ -125,6 +142,9 @@ async function dispatchWorkflow({
           delete_mode: deleteMode ? "true" : "false",
           send_unsubscribe_confirmation: sendUnsubscribeConfirmation ? "true" : "false",
           unsubscribe_recipient: String(unsubscribeRecipient || "").trim().toLowerCase(),
+          duty_mode: dutyMode ? "true" : "false",
+          duty_race: String(dutyRace || "").trim().toUpperCase(),
+          duty_participant_number: String(dutyParticipantNumber || "").trim(),
         },
       }),
     }
@@ -151,13 +171,15 @@ async function handleIncomingEmail(message, env) {
   const isAppend = isExactAppendSubject(subject);
   const isDelete = isExactDeleteSubject(subject);
   const isUnsubscribe = isExactUnsubscribeSubject(subject);
-  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe) {
-    console.log("Ignoring email because subject was not exactly 'resultater', 'append', 'delete', or 'afmeld resultater'.");
+  const dutyCommand = parseDutySubject(subject);
+  const isDuty = Boolean(dutyCommand);
+  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe && !isDuty) {
+    console.log("Ignoring email because subject was not a supported command.");
     return;
   }
 
-  if ((isAppend || isDelete) && from !== HUMMESSE_SENDER) {
-    console.log("Ignoring append/delete email because sender was not hummesse@gmail.com.");
+  if ((isAppend || isDelete || isDuty) && from !== HUMMESSE_SENDER) {
+    console.log("Ignoring admin-only email because sender was not hummesse@gmail.com.");
     return;
   }
 
@@ -172,6 +194,9 @@ async function handleIncomingEmail(message, env) {
   let deleteMode = false;
   let sendUnsubscribeConfirmation = false;
   let unsubscribeRecipient = "";
+  let dutyMode = false;
+  let dutyRace = "";
+  let dutyParticipantNumber = "";
   if (isUnsubscribe) {
     recipientsOverride = [from];
     persistRecipients = true;
@@ -179,6 +204,11 @@ async function handleIncomingEmail(message, env) {
     deleteMode = true;
     sendUnsubscribeConfirmation = true;
     unsubscribeRecipient = from;
+  } else if (isDuty) {
+    dutyMode = true;
+    appendOnly = true;
+    dutyRace = dutyCommand.raceLabel;
+    dutyParticipantNumber = dutyCommand.participantNumber;
   } else if (from === HUMMESSE_SENDER) {
     const rawEmail = await readRawEmail(message);
     const bodyText = extractEmailBodyText(rawEmail);
@@ -207,9 +237,15 @@ async function handleIncomingEmail(message, env) {
     deleteMode,
     sendUnsubscribeConfirmation,
     unsubscribeRecipient,
+    dutyMode,
+    dutyRace,
+    dutyParticipantNumber,
   });
   console.log(
     `Workflow dispatched for sender ${from}. mode=${
+      dutyMode
+        ? `duty:${dutyRace}:${dutyParticipantNumber}`
+        :
       isUnsubscribe
         ? "unsubscribe"
         : deleteMode
@@ -255,13 +291,15 @@ async function handleHttpTrigger(request, env) {
   const isAppend = isExactAppendSubject(subject);
   const isDelete = isExactDeleteSubject(subject);
   const isUnsubscribe = isExactUnsubscribeSubject(subject);
+  const dutyCommand = parseDutySubject(subject);
+  const isDuty = Boolean(dutyCommand);
 
-  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe) {
-    return new Response("Subject must be exactly 'resultater', 'append', 'delete', or 'afmeld resultater'", { status: 400 });
+  if (!isResultater && !isAppend && !isDelete && !isUnsubscribe && !isDuty) {
+    return new Response("Subject must be a supported command", { status: 400 });
   }
 
-  if ((isAppend || isDelete) && from !== HUMMESSE_SENDER) {
-    return new Response("Only hummesse@gmail.com may use subject 'append' or 'delete'", { status: 403 });
+  if ((isAppend || isDelete || isDuty) && from !== HUMMESSE_SENDER) {
+    return new Response("Only hummesse@gmail.com may use admin commands", { status: 403 });
   }
 
   if (isUnsubscribe && from === HUMMESSE_SENDER) {
@@ -282,6 +320,9 @@ async function handleHttpTrigger(request, env) {
   const deleteMode = isDelete || isUnsubscribe;
   const sendUnsubscribeConfirmation = isUnsubscribe;
   const unsubscribeRecipient = isUnsubscribe ? from : "";
+  const dutyMode = isDuty;
+  const dutyRace = isDuty ? dutyCommand.raceLabel : "";
+  const dutyParticipantNumber = isDuty ? dutyCommand.participantNumber : "";
 
   if (!from) {
     return new Response("Missing sender", { status: 400 });
@@ -299,13 +340,16 @@ async function handleHttpTrigger(request, env) {
     env,
     from,
     subject,
-    dryRun: appendOnly ? true : dryRun,
+    dryRun: appendOnly || dutyMode ? true : dryRun,
     recipientsOverride,
     persistRecipients,
-    appendOnly,
+    appendOnly: appendOnly || dutyMode,
     deleteMode,
     sendUnsubscribeConfirmation,
     unsubscribeRecipient,
+    dutyMode,
+    dutyRace,
+    dutyParticipantNumber,
   });
   return new Response("Triggered", { status: 202 });
 }

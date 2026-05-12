@@ -44,6 +44,19 @@ on:
         description: Recipient email for unsubscribe confirmation
         required: false
         type: string
+      duty_mode:
+        description: Update redress_duty_assignments.csv from dommertjans subject command
+        required: false
+        default: false
+        type: boolean
+      duty_race:
+        description: Duty race label, for example R3
+        required: false
+        type: string
+      duty_participant_number:
+        description: Participant number from participant_registry_2026.csv
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -76,9 +89,14 @@ jobs:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
           M2S_RECIPIENTS_KEY: ${{ secrets.M2S_RECIPIENTS_KEY }}
+          DUTY_MODE: ${{ inputs.duty_mode }}
         run: |
           missing=0
-          for name in M2S_GMAIL_FROM M2S_GMAIL_APP_PASSWORD M2S_RECIPIENTS_KEY; do
+          required_names=(M2S_GMAIL_FROM M2S_GMAIL_APP_PASSWORD)
+          if [ "${DUTY_MODE}" != "true" ]; then
+            required_names+=(M2S_RECIPIENTS_KEY)
+          fi
+          for name in "${required_names[@]}"; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: ${name}"
               missing=1
@@ -89,6 +107,7 @@ jobs:
           fi
 
       - name: Prepare recipients file
+        if: ${{ inputs.duty_mode != true && inputs.duty_mode != 'true' }}
         id: prepare_recipients
         env:
           RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
@@ -204,12 +223,21 @@ jobs:
           echo "Triggered from: ${{ inputs.trigger_from }}"
           echo "Trigger subject: ${{ inputs.trigger_subject }}"
 
+      - name: Apply dommertjans redress
+        id: apply_duty_redress
+        if: ${{ inputs.duty_mode == true || inputs.duty_mode == 'true' }}
+        run: |
+          python scripts/update_duty_redress.py \
+            --race "${{ inputs.duty_race }}" \
+            --participant-number "${{ inputs.duty_participant_number }}" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Build 2026 PDF
-        if: ${{ inputs.append_only != true && inputs.append_only != 'true' }}
+        if: ${{ inputs.append_only != true && inputs.append_only != 'true' && inputs.duty_mode != true && inputs.duty_mode != 'true' }}
         run: python run_2026.py
 
       - name: Send or dry-run email
-        if: ${{ inputs.append_only != true && inputs.append_only != 'true' }}
+        if: ${{ inputs.append_only != true && inputs.append_only != 'true' && inputs.duty_mode != true && inputs.duty_mode != 'true' }}
         env:
           M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
           M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
@@ -228,7 +256,7 @@ jobs:
 
       - name: Persist recipients registry
         id: persist_registry
-        if: steps.prepare_recipients.outputs.should_persist == 'true'
+        if: ${{ inputs.duty_mode != true && inputs.duty_mode != 'true' && steps.prepare_recipients.outputs.should_persist == 'true' }}
         env:
           RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
           RECIPIENTS_KEY: ${{ secrets.M2S_RECIPIENTS_KEY }}
@@ -350,6 +378,106 @@ jobs:
           git add recipients_repo.enc
           git commit -m "chore: update recipients registry from email trigger"
           git push
+
+      - name: Commit dommertjans redress update
+        id: commit_duty_redress
+        if: ${{ inputs.duty_mode == true || inputs.duty_mode == 'true' }}
+        run: |
+          if git diff --quiet -- redress_duty_assignments.csv; then
+            echo "No duty redress changes to commit."
+            echo "commit_made=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add redress_duty_assignments.csv
+          git commit -m "chore: ${{ steps.apply_duty_redress.outputs.action }} dommertjans redress for ${{ steps.apply_duty_redress.outputs.race }} #${{ steps.apply_duty_redress.outputs.participant_number }}"
+          git push
+          echo "commit_made=true" >> "$GITHUB_OUTPUT"
+
+      - name: Send dommertjans confirmation
+        if: ${{ (inputs.duty_mode == true || inputs.duty_mode == 'true') && inputs.trigger_from != '' && steps.apply_duty_redress.outcome == 'success' && steps.commit_duty_redress.outcome == 'success' }}
+        env:
+          M2S_GMAIL_FROM: ${{ secrets.M2S_GMAIL_FROM }}
+          M2S_GMAIL_APP_PASSWORD: ${{ secrets.M2S_GMAIL_APP_PASSWORD }}
+          DUTY_CONFIRM_TO: ${{ inputs.trigger_from }}
+          DUTY_ACTION: ${{ steps.apply_duty_redress.outputs.action }}
+          DUTY_YEAR: ${{ steps.apply_duty_redress.outputs.year }}
+          DUTY_RACE: ${{ steps.apply_duty_redress.outputs.race }}
+          DUTY_NUMBER: ${{ steps.apply_duty_redress.outputs.participant_number }}
+          DUTY_COMPETITOR: ${{ steps.apply_duty_redress.outputs.competitor }}
+          DUTY_SERIES: ${{ steps.apply_duty_redress.outputs.series }}
+          DUTY_GROUP: ${{ steps.apply_duty_redress.outputs.group }}
+          DUTY_REMOVED_COUNT: ${{ steps.apply_duty_redress.outputs.removed_count }}
+        run: |
+          python - <<'PY'
+          import os
+          import smtplib
+          from email.message import EmailMessage
+
+          from_email = os.getenv("M2S_GMAIL_FROM", "").strip()
+          app_password = os.getenv("M2S_GMAIL_APP_PASSWORD", "").strip()
+          recipient = os.getenv("DUTY_CONFIRM_TO", "").strip().lower()
+          action = os.getenv("DUTY_ACTION", "updated").strip()
+          year = os.getenv("DUTY_YEAR", "2026").strip()
+          race = os.getenv("DUTY_RACE", "").strip().upper()
+          number = os.getenv("DUTY_NUMBER", "").strip()
+          competitor = os.getenv("DUTY_COMPETITOR", "").strip()
+          series = os.getenv("DUTY_SERIES", "").strip()
+          group = os.getenv("DUTY_GROUP", "").strip()
+          removed_count_raw = os.getenv("DUTY_REMOVED_COUNT", "0").strip()
+
+          try:
+            removed_count = int(removed_count_raw)
+          except ValueError:
+            removed_count = 0
+
+          if not from_email or not app_password:
+            raise RuntimeError("Missing Gmail credentials for dommertjans confirmation.")
+          if not recipient:
+            raise RuntimeError("Missing dommertjans confirmation recipient.")
+          if not race or not number:
+            raise RuntimeError("Missing dommertjans confirmation details.")
+
+          message = EmailMessage()
+          message["From"] = from_email
+          message["To"] = recipient
+          if number == "0":
+            if action == "removed":
+              message["Subject"] = f"Dommertjans fjernet: {race}"
+              body = (
+                f"Fjernede dommertjans-redress i {year}.\n\n"
+                f"Race: {race}\n"
+                f"Fjernede rækker: {removed_count}\n"
+              )
+            else:
+              message["Subject"] = f"Ingen dommertjans fundet: {race}"
+              body = (
+                f"Der var ingen dommertjans-redress at fjerne i {year}.\n\n"
+                f"Race: {race}\n"
+                f"Fjernede rækker: {removed_count}\n"
+              )
+          else:
+            message["Subject"] = f"Dommertjans registreret: {race} #{number}"
+            body = (
+              f"{action.capitalize()} dommertjans-redress i {year}.\n\n"
+              f"Race: {race}\n"
+              f"Deltagernummer: {number}\n"
+              f"Navn: {competitor}\n"
+              f"Serie: {series}\n"
+              f"Bane: {group}\n"
+            )
+          message.set_content(body)
+
+          with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(from_email, app_password)
+            smtp.send_message(message, to_addrs=[recipient])
+
+          print("Dommertjans confirmation email sent.")
+          PY
 
       - name: Send unsubscribe confirmation
         if: ${{ (inputs.send_unsubscribe_confirmation == true || inputs.send_unsubscribe_confirmation == 'true') && inputs.unsubscribe_recipient != '' && steps.persist_registry.outcome == 'success' && (steps.persist_registry.outputs.persist_changed != 'true' || steps.commit_registry.outcome == 'success') }}
