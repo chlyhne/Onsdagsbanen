@@ -128,7 +128,16 @@ function collectCandidateThreads_() {
     }
   }
 
-  return [...byId.values()];
+  return [...byId.values()].sort((left, right) => {
+    const leftMessages = left.getMessages();
+    const rightMessages = right.getMessages();
+    const leftDate = leftMessages.length > 0 ? leftMessages[leftMessages.length - 1].getDate().getTime() : 0;
+    const rightDate = rightMessages.length > 0 ? rightMessages[rightMessages.length - 1].getDate().getTime() : 0;
+    if (leftDate !== rightDate) {
+      return leftDate - rightDate;
+    }
+    return left.getId().localeCompare(right.getId());
+  });
 }
 
 function markThreadProcessed_(thread, processedLabel) {

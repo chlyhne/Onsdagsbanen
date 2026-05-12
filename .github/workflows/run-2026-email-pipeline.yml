@@ -63,6 +63,7 @@ permissions:
 
 concurrency:
   group: m2s-results-email-pipeline
+  queue: max
   cancel-in-progress: false
 
 jobs:
