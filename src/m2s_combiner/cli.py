@@ -6,24 +6,28 @@ from itertools import combinations
 import re
 from pathlib import Path
 
+import pandas as pd
+
 from .combine import BAYESIAN_POINT_RULE
 from .combine import FRACTIONAL_POINT_RULE
 from .combine import HIGH_POINT_RULE
 from .combine import LOW_POINT_RULE
 from .combine import combine_overall_from_races
 from .combine import combine_races
+from .defaults import DEFAULT_CLASS_GROUPS
+from .defaults import DEFAULT_EVENT_URL
 from .parser import parse_available_race_labels_from_result_payload
 from .parser import parse_completed_race_labels_from_result_payload
 from .parser import parse_discard_after_races_from_result_payload
 from .parser import parse_race_rows_from_result_payload
 from .pdf_report import build_combined_pdf
+from .redress_duty import DEFAULT_DUTY_ASSIGNMENTS_PATH
+from .redress_duty import DutyApplicationContext
+from .redress_duty import apply_group_duty_assignments
+from .redress_duty import duty_assignment_years
+from .redress_duty import filter_relevant_duty_assignments
+from .redress_duty import load_duty_assignments
 from .scraper import fetch_class_results_batch
-
-DEFAULT_EVENT_URL = "https://www.manage2sail.com/da-DK/event/Onsdagsbanen2026#!/"
-DEFAULT_CLASS_GROUPS = [
-    ("Stor Bane", ["Stor bane 1", "Stor bane 2"]),
-    ("Lille Bane", ["Lille bane 1", "Lille bane 2"]),
-]
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -68,6 +72,14 @@ def _build_parser() -> argparse.ArgumentParser:
             f"'{HIGH_POINT_RULE}' gives 1 point for participation plus one per boat left behind; "
             f"'{FRACTIONAL_POINT_RULE}' is high-point normalized by race participants, then multiplied by 100 and rounded; "
             f"'{BAYESIAN_POINT_RULE}' applies order-invariant, time-based hierarchical Bayesian scoring with handicap baseline (no discards)."
+        ),
+    )
+    parser.add_argument(
+        "--duty-assignments",
+        default="",
+        help=(
+            "Optional CSV file with judge-duty redress assignments. "
+            "If omitted, the CLI automatically uses redress_duty_assignments.csv when present."
         ),
     )
     return parser
@@ -132,6 +144,33 @@ def _resolve_group_max_races(max_race_values: list[int] | None, group_count: int
     raise ValueError(
         "Provide --max-race either once (all groups) or once per --class-names group in the same order."
     )
+
+
+def _resolve_duty_assignments_path(args: argparse.Namespace) -> tuple[Path, bool]:
+    configured_path = str(getattr(args, "duty_assignments", "") or "").strip()
+    if configured_path:
+        return Path(configured_path), True
+    return DEFAULT_DUTY_ASSIGNMENTS_PATH, False
+
+
+def _event_year_from_payloads(payload_by_class: dict[str, dict[str, object]], max_race: int | None) -> int:
+    years: set[int] = set()
+    for payload in payload_by_class.values():
+        race_meta = _race_meta_from_payload(payload, max_race=max_race)
+        for race_info in race_meta.values():
+            race_date_text = _format_race_date_value(race_info.get("start_date"), race_info.get("start_date_with_time"))
+            if race_date_text == "ukendt":
+                continue
+            try:
+                years.add(int(race_date_text[-4:]))
+            except ValueError:
+                continue
+
+    if not years:
+        raise ValueError("Could not infer event year from Manage2Sail payload metadata.")
+    if len(years) != 1:
+        raise ValueError(f"Expected one event year, but found: {sorted(years)}")
+    return next(iter(years))
 
 
 def _race_meta_from_payload(payload: dict[str, object], max_race: int | None) -> dict[int, dict[str, object]]:
@@ -418,6 +457,10 @@ def run(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    duty_assignments_path, duty_assignments_required = _resolve_duty_assignments_path(args)
+    duty_assignments = load_duty_assignments(duty_assignments_path, required=duty_assignments_required)
+    redress_lookup: pd.DataFrame | None = None
+
     pdf_sections: list[dict[str, object]] = []
     source_descriptions: list[str] = []
 
@@ -465,6 +508,7 @@ def run(args: argparse.Namespace) -> int:
             )
 
         effective_max_race = requested_max_race if requested_max_race is not None else group_max_available
+        event_year = _event_year_from_payloads(payload_by_class, max_race=effective_max_race)
 
         race_warnings = _warn_if_group_not_meaningfully_combinable(
             group_label=group_label,
@@ -501,6 +545,36 @@ def run(args: argparse.Namespace) -> int:
             )
             for class_name in class_names
         }
+
+        if not duty_assignments.empty:
+            group_duties = filter_relevant_duty_assignments(
+                duty_assignments,
+                event_year=event_year,
+                group_label=group_label,
+                selected_races=selected_races,
+            )
+            if not group_duties.empty:
+                if redress_lookup is None:
+                    from .redress.pipeline import build_redress_lookup
+
+                    lookup_years = duty_assignment_years(duty_assignments)
+                    redress_lookup = build_redress_lookup(years=lookup_years)
+                duty_result = apply_group_duty_assignments(
+                    DutyApplicationContext(
+                        group_label=group_label,
+                        class_names=class_names,
+                        payload_by_class=payload_by_class,
+                        selected_races=selected_races,
+                        event_year=event_year,
+                    ),
+                    parsed_races_by_class,
+                    duty_assignments,
+                    redress_lookup,
+                )
+                parsed_races_by_class = duty_result.parsed_races_by_class
+                applied_duty_count = duty_result.applied_count
+                if applied_duty_count:
+                    print(f"[{group_label}] Applied {applied_duty_count} redress duty assignment(s).")
 
         completed_races: list[str] = []
         group_races = []

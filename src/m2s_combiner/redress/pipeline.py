@@ -9,6 +9,7 @@ import pandas as pd
 
 from .collect import build_competitor_year_group_map
 from .collect import build_group_data
+from .common import normalize_text
 from .common import predict_sailed_seconds_from_corrected
 from .common import race_num
 from .constants import EPS
@@ -18,7 +19,6 @@ from .constants import Q_SEARCH_MAX
 from .constants import Q_SEARCH_MIN
 from .constants import Z50
 from .exports import export_boat_plot_data
-from .exports import export_latest_race_table
 from .exports import export_missing_race_prediction_tables
 from .exports import export_ml_fit_example
 from .model import estimate_global_q
@@ -213,6 +213,34 @@ def _write_core_outputs(history: pd.DataFrame, q_diag: pd.DataFrame, *, output_d
     return paths
 
 
+def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | None = None, output_dir: Path | None = None) -> pd.DataFrame:
+    q_objective = resolve_q_objective(q_objective)
+    cache_dir = output_dir if output_dir is not None else Path("analysis")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    groups, all_data = build_group_data()
+    if not groups or all_data.empty:
+        raise RuntimeError("No group data could be built.")
+
+    q_by_group, _, _, _, _ = _fit_group_qs(groups, output_dir=cache_dir, q_objective=q_objective)
+    competitor_year_group = build_competitor_year_group_map(all_data, NON_OBS_STATUSES)
+    history, _, _ = run_all_groups_with_transfer(groups, q_by_group, competitor_year_group, collect_history=True)
+    history = history.sort_values(["group", "competitor", "race_date", "race"], ascending=[True, True, True, True]).reset_index(drop=True)
+    history = _enrich_history(history, competitor_year_group)
+
+    lookup = history.copy()
+    lookup["year"] = pd.to_numeric(lookup["year"], errors="coerce").astype("Int64")
+    if years is not None:
+        year_filter = {int(value) for value in years}
+        lookup = lookup.loc[lookup["year"].isin(year_filter)].reset_index(drop=True)
+    lookup["race_local"] = lookup["race_local"].astype(str).str.strip().str.upper()
+    lookup["race_local_norm"] = lookup["race_local"]
+    lookup["group_norm"] = lookup["group"].map(normalize_text)
+    lookup["series_norm"] = lookup["series"].map(normalize_text)
+    lookup["competitor_norm"] = lookup["competitor"].map(normalize_text)
+    return lookup
+
+
 def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
     q_objective = resolve_q_objective(q_objective)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -232,12 +260,6 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
 
     all_predictions = history.copy()
     manifest_path = export_boat_plot_data(all_predictions, allowed_competitors=active_2026_competitors, output_dir=output_dir / "boat_plot_data")
-    latest_race_paths = [
-        export_latest_race_table(all_predictions, output_path=output_dir / "latest_race_2026_r2_stor_bane1_table.csv", year=int(PLOT_ACTIVE_YEAR), race_local="R2", group_filter="Stor Bane", series_filter="Stor bane 1"),
-        export_latest_race_table(all_predictions, output_path=output_dir / "latest_race_2026_r2_stor_bane2_table.csv", year=int(PLOT_ACTIVE_YEAR), race_local="R2", group_filter="Stor Bane", series_filter="Stor bane 2"),
-        export_latest_race_table(all_predictions, output_path=output_dir / "latest_race_2026_r2_lille_bane1_table.csv", year=int(PLOT_ACTIVE_YEAR), race_local="R2", group_filter="Lille Bane", series_filter="Lille bane 1"),
-        export_latest_race_table(all_predictions, output_path=output_dir / "latest_race_2026_r2_lille_bane2_table.csv", year=int(PLOT_ACTIVE_YEAR), race_local="R2", group_filter="Lille Bane", series_filter="Lille bane 2"),
-    ]
     missing_race_prediction_tables_tex_path = export_missing_race_prediction_tables(history, output_dir=output_dir, years=(2026,))
     ml_fit_example_paths = export_ml_fit_example(history, output_dir=output_dir)
 
@@ -257,7 +279,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
             f"({row['q_source']})"
         )
 
-    for path in [core_paths["history"], core_paths["observed"], core_paths["latest"], core_paths["race"], core_paths["q_diag"], manifest_path, *latest_race_paths, missing_race_prediction_tables_tex_path, *ml_fit_example_paths]:
+    for path in [core_paths["history"], core_paths["observed"], core_paths["latest"], core_paths["race"], core_paths["q_diag"], manifest_path, missing_race_prediction_tables_tex_path, *ml_fit_example_paths]:
         print(f"Wrote: {path}")
     print("Note: This pipeline exports analysis artifacts and TeX fragments, but does not build the PDF report.")
     return 0

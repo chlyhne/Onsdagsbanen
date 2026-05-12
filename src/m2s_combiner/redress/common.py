@@ -26,6 +26,23 @@ def display_name(value: str) -> str:
     return compact.title()
 
 
+def abbreviate_name(value: str) -> str:
+    full_name = display_name(value)
+    if not full_name:
+        return ""
+    if normalize_text(full_name) == "blue x":
+        return full_name
+
+    parts = full_name.split()
+    if len(parts) < 2:
+        return full_name
+
+    initials = [f"{part.rstrip('.').strip()[0]}." for part in parts[:-1] if part.rstrip('.').strip()]
+    if not initials:
+        return full_name
+    return " ".join([*initials, parts[-1]])
+
+
 def normalize_text(value: object) -> str:
     text = str(value or "").strip()
     if not text:
@@ -74,6 +91,29 @@ def format_seconds_signed(value: float | int | None) -> str:
         return "0:00:00"
     sign = "+" if numeric > 0 else ""
     return sign + format_seconds_hms(numeric)
+
+
+def format_seconds_signed_compact(value: float | int | None) -> str:
+    if value is None:
+        return ""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not np.isfinite(numeric):
+        return ""
+
+    rounded = int(round(numeric))
+    if rounded == 0:
+        return "0:00"
+
+    sign = "+" if rounded > 0 else "-"
+    total = abs(rounded)
+    hours, rem = divmod(total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours > 0:
+        return f"{sign}{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{sign}{minutes}:{seconds:02d}"
 
 
 def format_rank_error(value: float | int | None) -> str:

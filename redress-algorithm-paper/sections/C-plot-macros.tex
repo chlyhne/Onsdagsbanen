@@ -1,8 +1,4 @@
 \newcommand{\BoatPlotDataDir}{../analysis/boat_plot_data}
-\newcommand{\LatestRaceTableStorBaneOneRtwoCsv}{../analysis/latest_race_2026_r2_stor_bane1_table.csv}
-\newcommand{\LatestRaceTableStorBaneTwoRtwoCsv}{../analysis/latest_race_2026_r2_stor_bane2_table.csv}
-\newcommand{\LatestRaceTableLilleBaneOneRtwoCsv}{../analysis/latest_race_2026_r2_lille_bane1_table.csv}
-\newcommand{\LatestRaceTableLilleBaneTwoRtwoCsv}{../analysis/latest_race_2026_r2_lille_bane2_table.csv}
 \newcommand{\MissingRacePredictionTablesTex}{../analysis/missing_race_prediction_tables.tex}
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
@@ -91,7 +87,7 @@ xtick=data,
 xticklabels from table={\firstboatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
 legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
-legend columns=4,
+legend columns=2,
 unbounded coords=discard,
 filter discard warning=false,
 ]
@@ -99,18 +95,18 @@ filter discard warning=false,
 \AddBoatStateSeriesToAxis{\secondboatplotdata}{#6}{#6}{secondseries}
 \addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
 \addlegendentry{#1 data}
-\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#1 forudsigelse}
-\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 samlet usikkerhed}
 \addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
 \addlegendentry{#4 data}
+\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#1 forudsigelse}
 \addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
 \addlegendentry{#4 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 proces-usikkerhed}
 \addlegendimage{legend image code/.code={\fill[#6!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
 \addlegendentry{#4 proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 samlet usikkerhed}
 \addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
 \addlegendentry{#4 samlet usikkerhed}
 \end{axis}
@@ -141,7 +137,7 @@ xtick=data,
 xticklabels from table={\firstboatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
 legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
-legend columns=4,
+legend columns=2,
 unbounded coords=discard,
 filter discard warning=false,
 ]
@@ -163,18 +159,18 @@ filter discard warning=false,
 \addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#6, mark options={fill=#6,draw=#6}, forget plot] table[x=x_pos,y=obs_pct] {\secondboatplotdata};
 \addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
 \addlegendentry{#1 data}
-\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#1 forudsigelse}
-\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 samlet usikkerhed}
 \addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
 \addlegendentry{#4 data}
+\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{#1 forudsigelse}
 \addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
 \addlegendentry{#4 forudsigelse}
+\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 proces-usikkerhed}
 \addlegendimage{legend image code/.code={\fill[#6!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
 \addlegendentry{#4 proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{#1 samlet usikkerhed}
 \addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
 \addlegendentry{#4 samlet usikkerhed}
 \end{axis}
@@ -182,22 +178,4 @@ filter discard warning=false,
 \end{figure}
 }
 
-\newcommand{\LatestRaceTableFromCsv}[1]{%
-\scriptsize
-\pgfplotstabletypeset[
-col sep=comma,
-string type,
-every head row/.style={before row=\toprule,after row=\midrule},
-every last row/.style={after row=\bottomrule},
-columns={deltager,malt_tid,loo_prediktion,loo_sejletid,loo_prediktions_fejl,tidsafvigelse,tidsafvigelse_procent},
-columns/deltager/.style={column name=Deltager,column type=l},
-columns/malt_tid/.style={column name=Målt,column type={>{\raggedleft\arraybackslash}p{1.35cm}}},
-columns/loo_prediktion/.style={column name=Forudsigelse,column type={>{\raggedleft\arraybackslash}p{1.6cm}}},
-columns/loo_sejletid/.style={column name=Sejltid,column type={>{\raggedleft\arraybackslash}p{1.45cm}}},
-columns/loo_prediktions_fejl/.style={column name=Pointfejl,column type={>{\raggedleft\arraybackslash}p{1.5cm}}},
-columns/tidsafvigelse/.style={column name=Tidsfejl,column type={>{\raggedleft\arraybackslash}p{1.45cm}}},
-columns/tidsafvigelse_procent/.style={column name=Tidsfejl (\%),column type={>{\raggedleft\arraybackslash}p{1.6cm}}},
-]{#1}
-\normalsize
-}
 

@@ -103,6 +103,28 @@ Common options:
 python -m m2s_combiner.cli --output-pdf Results.pdf --output-dir . --max-race 12
 ```
 
+Judge-duty redress input:
+
+- The CLI can inject synthetic redress times for boats with judge duty.
+- By default it auto-loads `redress_duty_assignments.csv` from the repo root when that file exists.
+- You can override the file path with `--duty-assignments path/to/file.csv`.
+- Expected columns are: `year`, `race_local`, `group`, `series`, `competitor`, `note`.
+- Rows are matched strictly on normalized year/race/group/series/competitor and fail fast on duplicates or unknown matches.
+- Synthetic rows are marked in the PDF with `*` and the note `Redress-tildelt tid pga. dommertjans.`
+
+Example:
+
+```csv
+year,race_local,group,series,competitor,note
+2026,R1,Lille Bane,Lille bane 1,Henrik AXELSEN,Dommertjans
+```
+
+Run with an explicit duty file:
+
+```bash
+python -m m2s_combiner.cli --duty-assignments redress_duty_assignments.csv
+```
+
 Scoring rule options:
 
 - `--scoring-rule low-point` (default): classic low-point scoring where lowest total wins.

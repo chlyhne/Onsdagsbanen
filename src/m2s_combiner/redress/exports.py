@@ -7,10 +7,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .common import abbreviate_name
 from .common import display_name
-from .common import format_percent_signed
 from .common import format_rank_error
 from .common import format_seconds_hms
+from .common import format_seconds_signed_compact
 from .common import format_seconds_signed
 from .common import latex_escape_text
 from .common import latex_table_cell
@@ -133,65 +134,6 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
     return manifest_path
 
 
-def export_latest_race_table(frame: pd.DataFrame, *, output_path: Path, year: int, race_local: str, group_filter: str | None = None, series_filter: str | None = None) -> Path:
-    required_columns = ["competitor", "group", "series", "race_local", "year", "observed", "beregnet_seconds", "y_pred_loo", "hdcp", "length_nm"]
-    missing = [column for column in required_columns if column not in frame.columns]
-    if missing:
-        raise ValueError(f"Missing required columns for latest-race table export: {', '.join(missing)}")
-
-    work = frame.copy()
-    work["year_num"] = pd.to_numeric(work["year"], errors="coerce")
-    if work["year_num"].isna().any():
-        raise ValueError("Missing year values in latest-race table export frame.")
-    work["race_local_norm"] = work["race_local"].astype(str).str.strip()
-    race_rows = work[(work["year_num"].astype(int) == int(year)) & (work["race_local_norm"] == str(race_local))].copy()
-    if group_filter is not None:
-        race_rows = race_rows[race_rows["group"].astype(str) == str(group_filter)].copy()
-    if series_filter is not None:
-        race_rows = race_rows[race_rows["series"].astype(str) == str(series_filter)].copy()
-    if race_rows.empty:
-        filters = []
-        if group_filter is not None:
-            filters.append(f"group={group_filter}")
-        if series_filter is not None:
-            filters.append(f"series={series_filter}")
-        suffix = "" if not filters else ", " + ", ".join(filters)
-        raise ValueError(f"No rows found for latest-race table: year={year}, race_local={race_local}{suffix}.")
-
-    race_rows = race_rows.loc[race_rows["observed"] == True].copy()  # noqa: E712
-    if race_rows.empty:
-        raise ValueError(f"No observed rows found for latest-race table: year={year}, race_local={race_local}.")
-
-    measured_seconds = pd.to_numeric(race_rows["beregnet_seconds"], errors="coerce")
-    if measured_seconds.dropna().empty:
-        raise ValueError(f"No observed measured times found for latest-race table: year={year}, race_local={race_local}.")
-    loo_pred_seconds = pd.to_numeric(race_rows["y_pred_loo"], errors="coerce").apply(lambda y: float(np.exp(y)) if pd.notna(y) and np.isfinite(y) else np.nan)
-    loo_pred_sailed_seconds = race_rows.apply(lambda row: predict_sailed_seconds_from_corrected(loo_pred_seconds.loc[row.name], row.get("hdcp"), row.get("length_nm")), axis=1)
-    loo_time_delta_seconds = measured_seconds - loo_pred_seconds
-    loo_time_delta_pct = (loo_time_delta_seconds / loo_pred_seconds) * 100.0
-    actual_rank = measured_seconds.groupby(race_rows["group"].astype(str)).rank(method="min", ascending=True)
-    loo_rank = loo_pred_seconds.groupby(race_rows["group"].astype(str)).rank(method="min", ascending=True)
-    loo_error_rank = loo_rank - actual_rank
-
-    result = pd.DataFrame(
-        {
-            "deltager": race_rows["competitor"].astype(str).map(display_name),
-            "malt_tid": measured_seconds.map(format_seconds_hms),
-            "loo_prediktion": loo_pred_seconds.map(format_seconds_hms),
-            "loo_sejletid": loo_pred_sailed_seconds.map(format_seconds_hms),
-            "loo_prediktions_fejl": loo_error_rank.map(format_rank_error),
-            "tidsafvigelse": loo_time_delta_seconds.map(format_seconds_hms),
-            "tidsafvigelse_procent": loo_time_delta_pct.map(format_percent_signed),
-            "_sort_tidsafvigelse_pct": loo_time_delta_pct.astype(float),
-        }
-    ).sort_values(["_sort_tidsafvigelse_pct", "deltager"], ascending=[True, True]).reset_index(drop=True)
-    result = result.drop(columns=["_sort_tidsafvigelse_pct"])
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    result.to_csv(output_path, index=False)
-    return output_path
-
-
 def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Path, years: tuple[int, ...]) -> Path:
     required_columns = ["competitor", "group", "series", "race_local", "year", "observed", "sailed_seconds", "beregnet_seconds", "pred_cf_sailed_seconds", "pred_cf_beregnet_seconds"]
     missing = [column for column in required_columns if column not in frame.columns]
@@ -221,10 +163,26 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
     work["cf_beregnet_cell"] = work["pred_cf_beregnet_seconds"].map(format_seconds_hms)
     work["group_display"] = work["group"].astype(str).map(display_name)
     work["series_display"] = work["series_filled"].astype(str).map(display_name)
-    work["competitor_display"] = work["competitor"].astype(str).map(display_name)
+    work["competitor_display"] = work["competitor"].astype(str).map(abbreviate_name)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    table_columns = ["deltager", "sejltid", "kontrafaktisksejltid", "beregnettid", "kontrafaktiskberegnettid", "prediktionsfejl"]
+    observed_mask = work["observed"] == True  # noqa: E712
+    work["actual_lane_rank"] = np.nan
+    work["estimated_lane_rank"] = np.nan
+    lane_rank_group_cols = ["year_num", "race_local_norm", "group", "series_filled"]
+    work.loc[observed_mask, "actual_lane_rank"] = (
+        work.loc[observed_mask]
+        .groupby(lane_rank_group_cols)["beregnet_seconds"]
+        .rank(method="min", ascending=True)
+    )
+    work.loc[observed_mask, "estimated_lane_rank"] = (
+        work.loc[observed_mask]
+        .groupby(lane_rank_group_cols)["pred_cf_beregnet_seconds"]
+        .rank(method="min", ascending=True)
+    )
+    work["point_error"] = work["estimated_lane_rank"] - work["actual_lane_rank"]
+
+    table_columns = ["Navn", "Tid", "Est. Tid", "Hdcp. Tid", "Est. Hdcp. Tid", "Fejl", "Point Fejl"]
     rendered_tables: list[tuple[str, pd.DataFrame]] = []
     race_keys = work.loc[:, ["year_num", "race_num", "race_local_norm"]].drop_duplicates().sort_values(["year_num", "race_num", "race_local_norm"]).itertuples(index=False, name=None)
     for year_num, race_num_value, race_local_norm in race_keys:
@@ -233,8 +191,9 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
             continue
 
         highlighted_cf_sailed = race_work.apply(lambda row: f"\\cellcolor{{yellow!35}} {format_seconds_hms(row['pred_cf_sailed_seconds'])}" if row["observed"] != True and format_seconds_hms(row["pred_cf_sailed_seconds"]) else format_seconds_hms(row["pred_cf_sailed_seconds"]), axis=1)  # noqa: E712
-        sailed_delta = race_work.apply(lambda row: format_seconds_signed(row["sailed_seconds"] - row["pred_cf_sailed_seconds"]) if row["observed"] == True else "", axis=1)  # noqa: E712
-        table = race_work.sort_values(["group_display", "series_display", "competitor_display"]).assign(kontrafaktisk_sejletid_highlight=highlighted_cf_sailed, tidsafvigelse=sailed_delta).loc[:, ["competitor_display", "sailed_cell", "beregnet_cell", "kontrafaktisk_sejletid_highlight", "cf_beregnet_cell", "tidsafvigelse"]].rename(columns={"competitor_display": "deltager", "sailed_cell": "sejltid", "beregnet_cell": "beregnettid", "kontrafaktisk_sejletid_highlight": "kontrafaktisksejltid", "cf_beregnet_cell": "kontrafaktiskberegnettid", "tidsafvigelse": "prediktionsfejl"}).reset_index(drop=True)
+        sailed_delta = race_work.apply(lambda row: format_seconds_signed_compact(row["sailed_seconds"] - row["pred_cf_sailed_seconds"]) if row["observed"] == True else "", axis=1)  # noqa: E712
+        point_error = race_work.apply(lambda row: format_rank_error(row["point_error"]) if row["observed"] == True else "", axis=1)  # noqa: E712
+        table = race_work.sort_values(["group_display", "series_display", "competitor_display"]).assign(kontrafaktisk_sejletid_highlight=highlighted_cf_sailed, tidsafvigelse=sailed_delta, pointfejl=point_error).loc[:, ["competitor_display", "sailed_cell", "kontrafaktisk_sejletid_highlight", "beregnet_cell", "cf_beregnet_cell", "tidsafvigelse", "pointfejl"]].rename(columns={"competitor_display": "Navn", "sailed_cell": "Tid", "kontrafaktisk_sejletid_highlight": "Est. Tid", "beregnet_cell": "Hdcp. Tid", "cf_beregnet_cell": "Est. Hdcp. Tid", "tidsafvigelse": "Fejl", "pointfejl": "Point Fejl"}).reset_index(drop=True)
         table = table.reindex(columns=table_columns)
         data_name = f"missing_race_predictions_{int(year_num)}_{slugify_filename(str(race_local_norm))}.csv"
         table.to_csv(output_dir / data_name, index=False)
@@ -254,9 +213,9 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
             r"\renewcommand{\arraystretch}{0.95}",
             r"\rowcolors{2}{white}{gray!12}",
             r"\begin{center}",
-            r"\begin{tabular}{|>{\raggedright\arraybackslash}m{3.8cm}|>{\centering\arraybackslash}m{1.5cm}|>{\centering\arraybackslash}m{2.15cm}|>{\centering\arraybackslash}m{1.7cm}|>{\centering\arraybackslash}m{2.3cm}|>{\centering\arraybackslash}m{1.8cm}|}",
+            r"\begin{tabular}{|>{\raggedright\arraybackslash}m{3.0cm}|>{\centering\arraybackslash}m{1.35cm}|>{\centering\arraybackslash}m{1.9cm}|>{\centering\arraybackslash}m{1.55cm}|>{\centering\arraybackslash}m{2.05cm}|>{\centering\arraybackslash}m{1.4cm}|>{\centering\arraybackslash}m{1.9cm}|}",
             r"\hline",
-            r"\rule[-0.35ex]{0pt}{4.8ex}\shortstack[l]{Deltager} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Sejltid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Kontrafaktisk\\sejltid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Beregnet\\tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Kontrafaktisk\\beregnet tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Prediktions-\\fejl}\\[0.75ex]",
+            r"\rule[-0.35ex]{0pt}{4.8ex}\shortstack[l]{Navn} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Est. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Hdcp. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Est. Hdcp. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Fejl} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Point Fejl}\\[0.75ex]",
             r"\hline",
         ])
         for row in table.itertuples(index=False):

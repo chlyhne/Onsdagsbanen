@@ -77,6 +77,10 @@ def combine_races(
         combined["race_points"] = pd.NA
     if "race_rank_raw" not in combined.columns:
         combined["race_rank_raw"] = pd.NA
+    if "result_source" not in combined.columns:
+        combined["result_source"] = ""
+    if "result_note" not in combined.columns:
+        combined["result_note"] = ""
 
     def _first_non_empty(values: pd.Series) -> str:
         for value in values:
@@ -96,6 +100,8 @@ def combine_races(
             race_status_code=("race_status_code", _first_non_empty),
             race_points=("race_points", "min"),
             race_rank_raw=("race_rank_raw", "min"),
+            result_source=("result_source", _first_non_empty),
+            result_note=("result_note", _first_non_empty),
             series_count=("series", lambda values: values.dropna().nunique()),
         )
         .sort_values(["race", "beregnet_seconds", "competitor"], ascending=[True, True, True], na_position="last")
@@ -294,6 +300,8 @@ def combine_races(
             "points",
             "series_count",
             "bayes_perf",
+            "result_source",
+            "result_note",
         ]
     ]
 
@@ -317,6 +325,17 @@ def combine_overall_from_races(
 
     if "points" not in combined_races.columns:
         raise ValueError("Combined race table must include a points column.")
+
+    synthetic_races_by_competitor: dict[str, list[str]] = {}
+    if "result_source" in combined_races.columns:
+        synthetic_rows = combined_races.loc[
+            combined_races["result_source"].fillna("").astype(str).str.strip().eq("redress-duty"),
+            ["competitor", "race"],
+        ].drop_duplicates()
+        for competitor, race in synthetic_rows.itertuples(index=False):
+            synthetic_races_by_competitor.setdefault(str(competitor), []).append(str(race))
+        for competitor, races in synthetic_races_by_competitor.items():
+            synthetic_races_by_competitor[competitor] = sorted(set(races), key=lambda label: int(label[1:]))
 
     is_low_point_rule = scoring_rule == LOW_POINT_RULE
     is_fractional_rule = scoring_rule == FRACTIONAL_POINT_RULE
@@ -542,6 +561,7 @@ def combine_overall_from_races(
         result.attrs["bayesian_speed_mu0"] = speed_mu0
         result.attrs["bayesian_win_probability_method"] = "posterior-predictive-monte-carlo-conditional-on-participation"
         result.attrs["bayesian_win_probability_simulations"] = BAYESIAN_WIN_PROBABILITY_SIMULATIONS
+        result.attrs["synthetic_races_by_competitor"] = synthetic_races_by_competitor
 
         return result[
             [
@@ -645,5 +665,6 @@ def combine_overall_from_races(
     result.attrs["discard_after"] = discard_after
     result.attrs["discard_count"] = discard_count
     result.attrs["scoring_rule"] = scoring_rule
+    result.attrs["synthetic_races_by_competitor"] = synthetic_races_by_competitor
 
     return result[["combined_rank", "competitor", "boat_type", *race_columns, "combined_points", "race_count"]]

@@ -442,6 +442,9 @@ def build_combined_pdf(
         for race_index, race_label in enumerate(race_labels):
             race_rows = combined_races[combined_races["race"] == race_label].copy()
             race_rows = race_rows.sort_values(["race_rank", "competitor"], ascending=[True, True]).reset_index(drop=True)
+            synthetic_mask = pd.Series(False, index=race_rows.index)
+            if "result_source" in race_rows.columns:
+                synthetic_mask = race_rows["result_source"].fillna("").astype(str).str.strip().eq("redress-duty")
 
             preferred_columns = [
                 "points",
@@ -459,6 +462,10 @@ def build_combined_pdf(
             if "points" in printable_race.columns:
                 printable_race["points"] = printable_race["points"].map(
                     lambda value: _point_text(value, as_percent=bayesian_percent_display)
+                )
+            if synthetic_mask.any() and "competitor" in printable_race.columns:
+                printable_race.loc[synthetic_mask, "competitor"] = (
+                    printable_race.loc[synthetic_mask, "competitor"].astype(str) + " *"
                 )
             printable_race = printable_race.rename(
                 columns={
@@ -506,6 +513,9 @@ def build_combined_pdf(
                     row_bg_colors=tuple(theme["row_bg_colors"]),
                 )
             )
+            if synthetic_mask.any():
+                story.append(Spacer(1, 1.5 * mm))
+                story.append(Paragraph("* Redress-tildelt tid pga. dommertjans.", styles["BodyText"]))
 
             warnings_for_race = race_warnings.get(str(race_label), [])
             if warnings_for_race:
@@ -530,6 +540,7 @@ def build_combined_pdf(
 
         overall_printable = combined_overall.copy()
         discard_map = combined_overall.attrs.get("discarded_races_by_competitor", {})
+        synthetic_races_by_competitor = combined_overall.attrs.get("synthetic_races_by_competitor", {})
 
         if "race_count" in overall_printable.columns:
             overall_printable = overall_printable.drop(columns=["race_count"])
@@ -572,6 +583,18 @@ def build_combined_pdf(
                     lambda value: _point_text(value, as_percent=bayesian_percent_display)
                 )
 
+        if "Deltager" in overall_printable.columns and synthetic_races_by_competitor:
+            for row_index, row in overall_printable.iterrows():
+                competitor_name = str(row.get("Deltager") or "")
+                synthetic_races = set(synthetic_races_by_competitor.get(competitor_name, []))
+                if not synthetic_races:
+                    continue
+                for race_label in synthetic_races:
+                    if race_label in overall_printable.columns:
+                        cell_text = str(overall_printable.at[row_index, race_label] or "").strip()
+                        if cell_text:
+                            overall_printable.at[row_index, race_label] = f"{cell_text}*"
+
         overall_printable = _mathify_point_columns(overall_printable, discard_map=discard_map, font_size=table_font_size)
         overall_printable = _mathify_time_columns(overall_printable, font_size=table_font_size)
         if "Deltager" in overall_printable.columns:
@@ -593,6 +616,9 @@ def build_combined_pdf(
                 row_bg_colors=tuple(theme["row_bg_colors"]),
             )
         )
+        if synthetic_races_by_competitor:
+            story.append(Spacer(1, 1.5 * mm))
+            story.append(Paragraph("* Redress-tildelt tid pga. dommertjans.", styles["BodyText"]))
 
         if section_index < len(sections) - 1:
             story.append(PageBreak())

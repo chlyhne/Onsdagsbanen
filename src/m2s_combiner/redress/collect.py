@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from m2s_combiner.cli import DEFAULT_CLASS_GROUPS
+from m2s_combiner.defaults import DEFAULT_CLASS_GROUPS
 from m2s_combiner.parser import parse_available_race_labels_from_result_payload
 from m2s_combiner.parser import parse_completed_race_labels_from_result_payload
 from m2s_combiner.parser import parse_race_rows_from_result_payload
