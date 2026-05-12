@@ -214,9 +214,10 @@ def apply_group_duty_assignments(
 
         existing_row = race_frame.loc[matching_indices[0]].copy() if matching_indices else None
         if existing_row is not None and pd.notna(existing_row.get("beregnet_seconds")):
-            raise ValueError(
-                f"Duty assignment targets competitor '{assignment['competitor']}' in {context.group_label} / {class_name} / {race_label}, but that boat already has a scored time."
+            print(
+                f"[{context.group_label}] Skipping duty assignment for '{assignment['competitor']}' in {class_name} / {race_label} because that boat already has a scored time."
             )
+            continue
 
         competitor_history = pd.concat(mutated[class_name].values(), ignore_index=True)
         competitor_history = competitor_history.loc[
