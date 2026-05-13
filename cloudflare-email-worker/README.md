@@ -24,6 +24,7 @@ Sender and mode rules:
 	- Any sender can use this.
 	- If sender is not `hummesse@gmail.com`, sender address is auto-added to recipients list.
 	- If sender is `hummesse@gmail.com`, addresses in email body are extracted and may be persisted.
+	- `hummesse@gmail.com` may only trigger `resultater` on Wednesdays after 19:00 in `Europe/Copenhagen`.
 - `append`
 	- Only `hummesse@gmail.com` can use this.
 	- Requires at least one email address in body.
