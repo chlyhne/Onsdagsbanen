@@ -32,7 +32,7 @@ _DANISH_TZ = ZoneInfo("Europe/Copenhagen")
 _REPORT_CREDIT = "hummesse@gmail.com"
 _DOMMERTJANS_METHOD_PDF_URL = (
     "https://raw.githubusercontent.com/chlyhne/Onsdagsbanen/main/docs/"
-    "godtgoerelse-dommertjans-onsdagsbanen-2026.pdf"
+    "godtgoerelse-dommertjans-onsdagsbanen-2026.pdf?v=926dc1d"
 )
 
 
