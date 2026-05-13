@@ -1,7 +1,57 @@
-\section{Kompensation for dommertjans}
-I øjeblikket får man blot en DNC hvis man har dommertjans, og det er ikke fair for det er ikke alle både, som har dommertjans, så det skævvrider sæsonen. Det må ikke være en straf at have dommertjans.
-Problemet er bare hvordan man så kompenserer for dommertjans. I manage2sail har er den eneste mulighed at indtaste en kontrafaktisk tid, for dermed at give deltageren en placering og nogle point. Men skal favoritten have den samme kontrafaktiske tid som begynderen? Det synes jeg ikke. Deltagerne skal ideelt have den kontrafaktiske tid, som det ville være mest sandsynligt de sejlede.
+﻿\section{Kompensation for dommertjans}
+Når en båd har dommertjans, får den i dag blot en DNC. Det er et problem, fordi dommertjans ikke fordeles ens mellem bådene, og fordi en DNC derfor bliver en reel straf for at tage en opgave, som er nødvendig for at afvikle sejladsen. Hvis godtgørelse ved dommertjans skal opleves som rimelig, må den i stedet bygge på et sagligt estimat af, hvad båden sandsynligvis ville have sejlet.
+
+Den praktiske begrænsning er, at Manage2Sail ikke har et særligt dommertjans-resultat. Systemet kan kun håndtere en tid. Derfor er opgaven ikke at opfinde et nyt pointsystem, men at estimere en kontrafaktisk tid, som kan indtastes i det eksisterende system. Det estimat bør afhænge af bådens niveau: en hurtig båd og en langsommere båd bør ikke tildeles den samme tænkte tid i det samme løb.
+
+\subsection*{Læsevejledning}
+Dokumentet er bygget i lag. De første afsnit forklarer problemet og den centrale idé i almindeligt sprog. Afsnittet om modellering af færdighedsniveau forklarer, hvad modellen prøver at lære om hver båd, og hvad det bruges til. Hvis man primært vil forstå hovedidéen, kan man i praksis læse til og med dette punkt. De efterfølgende afsnit går mere teknisk til værks og beskriver den konkrete statistiske model, estimeringen og resultaterne mere detaljeret.
+
+\subsection*{Hvorfor ikke bruge en enklere løsning?}
+Der findes flere umiddelbart enkle måder at håndtere dommertjans på, men de har alle væsentlige problemer.
+
+\subsubsection*{Sæsongennemsnit til sidst}
+En mulighed er at vente til sæsonen er slut og give båden en kunstig sejlads svarende til gennemsnittet af dens øvrige sejladser. Det lyder enkelt, men flytter hele beregningen ud af Manage2Sail og betyder samtidig, at den samlede pointstilling først rykker sent på sæsonen. Det er uhensigtsmæssigt, fordi stillingen så ikke afspejler den reelle godtgørelse løbende gennem året.
+
+\subsubsection*{Samme point som seneste sejlads}
+En anden mulighed er blot at give båden samme point som i dens seneste sejlads. Det giver imidlertid ikke en generel løsning, fordi nogle både ikke har en relevant seneste sejlads. Dertil kommer, at Manage2Sail heller ikke arbejder direkte med en sådan regel. Hvis denne løsning skulle bruges i praksis, måtte der manuelt findes en sejltid, som udløser netop de ønskede point. Det er både besværligt og skrøbeligt.
+
+\subsubsection*{En ekstra kunstig fratrækker}
+Man kunne også forestille sig en kunstig fratrækker ekstra. Det understøtter Manage2Sail heller ikke. Desuden ville det i praksis svare til en sejlads med $0$ point, hvilket er bedre end en førsteplads og derfor åbenlyst for gunstigt.
+
+\subsubsection*{At gøre ingenting}
+En fjerde mulighed er ganske enkelt at gøre ingenting og lade dommertjans udløse en DNC. Det er i praksis den nuværende situation. For nogle af de bedste sejlere kan en sådan DNC give omkring $16$ point i et enkelt løb. Det kan udgøre en meget stor del af hele sæsonens point og i nogle tilfælde være på størrelsesordenen halvdelen af deres samlede point. I den situation bliver dommertjans ikke bare en administrativ markering, men en markant sportslig straf.
+
+\subsubsection*{En standardtid midt i feltet}
+Endelig kunne alle både tildeles en standardtid midt i feltet. Det ville systematisk favorisere de langsommere både og systematisk skade de hurtigere. Netop derfor er det nødvendigt at bruge en metode, som forsøger at tildele den enkelte båd den tid, den mest sandsynligt selv ville have sejlet.
 
 
-\subsection*{Generel idé}
-Jeg foreslår at bruge alle beregnede tider for deltageren, som er tilgængelig i manage2sail, til at opbygge et estimat af færdigheds niveauet for deltageren på en statistisk måde. Dette færdigheds niveau bruges så til at forudsige hvilken tid båden ville have sejlet sammen med hvordan de andre sejlede. Dette vil give den mest sandsynlige placering for båden hvis den havde sejlet og ikke haft dommertjans. Dermed er det ikke længere en straf at have dommertjans, og tildelingen a point rykker mindst muligt ved de sammenlagte resultater.
+\subsection*{Hovedidé}
+Metoden bruger de beregnede tider, der allerede findes i Manage2Sail, til løbende at estimere hver båds niveau. Dette niveau kombineres derefter med dagens observerede felt, så modellen kan forudsige, hvilken tid båden mest sandsynligt ville have sejlet i det konkrete løb. Resultatet er ikke en perfekt rekonstruktion af en sejlads, der aldrig fandt sted, men et gennemsigtigt og systematisk estimat, som ligger så tæt som muligt på det sandsynlige udfald.
+
+Målet er dermed dobbelt. For det første skal dommertjans ikke være en straf. For det andet skal godtgørelsen forstyrre de samlede resultater mindst muligt ved at lægge en plausibel tid ind i stedet for en administrativ standardløsning.
+
+\subsection*{Løsningsmatrix}
+Tabellen nedenfor samler de vigtigste krav til en brugbar løsning.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.8cm}>{\centering\arraybackslash}p{1.45cm}>{\centering\arraybackslash}p{1.35cm}>{\centering\arraybackslash}p{1.35cm}>{\centering\arraybackslash}p{1.2cm}>{\centering\arraybackslash}p{1.7cm}>{\centering\arraybackslash}p{1.55cm}}
+\toprule
+Løsning & M2S & Løbende & Bådniveau & Fair & Kan gøres manuelt & Gennemsigtig \\
+\midrule
+Sæsongennemsnit til sidst & $\times$ & $\times$ & \checkmark & \checkmark & \checkmark & \checkmark \\
+Samme point som seneste sejlads & $\times$ & \checkmark & \checkmark & $\times$ & \checkmark & \checkmark \\
+Ekstra kunstig fratrækker & $\times$ & $\times$ & $\times$ & $\times$ & \checkmark & \checkmark \\
+DNC / gøre ingenting & \checkmark & \checkmark & $\times$ & $\times$ & \checkmark & \checkmark \\
+Standardtid midt i feltet & \checkmark & \checkmark & $\times$ & $\times$ & \checkmark & \checkmark \\
+Foreslået model & \checkmark & \checkmark & \checkmark & \checkmark & $\times$ & $\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{Et kort glimt af resultaterne}
+Når metoden anvendes på Onsdagsbanen 2026, giver den konkrete resultater i de løb, hvor en båd har dommertjans. I R1 2026 havde Inger Stokkink dommertjans, og modellen placerer hende med en kontrafaktisk beregnet tid på 1:34:08, svarende til en estimeret 5.-plads i feltet. I R2 havde Bo Bach Boddum dommertjans, men lykkedes med at få andre til at bemande posten, så han selv kunne sejle. Her rammer modellen præcist: den estimerede sejltid er 1:15:41, altså nøjagtig den samme som den tid han faktisk sejlede. Senere i dokumentet vises hele løb-for-løb-tabellen for 2026 samt et eksempel med Casper Lyhne og Rikke M. Schnuchel, hvor de estimerede tider kan holdes op mod deres observerede præstationer.
+
+

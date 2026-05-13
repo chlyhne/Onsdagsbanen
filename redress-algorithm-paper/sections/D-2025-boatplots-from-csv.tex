@@ -1,8 +1,8 @@
 \appendix
 \clearpage
-\section{CSV-Baserede Bådplots}
-Denne appendix-sektion indeholder alle individuelle bådplots læst direkte fra CSV-filer.
-Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX-fil kun renderer.
+\section{CSV-baserede bådplots}
+Dette appendiks samler de individuelle bådplots, som læses direkte fra CSV-filer.
+Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX-fil alene står for visningen.
 
 \pgfplotstableread[col sep=comma]{\BoatPlotDataDir/boat_plot_manifest.csv}\boatplotmanifest
 \pgfplotstableforeachcolumnelement{competitor_display}\of\boatplotmanifest\as\displayname{%

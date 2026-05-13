@@ -1,15 +1,17 @@
 \section{Resultater}
 \clearpage
-\subsection*{Kontrafaktiske sejltider ved fravaer}
-Tabellerne nedenfor viser 2026-loebene hver for sig. For hvert loeb vises sejltid, beregnet tid, kontrafaktisk sejltid og kontrafaktisk beregnet tid.
-Baade som ikke deltog i et loeb har tomme felter for sejltid, beregnet tid og afvigelser. Den kontrafaktiske sejltid er markeret med gult for disse baade.
+Dette afsnit viser, hvordan metoden ser ud, når den anvendes på Onsdagsbanen 2026. Først vises de kontrafaktiske tider løb for løb. Derefter følger et kort eksempel, hvor estimerede og observerede tider sammenholdes for to konkrete både.
+
+\subsection*{Kontrafaktiske sejltider ved fravær}
+Tabellerne nedenfor viser 2026-løbene hver for sig. For hvert løb vises sejltid, beregnet tid, kontrafaktisk sejltid og kontrafaktisk beregnet tid.
+Både, som ikke deltog i et løb, har tomme felter for sejltid, beregnet tid og afvigelser. Den kontrafaktiske sejltid er markeret med gult for disse både.
 
 \input{\MissingRacePredictionTablesTex}
 
 \clearpage
 \subsection*{Casper Lyhne og Rikke M. Schnuchel}
-Figuren herunder viser hvordan Rikkes og Casper ville have fået estimeret deres tid under dommertjans sammen med de tider de reelt sejlede.
-Det ses at trenden i estimerede tider følger trenden i resultater, og det er det vi ønsker.
+Figuren herunder skal først og fremmest læses som et billede af, hvordan modellens estimerede niveau for en båd udvikler sig over tid. Det niveau ligger til grund for de kontrafaktiske tider, men kan ikke aflæses direkte af grafen; det ses kun indirekte gennem forudsigelseskurven og usikkerhedsbåndene.
+I begyndelsen starter Casper Lyhne og Rikke M. Schnuchel ens, fordi modellen endnu ikke har nogen viden om dem. Samtidig er procesvariansen høj i starten, og derfor er de første procesbånd brede. Man kan også se, at observationer fra dage med høj varians ikke flytter estimatet særlig meget. Endelig deltager Casper ikke så ofte, og derfor når hans procesvarians typisk at vokse mere mellem observationerne. Det betyder, at et nyt datapunkt som regel flytter hans estimerede niveau mere end Rikkes.
 
 \DualBoatPercentPlotFromCsv
   {C. Lyhne}

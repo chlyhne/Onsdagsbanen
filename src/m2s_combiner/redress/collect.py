@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from datetime import datetime
 from typing import Any
 
@@ -92,6 +93,25 @@ def discover_class_groups(event_url: str) -> list[tuple[str, list[str]]]:
     return resolved
 
 
+def normalize_person_name(value: object) -> str:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            try:
+                parsed = ast.literal_eval(stripped)
+            except (SyntaxError, ValueError):
+                parsed = None
+            if isinstance(parsed, dict):
+                value = parsed
+    if isinstance(value, dict):
+        first_name = str(value.get("FirstName") or "").strip()
+        last_name = str(value.get("LastName") or "").strip()
+        combined = " ".join(part for part in [first_name, last_name] if part)
+        if combined:
+            return normalize_text(combined)
+    return normalize_text(value)
+
+
 def soft_match_competitors(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         return frame.copy()
@@ -101,7 +121,7 @@ def soft_match_competitors(frame: pd.DataFrame) -> pd.DataFrame:
     work["competitor_norm"] = work["competitor"].map(normalize_text)
     work["boat_name_norm"] = work["boat_name"].map(normalize_text)
     work["boat_type_norm"] = work["boat_type"].map(normalize_text)
-    work["skipper_norm"] = work["skipper"].map(normalize_text)
+    work["skipper_norm"] = work["skipper"].map(normalize_person_name)
     work["sail_norm"] = work.apply(
         lambda row: normalize_sail_number(row.get("sail_number"), row.get("sail_number_country")),
         axis=1,
@@ -157,6 +177,15 @@ def soft_match_competitors(frame: pd.DataFrame) -> pd.DataFrame:
             boat_sim = max((similarity(prof_boat, value) for value in canonical["boat_name_norms"]), default=0.0)
             type_sim = max((similarity(prof_type, value) for value in canonical["boat_type_norms"]), default=0.0)
             skipper_sim = max((similarity(prof_skipper, value) for value in canonical["skipper_norms"]), default=0.0)
+            sail_exact_match = bool(prof_sail) and prof_sail in canonical["sail_norms"]
+            sail_digit_match = bool(prof_sail_digits) and any(
+                sail_digits(value) == prof_sail_digits for value in canonical["sail_norms"]
+            )
+
+            # Sail numbers can be reused across years, so they are only decisive when
+            # another identity signal points to the same boat or skipper.
+            if (sail_exact_match or sail_digit_match) and comp_sim < 0.5 and boat_sim < 0.5 and skipper_sim < 0.5:
+                continue
 
             score = 0.18 * comp_sim + 0.28 * boat_sim + 0.16 * type_sim + 0.08 * skipper_sim
             if prof_comp and prof_comp in canonical["competitor_norms"]:
@@ -164,9 +193,9 @@ def soft_match_competitors(frame: pd.DataFrame) -> pd.DataFrame:
             if prof_boat and prof_boat in canonical["boat_name_norms"]:
                 score += 0.18
             if prof_sail and canonical["sail_norms"]:
-                if prof_sail in canonical["sail_norms"]:
+                if sail_exact_match:
                     score += 0.55
-                elif prof_sail_digits and any(sail_digits(value) == prof_sail_digits for value in canonical["sail_norms"]):
+                elif sail_digit_match:
                     score += 0.36
 
             if score > best_score:

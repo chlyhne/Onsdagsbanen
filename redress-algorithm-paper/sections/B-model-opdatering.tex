@@ -1,14 +1,24 @@
-\section{Modellering af Færdighedsniveau}
-Først laver jeg en simpel model af sejltid (beregnet efter handicap):
+\section{Modellering af færdighedsniveau}
+Den centrale idé i resten af dokumentet er, at hver båd tænkes at have et underliggende niveau, som ikke kan observeres direkte, men som viser sig gennem de beregnede tider over tid. Hvis dette niveau kan estimeres rimeligt, kan det også bruges til at danne et kvalificeret bud på den tid, båden ville have sejlet i et løb, hvor den havde dommertjans.
+
+Intuitionen er enkel: en båds tid i et givent løb afhænger både af bådens eget niveau og af dagens fælles forhold. Selv en hurtig båd kan få en langsom tid på en vanskelig aften, og en langsommere båd kan få en relativt god tid på en aften med gunstige forhold. Modellen forsøger derfor at skille disse to effekter fra hinanden, så bådens eget niveau ikke forveksles med dagens bane-, vind- eller feltforhold.
+
+Først opstilles en simpel model for sejltid (beregnet efter handicap):
 \begin{flalign}
 \hspace{2cm} T_{i,t} &= \alpha_t\,z_{i,t}\,\eta_{i,t}. &&
 \end{flalign}
-Her er $T_{i,t}$ den beregnede tid for deltager $i$ i ræs $t$. Faktoren $\alpha_t$ beskriver dagens generelle niveau, altså hvor hurtigt banen blev sejlet den dag. Det er denne størrelse, jeg senere kalder race-effekten. Den skal forstås som en fælles faktor, der rammer alle både i samme ræs: hvis vinden er let, banen er vanskelig, eller feltet generelt sejler langsomt den dag, bliver $\alpha_t$ højere; hvis forholdene giver hurtige tider, bliver $\alpha_t$ lavere. Jeg estimerer konkret $\alpha_t$ på dagen ud fra de observerede beregnede tider, samtidig med at modellen tager højde for de enkelte bådes forventede niveau og usikkerhed. Størrelsen $z_{i,t}$ er bådens færdighedsniveau. Hvis $z_{i,t}$ er lav, forventes båden at sejle hurtigt relativt til feltet, og hvis $z_{i,t}$ er høj, forventes båden at sejle langsommere. Til sidst er $\eta_{i,t}$ et multiplikativt støjled, som dækker over de mange forhold, der gør at en båd ikke sejler præcis som forventet hver onsdag.
+Her er $T_{i,t}$ den beregnede tid for deltager $i$ i ræs $t$. Faktoren $\alpha_t$ beskriver dagens generelle niveau, altså hvor hurtigt banen blev sejlet den dag. Denne størrelse kaldes herefter race-effekten. Den skal forstås som en fælles faktor, der rammer alle både i samme ræs: hvis vinden er let, banen er vanskelig, eller feltet generelt sejler langsomt den dag, bliver $\alpha_t$ højere; hvis forholdene giver hurtige tider, bliver $\alpha_t$ lavere. Værdien af $\alpha_t$ estimeres på dagen ud fra de observerede beregnede tider, samtidig med at modellen tager højde for de enkelte bådes forventede niveau og usikkerhed. Størrelsen $z_{i,t}$ er bådens færdighedsniveau. Hvis $z_{i,t}$ er lav, forventes båden at sejle hurtigt relativt til feltet, og hvis $z_{i,t}$ er høj, forventes båden at sejle langsommere. Til sidst er $\eta_{i,t}$ et multiplikativt støjled, som dækker over de mange forhold, der gør, at en båd ikke sejler præcis som forventet hver onsdag.
 
-Det er netop $z_{i,t}$, jeg gerne vil estimere ud fra historiske resultater. Når det er gjort, kan modellen bruges til at forudsige, hvilken tid en båd sandsynligvis ville have sejlet i et konkret ræs.
+Det er netop $z_{i,t}$, der ønskes estimeret ud fra historiske resultater. Når det er gjort, kan modellen bruges til at forudsige, hvilken tid en båd sandsynligvis ville have sejlet i et konkret ræs.
 
-\section{Transformation til Log-space}
-Kalman filtrering arbejder naturligt med additive modeller. Derfor transformerer jeg modellen ved at tage logaritmen af begge sider og indfører nye variable:
+Det er dermed også grænsen for den brede forklaring. Fra dette punkt er opgaven at estimere modellen konkret og gøre den operationel. Det kræver nogle tekniske valg om transformation, filtrering og likelihood-baseret estimering. Resten af kapitlet går derfor mere detaljeret og mere matematisk til værks.
+
+\section{Teknisk model og estimering}
+
+I dette afsnit gøres modellen operationel. Først omskrives den til en form, som egner sig til Kalman-filtrering. Derefter beskrives, hvordan hver båds niveau opdateres over tid, hvordan den globale procesusikkerhed estimeres, og hvordan dagens fælles niveau og dagsusikkerhed findes ud fra de både, der faktisk sejlede. Disse trin gør modellen til en systematisk og reproducerbar metode til at levere kontrafaktiske tider.
+
+\subsection{Transformation til Log-space}
+Kalman-filtrering arbejder naturligt med additive modeller. Derfor transformeres modellen ved at tage logaritmen af begge sider og indføre nye variable:
 \begin{flalign}
 \hspace{2cm} y_{i,t} &= \log(T_{i,t}), \qquad \mu_{y,t} = \log(\alpha_t), \qquad x_{i,t} = \log(z_{i,t}), \qquad v_{i,t} = \log(\eta_{i,t}). &&
 \end{flalign}
@@ -17,30 +27,31 @@ Dermed fås
 \hspace{2cm} y_{i,t} &= \mu_{y,t}+x_{i,t}+v_{i,t}. &&
 \end{flalign}
 
-Denne omskrivning er mere end bare et matematisk trick. For det første bliver race-effekten nu til $\mu_{y,t}=\log(\alpha_t)$, altså præcis den samme idé som ovenfor, bare på logskalaen. For det andet svarer en additiv ændring $\delta$ i log-space til en multiplikativ faktor $\exp(\delta)$ i den oprindelige tidsmodel. Når modellen derfor justerer et estimat lidt op eller ned i log-space, svarer det i praksis til en procentvis justering i tidsskala, ikke til at lægge et fast antal sekunder til eller fra. Det passer godt til sejltider, hvor afvigelser ofte opleves relativt snarere end absolut.
+En additiv ændring $\delta$ i log-space svarer til en multiplikativ faktor $\exp(\delta)$ i den oprindelige tidsmodel. Når modellen derfor justerer et estimat lidt op eller ned i log-space, svarer det i praksis til en procentvis justering i tidsskala, ikke til at lægge et fast antal sekunder til eller fra. Det passer godt til sejltider, hvor afvigelser ofte opleves relativt snarere end absolut.
 
-Denne gang vælger jeg bevidst $x_{i,t}=\log(z_{i,t})$, så bådens niveau peger samme vej som tiden. Når en båd er hurtig, er $z_{i,t}$ lav, og dermed bliver også $x_{i,t}$ lav. Lavere $x_{i,t}$ betyder altså en bedre båd. Det gør modellen lettere at læse, fordi både observationen $y_{i,t}$ og den skjulte tilstand $x_{i,t}$ nu har samme retning: højere værdi betyder langsommere sejltid, lavere værdi betyder hurtigere sejltid.
+$x_{i,t}=\log(z_{i,t})$ er valgt, så bådens niveau peger samme vej som tiden. Når en båd er hurtig, er $z_{i,t}$ lav, og dermed bliver også $x_{i,t}$ lav. Lavere $x_{i,t}$ betyder altså en bedre båd. Det gør modellen lettere at læse, fordi både observationen $y_{i,t}$ og den skjulte tilstand $x_{i,t}$ nu har samme retning: højere værdi betyder langsommere sejltid, lavere værdi betyder hurtigere sejltid.
 
-Jeg antager nu
+Det antages nu
 \begin{flalign}
 \hspace{2cm} v_{i,t} &\sim \mathcal{N}(0,\sigma_{y,t}^2). &&
 \end{flalign}
 I den oprindelige model svarer det til, at $\eta_{i,t}=\exp(v_{i,t})$ bliver et multiplikativt støjled. Dermed er $\eta_{i,t}$ altid positiv, og alle forudsagte tider bliver automatisk positive. Samtidig betyder det, at usikkerhed i log-space bliver til asymmetrisk, multiplicativ usikkerhed i tidsskala.
 
-\section{Estimering af Færdighedsniveau vha. Kalman Filtrering}
+\subsection{Estimering af Færdighedsniveau vha. Kalman Filtrering}
 Et Kalman-filter kan ses som en systematisk måde at kombinere to ting på:
 \begin{enumerate}
     \item hvad modellen forventede før dagens måling,
     \item hvad dagens måling faktisk siger.
 \end{enumerate}
-Her bruger jeg et 1D Kalman-filter. Med tidsindeks $k$ består det af en tilstandsligning og en måleligning:
+Her bruges et 1D Kalman-filter. Med tidsindeks $k$ består det af en tilstandsligning og en måleligning:
 \begin{flalign}
 \hspace{2cm} x_{k+1} &= x_k + w_{k+1}, \qquad w_{k+1} \sim \mathcal{N}(0,\Delta T_{k+1}\sigma_x^2). &&
 \end{flalign}
+Produktet $\Delta T_{k+1}\sigma_x^2$ er den ekstra usikkerhed, der når at opbygge sig mellem to observationer. Det er vigtigt, fordi ræs ikke nødvendigvis ligger med helt ens intervaller, og fordi en bestemt båd ikke nødvendigvis sejler hver gang. Hvis der går lang tid mellem to observationer af den samme båd, enten på grund af kalenderen eller fordi båden springer løb over, skal modellen derfor også blive mere usikker på bådens aktuelle niveau.
 \begin{flalign}
 \hspace{2cm} y_{k+1} &= x_{k+1} + \mu_{y,k+1} + v_{k+1}, \qquad v_{k+1} \sim \mathcal{N}(0,\sigma_y^2). &&
 \end{flalign}
-Tilstandsligningen beskriver, hvordan det skjulte niveau udvikler sig over tid. Måleligningen beskriver, hvordan den skjulte tilstand viser sig i de data, man kan observere.
+Tilstandsligningen beskriver, hvordan det skjulte niveau udvikler sig over tid. Måleligningen siger, at den observerede log-tid består af bådens tilstand, dagens fælles niveau og et målestøjled, som samler de tilfældigheder, der opstår på dagen.
 
 Ud fra de to ligninger består selve filteret af et prediktionsstep og et måleopdateringsstep:
 \begin{flalign}
@@ -66,9 +77,13 @@ Ud fra de to ligninger består selve filteret af et prediktionsstep og et måleo
 \end{flalign}
 Her betyder $^-$ den predikterede værdi før dagens observation, mens $^+$ betyder den opdaterede værdi efter observationen. I vores problem antages $\hat{\mu}_{y,k+1}$ og $\hat{\sigma}_{y,k+1}^2$ at være estimeret ud fra dagens observationer, før innovation og opdatering beregnes.
 
-I vores problem er den skjulte tilstand bådens færdighedsniveau i log-space, mens den observerede størrelse er den log-transformerede beregnede tid. Kalman-filteret bruges altså til at holde et løbende estimat af hver båds niveau, efterhånden som nye resultater kommer ind. Her er $\Delta T_{k+1}$ tiden siden forrige observation, og $\sigma_x^2$ er den globale procesvarians pr. dag. Det betyder, at jeg ikke lægger nogen systematisk dynamik ind i færdighedsniveauet fra én observation til den næste. Niveauet får i stedet lov til at drive lidt, og usikkerheden vokser jo længere tid der går.
+I dette problem er den skjulte tilstand bådens færdighedsniveau i log-space, mens den observerede størrelse er den log-transformerede beregnede tid. Kalman-filteret bruges altså til at holde et løbende estimat af hver båds niveau, efterhånden som nye resultater kommer ind. Her er $\Delta T_{k+1}$ tiden siden forrige observation, og $\sigma_x^2$ er den globale procesvarians pr. dag. Det betyder, at der ikke lægges nogen systematisk dynamik ind i færdighedsniveauet fra én observation til den næste. Niveauet får i stedet lov til at drive lidt, og usikkerheden vokser jo længere tid der går.
 
-\section{ML-estimering af procesvariansen}
+\subsection{ML-estimering af procesvariansen}
+En båds niveau er ikke nødvendigvis konstant gennem en hel sæson. Besætning, form, rutine og lokale forhold kan ændre sig over tid, så det er rimeligt at lade niveauet bevæge sig. Det er til gengæld ikke oplagt, hvor store disse bevægelser typisk bør forventes at være. Hvis procesvariansen sættes for lavt, bliver modellen for træg og reagerer for lidt på nye observationer. Hvis den sættes for højt, bliver modellen for nervøs og lægger for meget vægt på enkeltresultater.
+
+Derfor estimeres $\sigma_x^2$ direkte ud fra data. I denne model antages alle både at have samme procesvarians, altså samme grundlæggende volatilitet i deres niveau over tid. Det er næppe helt præcist, fordi nogle både og besætninger i praksis er mere stabile end andre. Samtidig er det en rimelig approximation, og datamængden er ikke stor nok til troværdigt at estimere en separat procesvarians for hver båd.
+
 Værdien af $\sigma_x^2$ estimeres ved maximum likelihood i en one-step prediktionsramme, hvor $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$ på hver dag profileres ud via dags-likelihooden.
 
 Likelihooden følger Kalman-recursionen og skrives via kædereglen som en sekvens af betingede one-step bidrag:
@@ -92,7 +107,7 @@ MLE-estimatet for procesvariansen vælges derefter som
 \end{flalign}
 I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$, hvor målfunktionen evalueres for kandidatværdier, og den bedste vælges.
 
-Intuitionen er den samme som før: en for lille $\sigma_x^2$ gør modellen for træg, mens en for stor $\sigma_x^2$ gør den for nervøs. Forskellen er, at balancen nu bestemmes af den samlede sandsynlighed under modellen i stedet for et rent fejlmål i sekunder.
+Intuitionen er den samme som før: en for lille $\sigma_x^2$ gør modellen for træg, mens en for stor $\sigma_x^2$ gør den for nervøs. Balancen bestemmes her af den samlede sandsynlighed under modellen.
 
 \par
 Når $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$ er fundet, opdateres de både, der faktisk sejlede, ved
@@ -110,7 +125,7 @@ For både, der ikke sejlede race $t$, anvendes kun prediktionssteppet. De får a
 \hspace{2cm} \hat{T}_{m,t} &= \exp\!\left(\hat{\mu}_{y,t}+\hat{x}_{m,t}^-\right). &&
 \end{flalign}
 
-\section{ML-estimering på dagen}
+\subsection{Estimering af dagens niveau og usikkerhed}
 Når dagens prior $(\hat{x}_{i,t}^-, p_{i,t}^-)$ er beregnet, mangler stadig to størrelser, før observationerne kan bruges i Kalman-opdateringen: dagens fælles niveau $\mu_{y,t}$ og dagens målevarians $\sigma_{y,t}^2$. De estimeres samlet ud fra de både, der faktisk sejlede den dag.
 
 Idéen er, at den observerede log-tid for båd $i$ skrives som

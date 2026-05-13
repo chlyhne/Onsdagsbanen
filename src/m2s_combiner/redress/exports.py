@@ -22,6 +22,27 @@ from .constants import EPS
 from .constants import Z50
 
 
+def _rank_predictions_against_actual_field(group: pd.DataFrame) -> pd.Series:
+    result = pd.Series(np.nan, index=group.index, dtype=float)
+    observed_group = group[group["observed"] == True].copy()  # noqa: E712
+    if observed_group.empty:
+        return result
+
+    actual_times = pd.to_numeric(observed_group["beregnet_seconds"], errors="coerce").to_numpy(dtype=float)
+    actual_times = actual_times[np.isfinite(actual_times)]
+    if actual_times.size == 0:
+        return result
+
+    predicted_times = pd.to_numeric(observed_group["pred_cf_beregnet_seconds"], errors="coerce").to_numpy(dtype=float)
+    finite_mask = np.isfinite(predicted_times)
+    if not finite_mask.any():
+        return result
+
+    predicted_ranks = np.sum(actual_times[:, None] < predicted_times[finite_mask], axis=0) + 1.0
+    result.loc[observed_group.index[finite_mask]] = predicted_ranks
+    return result
+
+
 def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] | None, output_dir: Path) -> Path:
     required_columns = [
         "competitor", "group", "series", "race", "race_local", "race_date", "year", "observed",
@@ -175,11 +196,11 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
         .groupby(lane_rank_group_cols)["beregnet_seconds"]
         .rank(method="min", ascending=True)
     )
-    work.loc[observed_mask, "estimated_lane_rank"] = (
-        work.loc[observed_mask]
-        .groupby(lane_rank_group_cols)["pred_cf_beregnet_seconds"]
-        .rank(method="min", ascending=True)
+    estimated_lane_rank = (
+        work.groupby(lane_rank_group_cols, group_keys=False)
+        .apply(_rank_predictions_against_actual_field)
     )
+    work.loc[estimated_lane_rank.index, "estimated_lane_rank"] = estimated_lane_rank
     work["point_error"] = work["estimated_lane_rank"] - work["actual_lane_rank"]
 
     table_columns = ["Navn", "Tid", "Est. Tid", "Hdcp. Tid", "Est. Hdcp. Tid", "Fejl", "Point Fejl"]

@@ -30,6 +30,10 @@ from .combine import LOW_POINT_RULE
 
 _DANISH_TZ = ZoneInfo("Europe/Copenhagen")
 _REPORT_CREDIT = "hummesse@gmail.com"
+_DOMMERTJANS_METHOD_PDF_URL = (
+    "https://raw.githubusercontent.com/chlyhne/Onsdagsbanen/main/docs/"
+    "godtgoerelse-dommertjans-onsdagsbanen-2026.pdf"
+)
 
 
 def _danish_now() -> datetime:
@@ -357,6 +361,13 @@ def build_combined_pdf(
         )
     )
     story.append(Paragraph(f"<b>Kontakt:</b> {_REPORT_CREDIT}", cover_text_style))
+    story.append(
+        Paragraph(
+            "<b>Redress for dommertjans:</b> Se metodebeskrivelsen "
+            f"<link href='{_DOMMERTJANS_METHOD_PDF_URL}'><u><font color='#1f5a96'>her (PDF)</font></u></link>.",
+            cover_text_style,
+        )
+    )
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph("Sådan får du resultater", cover_heading_style))
     story.append(Paragraph("Tilmelding: Send mail til hummesse@gmail.com med emnet <b>resultater</b>.", cover_text_style))
