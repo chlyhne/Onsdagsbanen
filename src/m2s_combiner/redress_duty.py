@@ -13,6 +13,7 @@ REDRESS_DUTY_RESULT_SOURCE = "redress-duty"
 REQUIRED_DUTY_COLUMNS = ["year", "race_local", "group", "series", "competitor"]
 OPTIONAL_DUTY_COLUMNS = ["note"]
 ALLOWED_DUTY_COLUMNS = [*REQUIRED_DUTY_COLUMNS, *OPTIONAL_DUTY_COLUMNS]
+NON_OBS_DUTY_STATUS_CODES = {"DNS", "DNC", "DSQ", "DNF"}
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,13 @@ def _normalize_text(value: object) -> str:
     normalized = normalized.lower()
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _has_observed_result(row: pd.Series | None) -> bool:
+    if row is None:
+        return False
+    status = str(row.get("race_status_code") or "").strip().upper()
+    return pd.notna(row.get("beregnet_seconds")) and status not in NON_OBS_DUTY_STATUS_CODES
 
 
 def empty_duty_assignments() -> pd.DataFrame:
@@ -213,7 +221,7 @@ def apply_group_duty_assignments(
             )
 
         existing_row = race_frame.loc[matching_indices[0]].copy() if matching_indices else None
-        if existing_row is not None and pd.notna(existing_row.get("beregnet_seconds")):
+        if _has_observed_result(existing_row):
             print(
                 f"[{context.group_label}] Skipping duty assignment for '{assignment['competitor']}' in {class_name} / {race_label} because that boat already has a scored time."
             )
