@@ -22,6 +22,7 @@ from .common import race_num
 from .common import race_sort_key
 from .common import sail_digits
 from .common import similarity
+from .constants import EXCLUDED_CLASS_PREFIXES_BY_YEAR
 from .constants import EVENT_URLS_BY_YEAR
 
 
@@ -66,9 +67,19 @@ def race_dates_by_label(payloads: dict[str, dict[str, Any]], selected_races: lis
     return {label: min(values) for label, values in dates_by_label.items() if values}
 
 
-def discover_class_groups(event_url: str) -> list[tuple[str, list[str]]]:
+def discover_class_groups(event_url: str, *, event_year: int | None = None) -> list[tuple[str, list[str]]]:
     _, regatta_map = fetch_event_bootstrap(event_url)
     class_names = sorted({meta["name"] for meta in regatta_map.values()})
+
+    excluded_prefixes = tuple(
+        normalize_text(value) for value in EXCLUDED_CLASS_PREFIXES_BY_YEAR.get(int(event_year), ())
+    ) if event_year is not None else ()
+    if excluded_prefixes:
+        class_names = [
+            name
+            for name in class_names
+            if not any(normalize_text(name).startswith(prefix) for prefix in excluded_prefixes)
+        ]
 
     group_prefixes: dict[str, str] = {}
     for group_label, group_classes in DEFAULT_CLASS_GROUPS:
@@ -252,7 +263,7 @@ def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
 
     for year in sorted(EVENT_URLS_BY_YEAR):
         event_url = EVENT_URLS_BY_YEAR[year]
-        class_groups = discover_class_groups(event_url)
+        class_groups = discover_class_groups(event_url, event_year=year)
         class_names = [name for _, group_classes in class_groups for name in group_classes]
         if not class_names:
             continue

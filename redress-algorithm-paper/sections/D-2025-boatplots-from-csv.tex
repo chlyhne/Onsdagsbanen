@@ -8,7 +8,7 @@ Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX
 \pgfplotstableforeachcolumnelement{competitor_display}\of\boatplotmanifest\as\displayname{%
   \pgfplotstablegetelem{\pgfplotstablerow}{group_display}\of\boatplotmanifest
   \let\groupdisplay\pgfplotsretval
-  \pgfplotstablegetelem{\pgfplotstablerow}{data_csv}\of\boatplotmanifest
+  \pgfplotstablegetelem{\pgfplotstablerow}{percent_data_csv}\of\boatplotmanifest
   \let\datacsv\pgfplotsretval
   \pgfplotstablegetelem{\pgfplotstablerow}{x_max}\of\boatplotmanifest
   \let\xmax\pgfplotsretval
@@ -18,4 +18,20 @@ Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX
   \let\ymax\pgfplotsretval
   \edef\boatdatapath{\BoatPlotDataDir/\datacsv}
   \BoatPlotFromCsv{\displayname\space(\groupdisplay)}{\boatdatapath}{\xmax}{\ymin}{\ymax}
+}
+
+\IfFileExists{../analysis/race_cdf_appendix.tex}{%
+  \input{../analysis/race_cdf_appendix.tex}%
+}{%
+  \clearpage
+  \section{Racevise CDF-plots (2025--2026)}
+  CDF-appendiksfilen blev ikke fundet. K\o r \texttt{scripts/redress\_2025\_evolution.py} for at generere den.
+}
+
+\IfFileExists{../analysis/q_local_likelihood_around_fit.tex}{%
+  \input{../analysis/q_local_likelihood_around_fit.tex}%
+}{%
+  \clearpage
+  \section{Lokal likelihood omkring fitted q}
+  Likelihood-appendiksfilen blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
 }

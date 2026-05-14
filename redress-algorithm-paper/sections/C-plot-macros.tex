@@ -1,5 +1,6 @@
 \newcommand{\BoatPlotDataDir}{../analysis/boat_plot_data}
 \newcommand{\MissingRacePredictionTablesTex}{../analysis/missing_race_prediction_tables.tex}
+\newcommand{\StorBaneSplitRecommendationTex}{../analysis/stor_bane_split_recommendation.tex}
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
 
@@ -19,6 +20,8 @@
 \addlegendentry{Data}
 \addlegendimage{legend image code/.code={\draw[black,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
 \addlegendentry{Forudsigelse}
+\addlegendimage{legend image code/.code={\draw[black,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{Posteriori}
 \addlegendimage{legend image code/.code={\fill[gray!50,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
 \addlegendentry{Proces-usikkerhed}
 \addlegendimage{legend image code/.code={\fill[gray!35,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
@@ -28,6 +31,8 @@
 \newcommand{\BoatPlotFromCsv}[5]{%
 \subsubsection*{#1}
 \pgfplotstableread[col sep=comma]{#2}\boatplotdata
+\pgfmathsetmacro{\boatplotyminpct}{100.0*(exp(#4)-1.0)}
+\pgfmathsetmacro{\boatplotymaxpct}{100.0*(exp(#5)-1.0)}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
@@ -35,13 +40,20 @@
 width=0.92\textwidth,
 height=5.6cm,
 xlabel=Race,
-ylabel={$x$ i log-space},
-grid=major,
+ylabel={Tidsafvigelse (\%)},
+ymajorgrids=true,
+xmajorgrids=false,
+xminorgrids=true,
+minor xtick=data,
+major grid style={draw=black!45,line width=0.9pt},
+yminorgrids=true,
 clip=false,
 xmin=0.5,
 xmax=#3.5,
-ymin=#4,
-ymax=#5,
+ymin=\boatplotyminpct,
+ymax=\boatplotymaxpct,
+ytick distance=10,
+minor y tick num=4,
 xtick=data,
 xticklabels from table={\boatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
@@ -50,23 +62,148 @@ legend columns=4,
 unbounded coords=discard,
 filter discard warning=false,
 ]
-\addplot[name path=totalLow, draw=none, forget plot] table[x=x_pos,y=x_total_q25] {\boatplotdata};
-\addplot[name path=totalHigh, draw=none, forget plot] table[x=x_pos,y=x_total_q75] {\boatplotdata};
+\addplot[name path=totalLow, draw=none, forget plot] table[x=x_pos,y=total_q25_pct] {\boatplotdata};
+\addplot[name path=totalHigh, draw=none, forget plot] table[x=x_pos,y=total_q75_pct] {\boatplotdata};
 \addplot[fill=gray!35, fill opacity=\TotalUncertaintyFillOpacity, draw=none, forget plot] fill between[of=totalHigh and totalLow];
-\addplot[name path=procLow, draw=none, forget plot] table[x=x_pos,y=x_proc_q25] {\boatplotdata};
-\addplot[name path=procHigh, draw=none, forget plot] table[x=x_pos,y=x_proc_q75] {\boatplotdata};
+\addplot[name path=procLow, draw=none, forget plot] table[x=x_pos,y=proc_q25_pct] {\boatplotdata};
+\addplot[name path=procHigh, draw=none, forget plot] table[x=x_pos,y=proc_q75_pct] {\boatplotdata};
 \addplot[fill=gray!50, fill opacity=\ProcessUncertaintyFillOpacity, draw=none, forget plot] fill between[of=procHigh and procLow];
-\addplot[solid, mark=none, line width=1.0pt, color=black, forget plot] table[x=x_pos,y=x_prior] {\boatplotdata};
-\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=red, mark options={fill=red,draw=red}, forget plot] table[x=x_pos,y=x_obs] {\boatplotdata};
+\addplot[solid, mark=none, line width=1.0pt, color=black, forget plot] table[x=x_pos,y=prior_pct] {\boatplotdata};
+\addplot[densely dashed, mark=none, line width=1.0pt, color=black, forget plot] table[x=x_pos,y=post_pct] {\boatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=red, mark options={fill=red,draw=red}, forget plot] table[x=x_pos,y=obs_pct] {\boatplotdata};
 \SingleBoatLegend
 \end{axis}
 \end{tikzpicture}
+\caption{#1}
 \end{figure}
 }
 
-\newcommand{\DualBoatStatePlotFromCsv}[9]{%
-\pgfplotstableread[col sep=comma]{#2}\firstboatplotdata
-\pgfplotstableread[col sep=comma]{#5}\secondboatplotdata
+\newcommand{\RaceCdfPlotFromCsv}[4]{%
+\subsubsection*{#1}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=6.2cm,
+xlabel={Korrigeret tid (sekunder)},
+ylabel={CDF},
+ymin=0,
+ymax=1,
+grid=major,
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=2,
+]
+\addplot[gray!70, thick] table[x=time_seconds,y=cdf, col sep=comma] {#2};
+\addlegendentry{Empirisk CDF (v\ae gtet)}
+\addplot[black, thick] table[x=time_seconds,y=cdf, col sep=comma] {#3};
+\addlegendentry{Model CDF}
+\end{axis}
+\end{tikzpicture}
+\caption{#1. Antal observerede b\aa de: #4.}
+\end{figure}
+}
+
+\pgfkeys{
+  /q likelihood plot/.is family,
+  /q likelihood plot,
+  title/.store in=\QLikelihoodTitle,
+  first-label/.store in=\QLikelihoodFirstLabel,
+  first-csv/.store in=\QLikelihoodFirstCsv,
+  first-color/.store in=\QLikelihoodFirstColor,
+  first-q-fit/.store in=\QLikelihoodFirstQFit,
+  first-nll-fit/.store in=\QLikelihoodFirstNllFit,
+  second-label/.store in=\QLikelihoodSecondLabel,
+  second-csv/.store in=\QLikelihoodSecondCsv,
+  second-color/.store in=\QLikelihoodSecondColor,
+  second-q-fit/.store in=\QLikelihoodSecondQFit,
+  second-nll-fit/.store in=\QLikelihoodSecondNllFit,
+  y-min/.store in=\QLikelihoodYMin,
+  y-max/.store in=\QLikelihoodYMax,
+  caption/.store in=\QLikelihoodCaption,
+  title={Lokal likelihood omkring fitted q},
+  first-label={Lille Bane},
+  first-csv={},
+  first-color={blue!70!black},
+  first-q-fit={1e-5},
+  first-nll-fit={0},
+  second-label={Stor Bane},
+  second-csv={},
+  second-color={red!75!black},
+  second-q-fit={1e-5},
+  second-nll-fit={0},
+  y-min={-1},
+  y-max={1},
+  caption={Negativ log-likelihood som funktion af q i intervallet q/10 til 10q med 1000 punkter per bane. Punkt markerer fitted q.},
+}
+
+\newcommand{\QLocalLikelihoodPlotFromCsv}[1]{%
+\pgfkeys{/q likelihood plot/.cd,#1}%
+\section*{\QLikelihoodTitle}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=0.92\textwidth,
+height=7.0cm,
+xlabel={q (log-skala)},
+ylabel={Negativ log-likelihood},
+xmode=log,
+ymin=\QLikelihoodYMin,
+ymax=\QLikelihoodYMax,
+grid=major,
+legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
+legend columns=2,
+]
+\addplot[\QLikelihoodFirstColor, line width=1.0pt, forget plot] table[x=q_value,y=negative_log_likelihood,col sep=comma] {\QLikelihoodFirstCsv};
+\addplot[\QLikelihoodSecondColor, line width=1.0pt, forget plot] table[x=q_value,y=negative_log_likelihood,col sep=comma] {\QLikelihoodSecondCsv};
+\addplot[only marks, mark=*, mark size=2.0pt, color=\QLikelihoodFirstColor, mark options={fill=\QLikelihoodFirstColor,draw=\QLikelihoodFirstColor}, forget plot] coordinates {(\QLikelihoodFirstQFit,\QLikelihoodFirstNllFit)};
+\addplot[only marks, mark=*, mark size=2.0pt, color=\QLikelihoodSecondColor, mark options={fill=\QLikelihoodSecondColor,draw=\QLikelihoodSecondColor}, forget plot] coordinates {(\QLikelihoodSecondQFit,\QLikelihoodSecondNllFit)};
+\addlegendimage{legend image code/.code={\draw[\QLikelihoodFirstColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\QLikelihoodFirstLabel}
+\addlegendimage{legend image code/.code={\draw[\QLikelihoodSecondColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\QLikelihoodSecondLabel}
+\addlegendimage{legend image code/.code={\draw[black,mark=*,mark size=2.0pt] plot coordinates {(0.3cm,0cm)};}}
+\addlegendentry{Fitted q}
+\end{axis}
+\end{tikzpicture}
+\caption{\QLikelihoodCaption}
+\end{figure}
+}
+
+\pgfkeys{
+  /dual boat state/.is family,
+  /dual boat state,
+  first-name/.store in=\DualBoatStateFirstName,
+  first-csv/.store in=\DualBoatStateFirstCsv,
+  first-color/.store in=\DualBoatStateFirstColor,
+  second-name/.store in=\DualBoatStateSecondName,
+  second-csv/.store in=\DualBoatStateSecondCsv,
+  second-color/.store in=\DualBoatStateSecondColor,
+  title/.store in=\DualBoatStateTitle,
+  height/.store in=\DualBoatStateHeight,
+  ymin/.store in=\DualBoatStateYMin,
+  ymax/.store in=\DualBoatStateYMax,
+  first-name={Første båd},
+  first-csv={},
+  first-color={blue!70!black},
+  second-name={Anden båd},
+  second-csv={},
+  second-color={red},
+  title={},
+  height={7.0cm},
+  ymin={-0.2},
+  ymax={0.2},
+}
+
+\newcommand{\DualBoatStatePlotFromCsv}[1]{%
+\pgfkeys{/dual boat state/.cd,#1}%
+\pgfplotstableread[col sep=comma]{\DualBoatStateFirstCsv}\firstboatplotdata
+\pgfplotstableread[col sep=comma]{\DualBoatStateSecondCsv}\secondboatplotdata
+\def\DualBoatStateResolvedTitle{\DualBoatStateTitle}%
+\ifx\DualBoatStateResolvedTitle\empty
+  \edef\DualBoatStateResolvedTitle{\DualBoatStateFirstName\space og \DualBoatStateSecondName}%
+\fi
 \pgfplotstablegetrowsof{\firstboatplotdata}%
 \pgfmathtruncatemacro{\dualplotxmax}{\pgfplotsretval}%
 \begin{figure}[H]
@@ -74,15 +211,22 @@ filter discard warning=false,
 \begin{tikzpicture}
 \begin{axis}[
 width=0.92\textwidth,
-height=7.0cm,
+height=\DualBoatStateHeight,
 xlabel=Race,
 ylabel={$x$ i log-space},
-grid=major,
+ymajorgrids=true,
+xmajorgrids=false,
+xminorgrids=true,
+minor xtick=data,
+major grid style={draw=black!45,line width=0.9pt},
+yminorgrids=true,
 clip=false,
 xmin=0.5,
 xmax=\dualplotxmax+0.5,
-ymin=#8,
-ymax=#9,
+ymin=\DualBoatStateYMin,
+ymax=\DualBoatStateYMax,
+ytick distance=10,
+minor y tick num=4,
 xtick=data,
 xticklabels from table={\firstboatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
@@ -91,32 +235,69 @@ legend columns=2,
 unbounded coords=discard,
 filter discard warning=false,
 ]
-\AddBoatStateSeriesToAxis{\firstboatplotdata}{#3}{#3}{firstseries}
-\AddBoatStateSeriesToAxis{\secondboatplotdata}{#6}{#6}{secondseries}
-\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
-\addlegendentry{#1 data}
-\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
-\addlegendentry{#4 data}
-\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#1 forudsigelse}
-\addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#4 forudsigelse}
-\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#6!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#4 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 samlet usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#4 samlet usikkerhed}
+\AddBoatStateSeriesToAxis{\firstboatplotdata}{\DualBoatStateFirstColor}{\DualBoatStateFirstColor}{firstseries}
+\AddBoatStateSeriesToAxis{\secondboatplotdata}{\DualBoatStateSecondColor}{\DualBoatStateSecondColor}{secondseries}
+\addplot[densely dashed, mark=none, line width=1.0pt, color=\DualBoatStateFirstColor, forget plot] table[x=x_pos,y=x_post] {\firstboatplotdata};
+\addplot[densely dashed, mark=none, line width=1.0pt, color=\DualBoatStateSecondColor, forget plot] table[x=x_pos,y=x_post] {\secondboatplotdata};
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=\DualBoatStateFirstColor,draw=\DualBoatStateFirstColor] at (0.3cm,0cm) {};}}
+\addlegendentry{\DualBoatStateFirstName\space data}
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=\DualBoatStateSecondColor,draw=\DualBoatStateSecondColor] at (0.3cm,0cm) {};}}
+\addlegendentry{\DualBoatStateSecondName\space data}
+\addlegendimage{legend image code/.code={\draw[\DualBoatStateFirstColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatStateFirstName\space forudsigelse}
+\addlegendimage{legend image code/.code={\draw[\DualBoatStateSecondColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatStateSecondName\space forudsigelse}
+\addlegendimage{legend image code/.code={\draw[\DualBoatStateFirstColor,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatStateFirstName\space posteriori}
+\addlegendimage{legend image code/.code={\draw[\DualBoatStateSecondColor,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatStateSecondName\space posteriori}
+\addlegendimage{legend image code/.code={\fill[\DualBoatStateFirstColor!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatStateFirstName\space proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatStateSecondColor!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatStateSecondName\space proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatStateFirstColor!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatStateFirstName\space samlet usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatStateSecondColor!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatStateSecondName\space samlet usikkerhed}
 \end{axis}
 \end{tikzpicture}
+\caption{\DualBoatStateResolvedTitle}
 \end{figure}
 }
 
-\newcommand{\DualBoatPercentPlotFromCsv}[8]{%
-\pgfplotstableread[col sep=comma]{#2}\firstboatplotdata
-\pgfplotstableread[col sep=comma]{#5}\secondboatplotdata
+\pgfkeys{
+  /dual boat percent/.is family,
+  /dual boat percent,
+  first-name/.store in=\DualBoatPercentFirstName,
+  first-csv/.store in=\DualBoatPercentFirstCsv,
+  first-color/.store in=\DualBoatPercentFirstColor,
+  second-name/.store in=\DualBoatPercentSecondName,
+  second-csv/.store in=\DualBoatPercentSecondCsv,
+  second-color/.store in=\DualBoatPercentSecondColor,
+  title/.store in=\DualBoatPercentTitle,
+  height/.store in=\DualBoatPercentHeight,
+  ymin/.store in=\DualBoatPercentYMin,
+  ymax/.store in=\DualBoatPercentYMax,
+  first-name={Første båd},
+  first-csv={},
+  first-color={blue!70!black},
+  second-name={Anden båd},
+  second-csv={},
+  second-color={red},
+  title={},
+  height={11cm},
+  ymin={-10},
+  ymax={10},
+}
+
+\newcommand{\DualBoatPercentPlotFromCsv}[1]{%
+\pgfkeys{/dual boat percent/.cd,#1}%
+\pgfplotstableread[col sep=comma]{\DualBoatPercentFirstCsv}\firstboatplotdata
+\pgfplotstableread[col sep=comma]{\DualBoatPercentSecondCsv}\secondboatplotdata
+\def\DualBoatPercentResolvedTitle{\DualBoatPercentTitle}%
+\ifx\DualBoatPercentResolvedTitle\empty
+  \edef\DualBoatPercentResolvedTitle{\DualBoatPercentFirstName\space og \DualBoatPercentSecondName}%
+\fi
 \pgfplotstablegetrowsof{\firstboatplotdata}%
 \pgfmathtruncatemacro{\dualplotxmax}{\pgfplotsretval}%
 \begin{figure}[H]
@@ -124,15 +305,22 @@ filter discard warning=false,
 \begin{tikzpicture}
 \begin{axis}[
 width=0.92\textwidth,
-height=7.0cm,
+height=\DualBoatPercentHeight,
 xlabel=Race,
 ylabel={Tidsafvigelse (\%)},
-grid=major,
+ymajorgrids=true,
+xmajorgrids=false,
+xminorgrids=true,
+minor xtick=data,
+major grid style={draw=black!45,line width=0.9pt},
+yminorgrids=true,
 clip=false,
 xmin=0.5,
 xmax=\dualplotxmax+0.5,
-ymin=#7,
-ymax=#8,
+ymin=\DualBoatPercentYMin,
+ymax=\DualBoatPercentYMax,
+ytick distance=10,
+minor y tick num=4,
 xtick=data,
 xticklabels from table={\firstboatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
@@ -143,39 +331,44 @@ filter discard warning=false,
 ]
 \addplot[name path=firstTotalPctLow, draw=none, forget plot] table[x=x_pos,y=total_q25_pct] {\firstboatplotdata};
 \addplot[name path=firstTotalPctHigh, draw=none, forget plot] table[x=x_pos,y=total_q75_pct] {\firstboatplotdata};
-\addplot[fill=#3!20, fill opacity=\TotalUncertaintyFillOpacity, draw=none, forget plot] fill between[of=firstTotalPctHigh and firstTotalPctLow];
+\addplot[fill=\DualBoatPercentFirstColor!20, fill opacity=\TotalUncertaintyFillOpacity, draw=none, forget plot] fill between[of=firstTotalPctHigh and firstTotalPctLow];
 \addplot[name path=firstProcPctLow, draw=none, forget plot] table[x=x_pos,y=proc_q25_pct] {\firstboatplotdata};
 \addplot[name path=firstProcPctHigh, draw=none, forget plot] table[x=x_pos,y=proc_q75_pct] {\firstboatplotdata};
-\addplot[fill=#3!35, fill opacity=\ProcessUncertaintyFillOpacity, draw=none, forget plot] fill between[of=firstProcPctHigh and firstProcPctLow];
-\addplot[solid, mark=none, line width=1.0pt, color=#3, forget plot] table[x=x_pos,y=prior_pct] {\firstboatplotdata};
-\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#3, mark options={fill=#3,draw=#3}, forget plot] table[x=x_pos,y=obs_pct] {\firstboatplotdata};
+\addplot[fill=\DualBoatPercentFirstColor!35, fill opacity=\ProcessUncertaintyFillOpacity, draw=none, forget plot] fill between[of=firstProcPctHigh and firstProcPctLow];
+\addplot[solid, mark=none, line width=1.0pt, color=\DualBoatPercentFirstColor, forget plot] table[x=x_pos,y=prior_pct] {\firstboatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=\DualBoatPercentFirstColor, mark options={fill=\DualBoatPercentFirstColor,draw=\DualBoatPercentFirstColor}, forget plot] table[x=x_pos,y=obs_pct] {\firstboatplotdata};
 \addplot[name path=secondTotalPctLow, draw=none, forget plot] table[x=x_pos,y=total_q25_pct] {\secondboatplotdata};
 \addplot[name path=secondTotalPctHigh, draw=none, forget plot] table[x=x_pos,y=total_q75_pct] {\secondboatplotdata};
-\addplot[fill=#6!20, fill opacity=\TotalUncertaintyFillOpacity, draw=none, forget plot] fill between[of=secondTotalPctHigh and secondTotalPctLow];
+\addplot[fill=\DualBoatPercentSecondColor!20, fill opacity=\TotalUncertaintyFillOpacity, draw=none, forget plot] fill between[of=secondTotalPctHigh and secondTotalPctLow];
 \addplot[name path=secondProcPctLow, draw=none, forget plot] table[x=x_pos,y=proc_q25_pct] {\secondboatplotdata};
 \addplot[name path=secondProcPctHigh, draw=none, forget plot] table[x=x_pos,y=proc_q75_pct] {\secondboatplotdata};
-\addplot[fill=#6!35, fill opacity=\ProcessUncertaintyFillOpacity, draw=none, forget plot] fill between[of=secondProcPctHigh and secondProcPctLow];
-\addplot[solid, mark=none, line width=1.0pt, color=#6, forget plot] table[x=x_pos,y=prior_pct] {\secondboatplotdata};
-\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=#6, mark options={fill=#6,draw=#6}, forget plot] table[x=x_pos,y=obs_pct] {\secondboatplotdata};
-\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#3,draw=#3] at (0.3cm,0cm) {};}}
-\addlegendentry{#1 data}
-\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=#6,draw=#6] at (0.3cm,0cm) {};}}
-\addlegendentry{#4 data}
-\addlegendimage{legend image code/.code={\draw[#3,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#1 forudsigelse}
-\addlegendimage{legend image code/.code={\draw[#6,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{#4 forudsigelse}
-\addlegendimage{legend image code/.code={\fill[#3!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#6!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#4 proces-usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#3!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#1 samlet usikkerhed}
-\addlegendimage{legend image code/.code={\fill[#6!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{#4 samlet usikkerhed}
+\addplot[fill=\DualBoatPercentSecondColor!35, fill opacity=\ProcessUncertaintyFillOpacity, draw=none, forget plot] fill between[of=secondProcPctHigh and secondProcPctLow];
+\addplot[solid, mark=none, line width=1.0pt, color=\DualBoatPercentSecondColor, forget plot] table[x=x_pos,y=prior_pct] {\secondboatplotdata};
+\addplot[densely dashed, mark=none, line width=1.0pt, color=\DualBoatPercentFirstColor, forget plot] table[x=x_pos,y=post_pct] {\firstboatplotdata};
+\addplot[densely dashed, mark=none, line width=1.0pt, color=\DualBoatPercentSecondColor, forget plot] table[x=x_pos,y=post_pct] {\secondboatplotdata};
+\addplot[only marks, mark=*, mark size=1.6pt, opacity=0.95, color=\DualBoatPercentSecondColor, mark options={fill=\DualBoatPercentSecondColor,draw=\DualBoatPercentSecondColor}, forget plot] table[x=x_pos,y=obs_pct] {\secondboatplotdata};
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=\DualBoatPercentFirstColor,draw=\DualBoatPercentFirstColor] at (0.3cm,0cm) {};}}
+\addlegendentry{\DualBoatPercentFirstName\space data}
+\addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=\DualBoatPercentSecondColor,draw=\DualBoatPercentSecondColor] at (0.3cm,0cm) {};}}
+\addlegendentry{\DualBoatPercentSecondName\space data}
+\addlegendimage{legend image code/.code={\draw[\DualBoatPercentFirstColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatPercentFirstName\space forudsigelse}
+\addlegendimage{legend image code/.code={\draw[\DualBoatPercentSecondColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatPercentSecondName\space forudsigelse}
+\addlegendimage{legend image code/.code={\draw[\DualBoatPercentFirstColor,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatPercentFirstName\space posteriori}
+\addlegendimage{legend image code/.code={\draw[\DualBoatPercentSecondColor,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
+\addlegendentry{\DualBoatPercentSecondName\space posteriori}
+\addlegendimage{legend image code/.code={\fill[\DualBoatPercentFirstColor!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatPercentFirstName\space proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatPercentSecondColor!35,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatPercentSecondName\space proces-usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatPercentFirstColor!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatPercentFirstName\space samlet usikkerhed}
+\addlegendimage{legend image code/.code={\fill[\DualBoatPercentSecondColor!20,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
+\addlegendentry{\DualBoatPercentSecondName\space samlet usikkerhed}
 \end{axis}
 \end{tikzpicture}
+\caption{\DualBoatPercentResolvedTitle}
 \end{figure}
 }
-
-

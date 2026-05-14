@@ -79,6 +79,17 @@ Her betyder $^-$ den predikterede værdi før dagens observation, mens $^+$ bety
 
 I dette problem er den skjulte tilstand bådens færdighedsniveau i log-space, mens den observerede størrelse er den log-transformerede beregnede tid. Kalman-filteret bruges altså til at holde et løbende estimat af hver båds niveau, efterhånden som nye resultater kommer ind. Her er $\Delta T_{k+1}$ tiden siden forrige observation, og $\sigma_x^2$ er den globale procesvarians pr. dag. Det betyder, at der ikke lægges nogen systematisk dynamik ind i færdighedsniveauet fra én observation til den næste. Niveauet får i stedet lov til at drive lidt, og usikkerheden vokser jo længere tid der går.
 
+Samme historie kan skrives i matrixnotation ved at samle de aktive både i en tilstandsvektor:
+\begin{flalign}
+\hspace{2cm} x_t^- &= x_{t-1}^+, \qquad P_t^- = P_{t-1}^+ + Q_t, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} y_t &= H_t x_t + \mu_{y,t}\mathbf{1} + \varepsilon_t, \qquad \varepsilon_t\sim\mathcal{N}(0,\sigma_{y,t}^2I). &&
+\end{flalign}
+I første omgang er strukturen diagonal: $Q_t$ er diagonal, og den bådvise 1D-intuition svarer til, at hver båd opdateres fra sin egen prior-varians. Derfor kan den første forklaring læses helt båd-for-båd.
+
+Senere i algoritmen indføres et normaliseringsskridt, hvor niveauerne projekteres til en fælles reference via identifikationsrestriktionen $\sum_i x_{i,t}=0$. Det skridt kobler bådene lineært i kovariansen. Derfor generaliseres notationen til fuld kovarians allerede her, så samme Kalman-recursion kan bruges både før og efter normaliseringen.
+
 \subsection{ML-estimering af procesvariansen}
 En båds niveau er ikke nødvendigvis konstant gennem en hel sæson. Besætning, form, rutine og lokale forhold kan ændre sig over tid, så det er rimeligt at lade niveauet bevæge sig. Det er til gengæld ikke oplagt, hvor store disse bevægelser typisk bør forventes at være. Hvis procesvariansen sættes for lavt, bliver modellen for træg og reagerer for lidt på nye observationer. Hvis den sættes for højt, bliver modellen for nervøs og lægger for meget vægt på enkeltresultater.
 
@@ -92,20 +103,21 @@ Likelihooden følger Kalman-recursionen og skrives via kædereglen som en sekven
 -\log p(y_{1:T}\mid \sigma_x^2) = \sum_{t=1}^{T} -\log p(y_t\mid y_{1:t-1}, \sigma_x^2). &&
 \end{flalign}
 
-For en given kandidatværdi af $\sigma_x^2$ køres filteret frem gennem data, og den samlede negative log-likelihood summeres over alle observerede både og ræs:
+For en given kandidatværdi af $\sigma_x^2$ køres filteret frem gennem data, og den samlede negative log-likelihood skrives som en sum af dagsbidrag:
 \begin{flalign}
-\hspace{2cm} \mathcal{L}(\sigma_x^2) &= \sum_t \sum_{i\in\mathcal{S}_t} \frac{1}{2}\left[\log\!\left(2\pi s_{i,t}(\sigma_x^2)\right)+\frac{e_{i,t}(\sigma_x^2)^2}{s_{i,t}(\sigma_x^2)}\right], &&
+\hspace{2cm} \mathcal{L}(\sigma_x^2) &= \sum_t \ell_t(\sigma_x^2). &&
 \end{flalign}
-hvor
+For ræs $t$ med $m_t$ observerede både defineres residualvektoren $r_t=y_t-H_t\hat{x}_t^-$ og den samlede residual-kovarians $S_t=P_{oo,t}^-+\hat{\sigma}_{y,t}^2 I$. Dagsbidraget er da
 \begin{flalign}
-\hspace{2cm} s_{i,t}(\sigma_x^2) &= p_{i,t}^-(\sigma_x^2)+\hat{\sigma}_{y,t}^2(\sigma_x^2), \qquad e_{i,t}(\sigma_x^2)=y_{i,t}-\hat{y}_{i,t}^-(\sigma_x^2). &&
+\hspace{2cm} \ell_t(\sigma_x^2) &= \frac{1}{2}\left[m_t\log(2\pi)+\log\det(S_t)+\left(r_t-\hat{\mu}_{y,t}\mathbf{1}\right)^\top S_t^{-1}\left(r_t-\hat{\mu}_{y,t}\mathbf{1}\right)\right], &&
 \end{flalign}
+hvor $(\hat{\mu}_{y,t},\hat{\sigma}_{y,t}^2)$ profileres på dagen via ML ud fra de observerede både i ræs $t$.
 
 MLE-estimatet for procesvariansen vælges derefter som
 \begin{flalign}
 \hspace{2cm} \hat{\sigma}_x^2 &= \arg\min_{\sigma_x^2\in[\sigma_{x,\min}^2,\sigma_{x,\max}^2]} \mathcal{L}(\sigma_x^2). &&
 \end{flalign}
-I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$, hvor målfunktionen evalueres for kandidatværdier, og den bedste vælges. Implementeringen bruger en fast kandidatlinje med lokal forfining omkring bedste punkt; kandidat-evalueringerne kan køres parallelt af hensyn til runtime.
+I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$. Implementeringen bruger først et log-grid, derefter lokal log-space forfining omkring bedste område, og til sidst en golden-section forfining i lineær skala; kandidat-evalueringerne kan køres parallelt af hensyn til runtime.
 
 Intuitionen er den samme som før: en for lille $\sigma_x^2$ gør modellen for træg, mens en for stor $\sigma_x^2$ gør den for nervøs. Balancen bestemmes her af den samlede sandsynlighed under modellen.
 
@@ -126,27 +138,38 @@ For både, der ikke sejlede race $t$, anvendes kun prediktionssteppet. De får a
 \end{flalign}
 
 \subsection{Estimering af dagens niveau og usikkerhed}
-Når dagens prior $(\hat{x}_{i,t}^-, p_{i,t}^-)$ er beregnet, mangler stadig to størrelser, før observationerne kan bruges i Kalman-opdateringen: dagens fælles niveau $\mu_{y,t}$ og dagens målevarians $\sigma_{y,t}^2$. De estimeres samlet ud fra de både, der faktisk sejlede den dag.
+Når dagens prior er beregnet, estimeres dagens fælles niveau $\mu_{y,t}$ og dagens målevarians $\sigma_{y,t}^2$ fra de observerede både i ræs $t$.
 
-Idéen er, at den observerede log-tid for båd $i$ skrives som
+Sæt
 \begin{flalign}
-\hspace{2cm} y_{i,t} - \hat{x}_{i,t}^- &= \mu_{y,t} + e_{i,t}, \qquad e_{i,t}\sim \mathcal{N}(0,p_{i,t}^-+\sigma_{y,t}^2). &&
+\hspace{2cm} y_t &= \text{vektor af observerede log-tider}, \qquad
+\tilde{x}_{o,t}^- = H_t\hat{x}_t^-, &&
 \end{flalign}
-Dermed får både med høj prior-usikkerhed automatisk større samlet residualvarians, og de tæller derfor mindre med i estimeringen af dagens fælles niveau. For en fast værdi af $\sigma_{y,t}^2$ bliver maksimum likelihood-estimatet for $\mu_{y,t}$ det vægtede gennemsnit
 \begin{flalign}
-\hspace{2cm} \hat{\mu}_{y,t}(\sigma^2) &= \frac{\sum_{i\in\mathcal{S}_t} \frac{y_{i,t}-\hat{x}_{i,t}^-}{p_{i,t}^-+\sigma^2}}{\sum_{i\in\mathcal{S}_t} \frac{1}{p_{i,t}^-+\sigma^2}}. &&
+\hspace{2cm} r_t &= y_t-\tilde{x}_{o,t}^-, \qquad
+P_{oo,t}^- = H_tP_t^-H_t^\top. &&
 \end{flalign}
-Det er netop her, bådenes forskellige færdighedsniveauer automatisk tages med. I log-space trækkes den forventede båd-effekt fra, før dagens fælles niveau estimeres. I den oprindelige multiplicative model svarer det til, at den observerede tid divideres med bådens forventede tidsfaktor. Både med stor prior-usikkerhed vægter samtidig mindre.
+Her er $r_t$ residualen efter fradrag af den forventede båd-effekt, og $P_{oo,t}^-$ er prior-kovariansen for de observerede både.
 
-Indsættes dette i likelihooden, står kun én ukendt størrelse tilbage, nemlig $\sigma_{y,t}^2$. Den findes derfor ved en endimensional søgning:
+For en kandidatværdi $\sigma^2$ defineres
 \begin{flalign}
-\hspace{2cm} \hat{\sigma}_{y,t}^2 &= \arg\min_{\sigma^2\geq\varepsilon} \frac{1}{2}\sum_{i\in\mathcal{S}_t}\left[\log\!\left(p_{i,t}^-+\sigma^2\right)+\frac{\left(y_{i,t}-\hat{x}_{i,t}^- - \hat{\mu}_{y,t}(\sigma^2)\right)^2}{p_{i,t}^-+\sigma^2}\right]. &&
+\hspace{2cm} S_t(\sigma^2) &= P_{oo,t}^-+\sigma^2 I. &&
 \end{flalign}
-Udtrykket kommer direkte fra den negative log-likelihood for normalfordelingen
+Maksimum-likelihood-estimatet for dagsniveauet fås da i lukket form som
 \begin{flalign}
-\hspace{2cm} y_{i,t} - \hat{x}_{i,t}^- &\sim \mathcal{N}\!\left(\mu_{y,t},\,p_{i,t}^-+\sigma_{y,t}^2\right). &&
+\hspace{2cm} \hat{\mu}_{y,t}(\sigma^2) &= \frac{\mathbf{1}^\top S_t(\sigma^2)^{-1}r_t}{\mathbf{1}^\top S_t(\sigma^2)^{-1}\mathbf{1}}. &&
 \end{flalign}
-Log-leddet stammer fra normalfordelingens normaliseringskonstant, mens kvotientleddet stammer fra den kvadrerede residual i eksponenten. Fordi variansen her er $p_{i,t}^-+\sigma_{y,t}^2$, optræder netop denne størrelse begge steder i likelihooden.
+
+Den profilerede dags-likelihood skrives som
+\begin{flalign}
+\hspace{2cm} \ell_t(\sigma^2) &= \frac{1}{2}\left[m_t\log(2\pi)+\log\det(S_t(\sigma^2))+\left(r_t-\hat{\mu}_{y,t}(\sigma^2)\mathbf{1}\right)^\top S_t(\sigma^2)^{-1}\left(r_t-\hat{\mu}_{y,t}(\sigma^2)\mathbf{1}\right)\right], &&
+\end{flalign}
+hvor $m_t$ er antal observerede både i ræs $t$. Dagens målevarians estimeres ved 1D-minimering:
+\begin{flalign}
+\hspace{2cm} \hat{\sigma}_{y,t}^2 &= \arg\min_{\sigma^2\geq\varepsilon}\,\ell_t(\sigma^2). &&
+\end{flalign}
+
+Når $P_{oo,t}^-$ er diagonal, reduceres udtrykket til den velkendte inverse-varians-vægtning båd-for-båd.
 
 For at se denne model i tidsskalaen kan man i et konkret ræs først korrigere de observerede tider for bådens forventede niveau, altså betragte $T_{i,t}/\exp(\hat{x}_{i,t}^-)$. I eksemplet nedenfor er $p_{i,t}^-$ ens på tværs af bådene, så modellen i tidsskalaen bliver en ren log-normal fordeling. Den grå kurve viser den empiriske fordelingsfunktion for de korrigerede tider, og den sorte kurve viser den log-normalfordeling, der svarer til de fundne værdier af $\hat{\mu}_{y,t}$ og $\hat{\sigma}_{y,t}^2$.
 
@@ -176,45 +199,23 @@ legend columns=2,
 Hvis et ræs ser usædvanligt uroligt ud, bliver $\hat{\sigma}_{y,t}^2$ høj, og så bliver Kalman-forstærkningen automatisk lav. Modellen lærer altså kun lidt af et mærkeligt ræs.
 
 \subsection{Eftertanke: Fuld kovarians og identifikation}
-Den foregående fremstilling bruger en diagonal approximation af usikkerheden mellem bådene. I den endelige implementering er dette løftet til en fuld kovariansmodel uden nye strukturelle frihedsgrader. Her fitter vi kun $\sigma_x^2$. Parametrene $(x_0,p_0)$ fastsættes direkte fra data for nye både: $x_0$ sættes til gennemsnittet af første observerede performance, og $p_0$ sættes til variansen af disse første performance-observationer.
+Den operationelle implementering bruger samme Kalman-recursion som ovenfor i fuld kovariansform for de aktive både. For nye både sættes $x_0$ til gennemsnittet af første observerede performance, mens $p_0$ sættes som $p_0=365\cdot q$.
 
-Idéen er at samle alle bådes niveauer i en vektor $x_t\in\mathbb{R}^n$ med kovariansmatrix $P_t\in\mathbb{R}^{n\times n}$. Prediktionen skrives da som
+I observationsrummet bruges de to mellemvariable
 \begin{flalign}
-\hspace{2cm} \hat{x}_t^- &= \hat{x}_{t-1}^+, \qquad
-P_t^- = P_{t-1}^+ + Q_t, &&
+\hspace{2cm} P_{oo,t}^- &= H_t P_t^- H_t^\top, \qquad
+S_t = P_{oo,t}^- + \hat{\sigma}_{y,t}^2 I, &&
 \end{flalign}
-hvor $Q_t$ er diagonal med elementer $\Delta T_{i,t}\sigma_x^2$.
+hvor $P_{oo,t}^-$ er prior-kovariansen for de observerede både i ræs $t$, og $S_t$ er den samlede residual-kovarians i dagsfittet.
 
-For de både, der observeres i ræs $t$, skrives målemodellen i vektorform
+Efter hvert step normaliseres tilstanden med identifikationsrestriktionen (centreringsconstrainten) $\mathbf{1}^\top x_t=0$:
 \begin{flalign}
-\hspace{2cm} y_t &= H_t x_t + \mu_{y,t}\mathbf{1} + \varepsilon_t, \qquad
-\varepsilon_t\sim \mathcal{N}(0,\sigma_{y,t}^2 I). &&
-\end{flalign}
-Her er $H_t$ en selektionsmatrix, og den relevante prior-kovarians er $P_{oo,t}^- = H_t P_t^- H_t^\top$. For en fast $\sigma_{y,t}^2$ fås
-\begin{flalign}
-\hspace{2cm} \hat{\mu}_{y,t}(\sigma^2) &=
-\frac{\mathbf{1}^\top S_t(\sigma^2)^{-1}\left(y_t-H_t\hat{x}_t^-\right)}
-{\mathbf{1}^\top S_t(\sigma^2)^{-1}\mathbf{1}}, \qquad
-S_t(\sigma^2)=P_{oo,t}^-+\sigma^2 I, &&
-\end{flalign}
-og $\hat{\sigma}_{y,t}^2$ findes igen ved 1D ML-søgning.
-
-Posterior-opdateringen er den sædvanlige multivariate Kalman-opdatering
-\begin{flalign}
-\hspace{2cm} K_t &= P_t^-H_t^\top\!\left(H_tP_t^-H_t^\top+\hat{\sigma}_{y,t}^2I\right)^{-1}, &&
+\hspace{2cm} v_t &= P_t\mathbf{1}, \qquad s_t=\mathbf{1}^\top P_t\mathbf{1}, &&
 \end{flalign}
 \begin{flalign}
-\hspace{2cm} \hat{x}_t^+ &= \hat{x}_t^- + K_t\!\left(y_t-H_t\hat{x}_t^- - \hat{\mu}_{y,t}\mathbf{1}\right), &&
+\hspace{2cm} \hat{x}_t &\leftarrow \hat{x}_t - v_t\,\frac{\mathbf{1}^\top\hat{x}_t}{s_t}, &&
 \end{flalign}
 \begin{flalign}
-\hspace{2cm} P_t^+ &= P_t^- - K_tH_tP_t^-. &&
+\hspace{2cm} P_t &\leftarrow P_t - \frac{v_t v_t^\top}{s_t}. &&
 \end{flalign}
-
-For at fjerne identifikationsproblemet (fælles drift i $x$ modsat drift i race-mean) pålægges gauge-constrainten $\mathbf{1}^\top x_t=0$ ved projektion efter hvert step:
-\begin{flalign}
-\hspace{2cm} \hat{x}_t &\leftarrow \hat{x}_t - P_t\mathbf{1}\left(\mathbf{1}^\top P_t\mathbf{1}\right)^{-1}\mathbf{1}^\top\hat{x}_t, &&
-\end{flalign}
-\begin{flalign}
-\hspace{2cm} P_t &\leftarrow P_t - P_t\mathbf{1}\left(\mathbf{1}^\top P_t\mathbf{1}\right)^{-1}\mathbf{1}^\top P_t. &&
-\end{flalign}
-Det er samme modelidé som ovenfor, men i en strammere og mere konsistent multivariat udgave.
+Projektionen er en lineær konditionering af den Gaussiske tilstand på hyperplanet $\mathbf{1}^\top x_t=0$ og holder derfor Kalman-strukturen intakt i den normaliserede model.

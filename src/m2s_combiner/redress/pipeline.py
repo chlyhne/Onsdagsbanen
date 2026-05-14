@@ -12,18 +12,18 @@ from .collect import build_group_data
 from .common import normalize_text
 from .common import predict_sailed_seconds_from_corrected
 from .common import race_num
+from .constants import EVENT_URLS_BY_YEAR
 from .constants import EPS
 from .constants import NON_OBS_STATUSES
-from .constants import PLOT_ACTIVE_YEAR
 from .constants import Q_SEARCH_MAX
 from .constants import Q_SEARCH_MIN
 from .constants import Z50
 from .exports import export_boat_plot_data
+from .exports import export_race_cdf_appendix
 from .exports import export_missing_race_prediction_tables
 from .exports import export_ml_fit_example
 from .exports import export_stor_bane_split_recommendation
 from .model import estimate_global_q
-from .model import estimate_initial_p0_from_first_observations
 from .model import estimate_initial_x0_from_first_observations
 from .model import evaluate_q_score
 from .model import fit_global_q
@@ -34,12 +34,15 @@ from .model import resolve_q_objective
 from .model import run_all_groups_with_transfer
 from .model import save_group_q_cache
 
+P0_FROM_Q_SCALE = 365.0
+
 
 def _fit_group_qs(
     groups: list[dict[str, Any]],
     *,
     output_dir: Path,
     q_objective: str,
+    run_q_diagnostics: bool = False,
 ) -> tuple[dict[str, float], dict[str, float], dict[str, float], list[dict[str, Any]], pd.DataFrame, bool, Path]:
     q_grid = np.logspace(math.log10(Q_SEARCH_MIN), math.log10(Q_SEARCH_MAX), 61, dtype=float)
     q_cache_path = q_cache_path_for_objective(output_dir, q_objective)
@@ -57,16 +60,18 @@ def _fit_group_qs(
         estimated_initial_q = estimate_global_q(group["combined"])
         initial_q_for_fit = float(cached_q_map.get(group_name, estimated_initial_q))
         group_x0 = float(estimate_initial_x0_from_first_observations(group))
-        group_p0 = float(estimate_initial_p0_from_first_observations(group))
+        initial_p0_for_fit = float(max(EPS, P0_FROM_Q_SCALE * initial_q_for_fit))
         group_q, fit_score, fit_obs = fit_global_q(
             [group],
             initial_q=initial_q_for_fit,
             objective=q_objective,
             initial_x0=group_x0,
-            initial_p0=group_p0,
+            initial_p0=initial_p0_for_fit,
+            p0_from_q_scale=P0_FROM_Q_SCALE,
             progress_label=group_name,
             progress_every=1,
         )
+        group_p0 = float(max(EPS, P0_FROM_Q_SCALE * group_q))
         rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse", initial_x0=group_x0, initial_p0=group_p0)
         mle_score, mle_obs = evaluate_q_score([group], group_q, "mle", initial_x0=group_x0, initial_p0=group_p0)
         q_by_group[group_name] = float(group_q)
@@ -81,7 +86,7 @@ def _fit_group_qs(
                 "fitted_x0": float(group_x0),
                 "fitted_p0": float(group_p0),
                 "x0_source": "fixed-first-observation-mean",
-                "p0_source": "fixed-first-observation-variance",
+                "p0_source": "fixed-as-365-times-q",
                 "fit_objective": q_objective,
                 "fit_score": float(fit_score),
                 "fit_obs": int(fit_obs),
@@ -92,13 +97,22 @@ def _fit_group_qs(
                 "q_source": "q-only-fit",
             }
         )
-        group_diag = q_diagnostics([group], q_grid, initial_x0=group_x0, initial_p0=group_p0)
-        group_diag["group"] = group_name
-        group_diag["fit_objective"] = q_objective
-        group_diag["x0_value"] = float(group_x0)
-        group_diag["p0_value"] = float(group_p0)
-        group_diag["source"] = "joint-fit"
-        q_diag_frames.append(group_diag)
+        if run_q_diagnostics:
+            group_diag = q_diagnostics(
+                [group],
+                q_grid,
+                initial_x0=group_x0,
+                initial_p0=initial_p0_for_fit,
+                p0_from_q_scale=P0_FROM_Q_SCALE,
+                progress_label=group_name,
+                progress_every=10,
+            )
+            group_diag["group"] = group_name
+            group_diag["fit_objective"] = q_objective
+            group_diag["x0_value"] = float(group_x0)
+            group_diag["p0_formula_scale"] = float(P0_FROM_Q_SCALE)
+            group_diag["source"] = "joint-fit"
+            q_diag_frames.append(group_diag)
 
     save_group_q_cache(q_cache_path, q_by_group)
     q_diag = pd.concat(q_diag_frames, ignore_index=True) if q_diag_frames else pd.DataFrame()
@@ -231,7 +245,7 @@ def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | N
     return lookup
 
 
-def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
+def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool = False) -> int:
     q_objective = resolve_q_objective(q_objective)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -243,6 +257,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
         groups,
         output_dir=output_dir,
         q_objective=q_objective,
+        run_q_diagnostics=run_q_diagnostics,
     )
     competitor_year_group = build_competitor_year_group_map(all_data, NON_OBS_STATUSES)
     history, _, _ = run_all_groups_with_transfer(
@@ -257,11 +272,20 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
     history = _enrich_history(history, competitor_year_group)
 
     core_paths = _write_core_outputs(history, q_diag, output_dir=output_dir)
-    active_2026_competitors = {competitor for (competitor, year), _group in competitor_year_group.items() if int(year) == int(PLOT_ACTIVE_YEAR)}
+    included_plot_years = {int(year) for year in EVENT_URLS_BY_YEAR.keys()}
+    included_plot_competitors = {
+        competitor
+        for (competitor, year), _group in competitor_year_group.items()
+        if int(year) in included_plot_years
+    }
 
     all_predictions = history.copy()
     boat_plot_data_dir = output_dir / "boat_plot_data"
-    manifest_path = export_boat_plot_data(all_predictions, allowed_competitors=active_2026_competitors, output_dir=boat_plot_data_dir)
+    manifest_path = export_boat_plot_data(
+        all_predictions,
+        allowed_competitors=included_plot_competitors,
+        output_dir=boat_plot_data_dir,
+    )
     stor_bane_split_tex_path = export_stor_bane_split_recommendation(
         manifest_path=manifest_path,
         boat_plot_data_dir=boat_plot_data_dir,
@@ -270,6 +294,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
     )
     missing_race_prediction_tables_tex_path = export_missing_race_prediction_tables(history, output_dir=output_dir, years=(2026,))
     ml_fit_example_paths = export_ml_fit_example(history, output_dir=output_dir)
+    race_cdf_manifest_path, race_cdf_appendix_tex_path = export_race_cdf_appendix(history, output_dir=output_dir, years=(2025, 2026))
 
     if using_cached_q:
         print(f"Loaded group Q cache (as start values): {q_cache_path} (fit objective={q_objective})")
@@ -294,12 +319,17 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
         core_paths["observed"],
         core_paths["latest"],
         core_paths["race"],
-        core_paths["q_diag"],
         manifest_path,
         stor_bane_split_tex_path,
         missing_race_prediction_tables_tex_path,
+        race_cdf_manifest_path,
+        race_cdf_appendix_tex_path,
         *ml_fit_example_paths,
     ]:
         print(f"Wrote: {path}")
+    if run_q_diagnostics:
+        print(f"Wrote: {core_paths['q_diag']}")
+    else:
+        print(f"Skipped Q diagnostics (enable with --with-qdiag). Placeholder file refreshed: {core_paths['q_diag']}")
     print("Note: This pipeline exports analysis artifacts and TeX fragments, but does not build the PDF report.")
     return 0

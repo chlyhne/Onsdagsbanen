@@ -1,31 +1,57 @@
-competitor,competitor_display,group,group_display,data_csv,x_max,y_min,y_max
-Anna Kiel GRUD,Anna Kiel Grud,Lille Bane,Lille Bane,boat_plot_01_anna-kiel-grud.csv,2,-0.11932501260533263,0.11932501260533263
-Axel Thomsen,Axel Thomsen,Stor Bane,Stor Bane,boat_plot_02_axel-thomsen.csv,37,-0.23294460951775622,0.12406792162963838
-Blue X,Blue X,Stor Bane,Stor Bane,boat_plot_03_blue-x.csv,37,-0.08934279182921473,0.12431580124832126
-Bo Bach Boddum,Bo Bach Boddum,Stor Bane,Stor Bane,boat_plot_04_bo-bach-boddum.csv,37,-0.22336051475084157,0.16803942762309565
-Casper Lyhne,Casper Lyhne,Lille Bane,Lille Bane,boat_plot_05_casper-lyhne.csv,37,-0.17473575211573852,0.11993705737467376
-Christian GREJS,Christian Grejs,Stor Bane,Stor Bane,boat_plot_06_christian-grejs.csv,37,-0.19696545295025705,0.053648881059012575
-Christian Lindholst,Christian Lindholst,Stor Bane,Stor Bane,boat_plot_07_christian-lindholst.csv,37,-0.05641065075310328,0.19294677101718377
-Christian Løvgren Persson,Christian Løvgren Persson,Lille Bane,Lille Bane,boat_plot_08_christian-l-vgren-persson.csv,19,-0.08119982403213775,0.1569896276537644
-Esben HARDER,Esben Harder,Lille Bane,Lille Bane,boat_plot_09_esben-harder.csv,37,-0.1758745720678008,0.1329941796631769
-Henrik AXELSEN,Henrik Axelsen,Lille Bane,Lille Bane,boat_plot_10_henrik-axelsen.csv,37,-0.17165543096506508,0.08651371389227216
-Henrik Gersling,Henrik Gersling,Stor Bane,Stor Bane,boat_plot_11_henrik-gersling.csv,37,-0.09789113826204592,0.09789113826204592
-Henrik ZÜRICHO,Henrik Züricho,Stor Bane,Stor Bane,boat_plot_12_henrik-zuricho.csv,37,-0.0670064528650278,0.15922136038637208
-Horacio Bulacio,Horacio Bulacio,Lille Bane,Lille Bane,boat_plot_13_horacio-bulacio.csv,19,-0.13475319465584767,0.10109012388709025
-Illan HURVITZ,Illan Hurvitz,Lille Bane,Lille Bane,boat_plot_14_illan-hurvitz.csv,2,-0.1198747886876979,0.12903772339378577
-Inger Stokkink,Inger Stokkink,Lille Bane,Lille Bane,boat_plot_15_inger-stokkink.csv,37,-0.12416899048655647,0.12411641758953791
-Jan Ilsø Sørensen,Jan Ilsø Sørensen,Stor Bane,Stor Bane,boat_plot_16_jan-ils-s-rensen.csv,19,-0.07302196978065056,0.11976762516630268
-Jens Due OLSEN,Jens Due Olsen,Lille Bane,Lille Bane,boat_plot_17_jens-due-olsen.csv,37,-0.06832746162545693,0.16778600596095672
-Jens ESKILDSEN,Jens Eskildsen,Stor Bane,Stor Bane,boat_plot_18_jens-eskildsen.csv,2,-0.07357627078209525,0.07357627078209525
-Jesper THYGESEN,Jesper Thygesen,Lille Bane,Lille Bane,boat_plot_19_jesper-thygesen.csv,37,-0.058905813817991676,0.21732325652085427
-John AMBY,John Amby,Lille Bane,Lille Bane,boat_plot_20_john-amby.csv,37,-0.11920359758281172,0.13846129463022783
-Martin Rasmussen,Martin Rasmussen,Lille Bane,Lille Bane,boat_plot_21_martin-rasmussen.csv,37,-0.05699213324565755,0.28284695838423995
-Mikkel HOLME,Mikkel Holme,Lille Bane,Lille Bane,boat_plot_22_mikkel-holme.csv,2,-0.17431822309013031,0.12243783584032117
-Morten Juul CHRISTENSEN,Morten Juul Christensen,Stor Bane,Stor Bane,boat_plot_23_morten-juul-christensen.csv,37,-0.08619584240943422,0.10680776976478264
-Oluf GRØNKJÆR,Oluf Grønkjær,Lille Bane,Lille Bane,boat_plot_24_oluf-gr-nkj-r.csv,37,-0.39608824846968715,0.12275740725417247
-Per Brøker KRISTENSEN,Per Brøker Kristensen,Lille Bane,Lille Bane,boat_plot_25_per-br-ker-kristensen.csv,2,-0.11932501260533263,0.11932501260533263
-Peter Paris JACOBSEN,Peter Paris Jacobsen,Lille Bane,Lille Bane,boat_plot_26_peter-paris-jacobsen.csv,2,-0.11932501260533263,0.11932501260533263
-Pia Olesen,Pia Olesen,Stor Bane,Stor Bane,boat_plot_27_pia-olesen.csv,19,-0.13642928694076345,0.07814252436154148
-Rikke M. Schnuchel,Rikke M. Schnuchel,Stor Bane,Stor Bane,boat_plot_28_rikke-m-schnuchel.csv,37,-0.17526280568033265,0.13942010237123198
-Thomas Pedersen,Thomas Pedersen,Stor Bane,Stor Bane,boat_plot_29_thomas-pedersen.csv,37,-0.1308788370104847,0.16346546776265186
-Thomas Yde,Thomas Yde,Lille Bane,Lille Bane,boat_plot_30_thomas-yde.csv,37,-0.09109261184359405,0.22136662035072402
+competitor,competitor_display,group,group_display,data_csv,percent_data_csv,x_max,y_min,y_max
+Anders Albrecktsen Hansen,Anders Albrecktsen Hansen,Lille Bane,Lille Bane,boat_plot_anders-albrecktsen-hansen.csv,boat_plot_anders-albrecktsen-hansen_percent.csv,18,-0.0754549045336547,0.054225885907104594
+Anders VESTERØ,Anders Vesterø,Stor Bane,Stor Bane,boat_plot_anders-vester.csv,boat_plot_anders-vester_percent.csv,34,-0.09074130816089884,0.10990776557756357
+Anna Kiel GRUD,Anna Kiel Grud,Lille Bane,Lille Bane,boat_plot_anna-kiel-grud.csv,boat_plot_anna-kiel-grud_percent.csv,3,-0.11603576539796398,0.11603576539796401
+Anni Lauridsen,Anni Lauridsen,Lille Bane,Lille Bane,boat_plot_anni-lauridsen.csv,boat_plot_anni-lauridsen_percent.csv,18,-0.10729952532592085,0.09483593544375735
+Asger SCHOU,Asger Schou,Lille Bane,Lille Bane,boat_plot_asger-schou.csv,boat_plot_asger-schou_percent.csv,18,-0.09441518838960139,0.3039377556583401
+Axel THOMSEN,Axel Thomsen,Stor Bane,Stor Bane,boat_plot_axel-thomsen.csv,boat_plot_axel-thomsen_percent.csv,54,-0.24542659153656202,0.11494299292864489
+Blue X,Blue X,Stor Bane,Stor Bane,boat_plot_blue-x.csv,boat_plot_blue-x_percent.csv,54,-0.10435573194697997,0.11509644661235356
+Bo BODDUM,Bo Boddum,Stor Bane,Stor Bane,boat_plot_bo-boddum.csv,boat_plot_bo-boddum_percent.csv,54,-0.23551862885221028,0.15319283238073075
+Casper Lyhne,Casper Lyhne,Stor Bane,Stor Bane,boat_plot_casper-lyhne.csv,boat_plot_casper-lyhne_percent.csv,54,-0.1820588003361639,0.10735308212111934
+Christian GREJS,Christian Grejs,Stor Bane,Stor Bane,boat_plot_christian-grejs.csv,boat_plot_christian-grejs_percent.csv,54,-0.20712555626144716,0.05945498382033419
+Christian LINDHOLST,Christian Lindholst,Stor Bane,Stor Bane,boat_plot_christian-lindholst.csv,boat_plot_christian-lindholst_percent.csv,54,-0.09671983697551681,0.18473249195279207
+Christian Løvgren Persson,Christian Løvgren Persson,Lille Bane,Lille Bane,boat_plot_christian-l-vgren-persson.csv,boat_plot_christian-l-vgren-persson_percent.csv,20,-0.09070559884209854,0.14272551602061018
+Claus BÜLOW,Claus Bülow,Stor Bane,Stor Bane,boat_plot_claus-bulow.csv,boat_plot_claus-bulow_percent.csv,51,-0.1531708789928532,0.14009972357718573
+Erik VANGSGAARD,Erik Vangsgaard,Stor Bane,Stor Bane,boat_plot_erik-vangsgaard.csv,boat_plot_erik-vangsgaard_percent.csv,51,-0.06951303845656703,0.15214837036630763
+Esben HARDER,Esben Harder,Lille Bane,Lille Bane,boat_plot_esben-harder.csv,boat_plot_esben-harder_percent.csv,54,-0.18502791949805347,0.12620488218579964
+Frederik Futtrup,Frederik Futtrup,Lille Bane,Lille Bane,boat_plot_frederik-futtrup.csv,boat_plot_frederik-futtrup_percent.csv,17,-0.08033116114863395,0.08230350176796909
+Harpelunde Senior,Harpelunde Senior,Lille Bane,Lille Bane,boat_plot_harpelunde-senior.csv,boat_plot_harpelunde-senior_percent.csv,17,-0.09619670707609738,0.05889613254971783
+Henrik AXELSEN,Henrik Axelsen,Lille Bane,Lille Bane,boat_plot_henrik-axelsen.csv,boat_plot_henrik-axelsen_percent.csv,54,-0.18880047177991413,0.09680266875890321
+Henrik Gersling,Henrik Gersling,Stor Bane,Stor Bane,boat_plot_henrik-gersling.csv,boat_plot_henrik-gersling_percent.csv,38,-0.07543814761132435,0.12003018636894823
+Henrik ZÜRICHO,Henrik Züricho,Stor Bane,Stor Bane,boat_plot_henrik-zuricho.csv,boat_plot_henrik-zuricho_percent.csv,54,-0.0726132708635033,0.14970727145781215
+Horacio Bulacio,Horacio Bulacio,Lille Bane,Lille Bane,boat_plot_horacio-bulacio.csv,boat_plot_horacio-bulacio_percent.csv,20,-0.1437208573474612,0.08765685408475087
+Ilan HURVITZ,Ilan Hurvitz,Lille Bane,Lille Bane,boat_plot_ilan-hurvitz.csv,boat_plot_ilan-hurvitz_percent.csv,54,-0.1004044974109769,0.15592041012984625
+Inger STOKKINK,Inger Stokkink,Lille Bane,Lille Bane,boat_plot_inger-stokkink.csv,boat_plot_inger-stokkink_percent.csv,54,-0.1431874687049119,0.10863028808138855
+Jan Ilsø Sørensen,Jan Ilsø Sørensen,Stor Bane,Stor Bane,boat_plot_jan-ils-s-rensen.csv,boat_plot_jan-ils-s-rensen_percent.csv,20,-0.07907237081701181,0.11175528817407386
+Jan SKYTTE,Jan Skytte,Lille Bane,Lille Bane,boat_plot_jan-skytte.csv,boat_plot_jan-skytte_percent.csv,16,-0.04002974419906586,0.1939114015937542
+Jannik PUGGAARD,Jannik Puggaard,Lille Bane,Lille Bane,boat_plot_jannik-puggaard.csv,boat_plot_jannik-puggaard_percent.csv,18,-0.13564895771735766,0.039747879815973455
+Jens Due OLSEN,Jens Due Olsen,Lille Bane,Lille Bane,boat_plot_jens-due-olsen.csv,boat_plot_jens-due-olsen_percent.csv,54,-0.07811623745049179,0.1538204665318421
+Jens ESKILDSEN,Jens Eskildsen,Stor Bane,Stor Bane,boat_plot_jens-eskildsen.csv,boat_plot_jens-eskildsen_percent.csv,3,-0.11645264496514089,0.07249371041470666
+Jesper HARPELUNDE,Jesper Harpelunde,Lille Bane,Lille Bane,boat_plot_jesper-harpelunde.csv,boat_plot_jesper-harpelunde_percent.csv,16,-0.0842513567904032,0.14347265822265803
+Jesper THYGESEN,Jesper Thygesen,Lille Bane,Lille Bane,boat_plot_jesper-thygesen.csv,boat_plot_jesper-thygesen_percent.csv,38,-0.067562016323801,0.20752597301846298
+Joachim BERG,Joachim Berg,Stor Bane,Stor Bane,boat_plot_joachim-berg.csv,boat_plot_joachim-berg_percent.csv,34,-0.32860120167894835,0.08549758816629387
+John AMBY,John Amby,Lille Bane,Lille Bane,boat_plot_john-amby.csv,boat_plot_john-amby_percent.csv,54,-0.12672931612375526,0.13304384602004268
+Klaus Lauridsen,Klaus Lauridsen,Stor Bane,Stor Bane,boat_plot_klaus-lauridsen.csv,boat_plot_klaus-lauridsen_percent.csv,18,-0.11116263847108405,0.04230168973304523
+Lotte MARKERT,Lotte Markert,Lille Bane,Lille Bane,boat_plot_lotte-markert.csv,boat_plot_lotte-markert_percent.csv,35,-0.2866794396944793,0.05799351902559276
+Martin Rasmussen,Martin Rasmussen,Lille Bane,Lille Bane,boat_plot_martin-rasmussen.csv,boat_plot_martin-rasmussen_percent.csv,38,-0.07089027312121263,0.2722927482916334
+Mikkel HOLME,Mikkel Holme,Lille Bane,Lille Bane,boat_plot_mikkel-holme.csv,boat_plot_mikkel-holme_percent.csv,3,-0.17930147581087064,0.11961684334586438
+Mikkel VINTER,Mikkel Vinter,Lille Bane,Lille Bane,boat_plot_mikkel-vinter.csv,boat_plot_mikkel-vinter_percent.csv,34,-0.23680229773511918,0.08349031631954229
+Morten HOFFMANN,Morten Hoffmann,Stor Bane,Stor Bane,boat_plot_morten-hoffmann.csv,boat_plot_morten-hoffmann_percent.csv,34,-0.07440702834835805,0.21393029035959926
+Morten Juul CHRISTENSEN,Morten Juul Christensen,Stor Bane,Stor Bane,boat_plot_morten-juul-christensen.csv,boat_plot_morten-juul-christensen_percent.csv,54,-0.09632302008218951,0.11845011233474155
+Niklas Bomholt,Niklas Bomholt,Stor Bane,Stor Bane,boat_plot_niklas-bomholt.csv,boat_plot_niklas-bomholt_percent.csv,33,-0.0646138671288768,0.27559812311597065
+Ole KRISTIANSEN,Ole Kristiansen,Stor Bane,Stor Bane,boat_plot_ole-kristiansen.csv,boat_plot_ole-kristiansen_percent.csv,18,-0.07260545263912568,0.06869191735729598
+Ole RASMUSSEN,Ole Rasmussen,Lille Bane,Lille Bane,boat_plot_ole-rasmussen.csv,boat_plot_ole-rasmussen_percent.csv,35,-0.17731984099939652,0.11892180258356143
+Oluf GRØNKJÆR,Oluf Grønkjær,Lille Bane,Lille Bane,boat_plot_oluf-gr-nkj-r.csv,boat_plot_oluf-gr-nkj-r_percent.csv,54,-0.40665229829060284,0.15529685964243445
+Oskar Hansen,Oskar Hansen,Lille Bane,Lille Bane,boat_plot_oskar-hansen.csv,boat_plot_oskar-hansen_percent.csv,17,-0.08038939785245201,0.08333235020208811
+Peder FLARUP,Peder Flarup,Lille Bane,Lille Bane,boat_plot_peder-flarup.csv,boat_plot_peder-flarup_percent.csv,35,-0.06384078891360194,0.3321547796895232
+Per Brøker KRISTENSEN,Per Brøker Kristensen,Lille Bane,Lille Bane,boat_plot_per-br-ker-kristensen.csv,boat_plot_per-br-ker-kristensen_percent.csv,3,-0.11603576539796398,0.11603576539796401
+Peter Kok Jensen,Peter Kok Jensen,Stor Bane,Stor Bane,boat_plot_peter-kok-jensen.csv,boat_plot_peter-kok-jensen_percent.csv,17,-0.10122360161970666,0.09251463146326906
+Peter Paris JACOBSEN,Peter Paris Jacobsen,Lille Bane,Lille Bane,boat_plot_peter-paris-jacobsen.csv,boat_plot_peter-paris-jacobsen_percent.csv,3,-0.11603576539796398,0.11603576539796401
+Pia Olesen,Pia Olesen,Stor Bane,Stor Bane,boat_plot_pia-olesen.csv,boat_plot_pia-olesen_percent.csv,20,-0.14718568746744942,0.09448321126328466
+Rikke M. Schnuchel,Rikke M. Schnuchel,Lille Bane,Lille Bane,boat_plot_rikke-m-schnuchel.csv,boat_plot_rikke-m-schnuchel_percent.csv,54,-0.1843877343813253,0.12693812035242746
+Rune AAGAARD,Rune Aagaard,Lille Bane,Lille Bane,boat_plot_rune-aagaard.csv,boat_plot_rune-aagaard_percent.csv,34,-0.17998555975726768,0.0870196898741237
+Thomas PEDERSEN,Thomas Pedersen,Stor Bane,Stor Bane,boat_plot_thomas-pedersen.csv,boat_plot_thomas-pedersen_percent.csv,54,-0.14559151509662174,0.14894148390126155
+Thomas YDE,Thomas Yde,Lille Bane,Lille Bane,boat_plot_thomas-yde.csv,boat_plot_thomas-yde_percent.csv,16,-0.0959235950732516,0.1301529651783827
+Thomas Yde,Thomas Yde,Lille Bane,Lille Bane,boat_plot_thomas-yde-2.csv,boat_plot_thomas-yde-2_percent.csv,38,-0.06179706777647806,0.20921245089258553
+Tonni GADGAARD,Tonni Gadgaard,Lille Bane,Lille Bane,boat_plot_tonni-gadgaard.csv,boat_plot_tonni-gadgaard_percent.csv,51,-0.17063449679024006,0.06986798712954952
+Torben DUUS,Torben Duus,Lille Bane,Lille Bane,boat_plot_torben-duus.csv,boat_plot_torben-duus_percent.csv,16,-0.17068473504152817,0.4398735538407371

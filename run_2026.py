@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,8 +9,11 @@ from pathlib import Path
 
 def main() -> int:
     root = Path(__file__).resolve().parent
+    src = root / "src"
+    venv_python = root / ".venv" / "bin" / "python"
+    python_exec = str(venv_python) if venv_python.is_file() else sys.executable
     cmd = [
-        sys.executable,
+        python_exec,
         "-m",
         "m2s_combiner.cli",
         "--event-url",
@@ -22,7 +26,11 @@ def main() -> int:
         "low-point"
     ]
     cmd.extend(sys.argv[1:])
-    completed = subprocess.run(cmd, cwd=root)
+    env = os.environ.copy()
+    if src.is_dir():
+        existing = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = f"{src}{os.pathsep}{existing}" if existing else str(src)
+    completed = subprocess.run(cmd, cwd=root, env=env)
     return completed.returncode
 
 

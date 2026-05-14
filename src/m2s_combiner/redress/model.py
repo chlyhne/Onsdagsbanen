@@ -5,6 +5,7 @@ import json
 import math
 import multiprocessing
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -259,12 +260,14 @@ def _project_zero_sum_full_state(mean_values: np.ndarray, covariance: np.ndarray
     cov = _symmetrize_and_floor_covariance(covariance)
     if mean.size == 0:
         return mean, cov
-    ones = np.ones(mean.shape[0], dtype=float)
-    v = cov @ ones
-    denom = float(ones @ v)
+
+    # Gauge constraint is sum(x)=0, so the constraint vector is all-ones.
+    # For this case we can avoid generic matrix products and use row sums directly.
+    v = np.sum(cov, axis=1, dtype=float)
+    denom = float(np.sum(v, dtype=float))
     if not np.isfinite(denom) or denom <= EPS:
         return mean - float(np.mean(mean)), cov
-    correction = float(ones @ mean) / denom
+    correction = float(np.sum(mean, dtype=float)) / denom
     mean_projected = mean - v * correction
     cov_projected = cov - np.outer(v, v) / denom
     cov_projected = _symmetrize_and_floor_covariance(cov_projected)
@@ -277,11 +280,20 @@ def _project_active_zero_sum(mean_values: np.ndarray, covariance: np.ndarray, ac
     if not active_indices:
         return mean, cov
     active = np.array(sorted(set(int(idx) for idx in active_indices)), dtype=int)
-    sub_mean = mean[active]
+
     sub_cov = cov[np.ix_(active, active)]
-    projected_mean, projected_cov = _project_zero_sum_full_state(sub_mean, sub_cov)
-    mean[active] = projected_mean
-    cov[np.ix_(active, active)] = projected_cov
+    sub_mean = mean[active]
+
+    # Same sum(x_active)=0 gauge projection specialized to ones-constraint.
+    v = np.sum(sub_cov, axis=1, dtype=float)
+    denom = float(np.sum(v, dtype=float))
+    if not np.isfinite(denom) or denom <= EPS:
+        mean[active] = sub_mean - float(np.mean(sub_mean))
+        return mean, cov
+
+    correction = float(np.sum(sub_mean, dtype=float)) / denom
+    mean[active] = sub_mean - v * correction
+    cov[np.ix_(active, active)] = sub_cov - np.outer(v, v) / denom
     cov = _symmetrize_and_floor_covariance(cov)
     return mean, cov
 
@@ -1000,21 +1012,29 @@ def q_diagnostics(
     *,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    p0_from_q_scale: float | None = None,
     rmse_cache: dict[float, tuple[float, int]] | None = None,
     mle_cache: dict[float, tuple[float, int]] | None = None,
+    progress_label: str | None = None,
+    progress_every: int = 10,
 ) -> pd.DataFrame:
+    progress_every = max(1, int(progress_every))
+    p0_scale = float(p0_from_q_scale) if p0_from_q_scale is not None else None
+    p0_fixed = float(max(EPS, initial_p0))
     rows: list[dict[str, float | int]] = []
-    for q_value in q_values:
+    for idx, q_value in enumerate(q_values, start=1):
         q_float = float(q_value)
+        p0_for_q = float(max(EPS, p0_scale * q_float)) if p0_scale is not None else p0_fixed
         rmse_score, rmse_obs = evaluate_q_score(
-            groups, q_float, "rmse", initial_x0=initial_x0, initial_p0=initial_p0, score_cache=rmse_cache
+            groups, q_float, "rmse", initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
         )
         mle_score, mle_obs = evaluate_q_score(
-            groups, q_float, "mle", initial_x0=initial_x0, initial_p0=initial_p0, score_cache=mle_cache
+            groups, q_float, "mle", initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
         )
         rows.append(
             {
                 "q_value": q_float,
+                "p0_value": p0_for_q,
                 "one_step_rmse_seconds": float(rmse_score),
                 "rmse_observations": int(rmse_obs),
                 "negative_log_likelihood": float(mle_score),
@@ -1022,6 +1042,12 @@ def q_diagnostics(
                 "observations": int(rmse_obs),
             }
         )
+        if progress_label and (idx % progress_every == 0 or idx == len(q_values)):
+            print(
+                f"[QDIAG {progress_label}] completed {idx}/{len(q_values)} q={q_float:.3e} "
+                f"rmse={float(rmse_score):.3f} nll={float(mle_score):.3f}",
+                flush=True,
+            )
     return pd.DataFrame(rows).sort_values("q_value").reset_index(drop=True)
 
 
@@ -1032,6 +1058,7 @@ def fit_global_q(
     *,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    p0_from_q_scale: float | None = None,
     score_cache: dict[float, tuple[float, int]] | None = None,
     n_workers: int | None = None,
     progress_label: str | None = None,
@@ -1040,6 +1067,7 @@ def fit_global_q(
     objective = resolve_q_objective(objective)
     x0_fixed = float(initial_x0)
     p0_fixed = float(max(EPS, initial_p0))
+    p0_scale = float(p0_from_q_scale) if p0_from_q_scale is not None else None
     progress_every = max(1, int(progress_every))
 
     if n_workers is None:
@@ -1057,8 +1085,12 @@ def fit_global_q(
     executor: concurrent.futures.ProcessPoolExecutor | None = None
     parallel_cache: dict[float, tuple[float, int]] = {}
     evaluated_scores: dict[float, tuple[float, int]] = {}
+    mp_context_name = str(os.getenv("REDRESS_MP_CONTEXT", "spawn")).strip().lower()
+    if mp_context_name not in {"spawn", "fork", "forkserver"}:
+        mp_context_name = "spawn"
+
     if use_parallel:
-        mp_context = multiprocessing.get_context("fork")
+        mp_context = multiprocessing.get_context(mp_context_name)
         executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=n_workers,
             mp_context=mp_context,
@@ -1091,12 +1123,13 @@ def fit_global_q(
             if executor is None:
                 computed: list[tuple[float, int]] = []
                 for idx, q_value in enumerate(missing, start=1):
+                    p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
                     result = evaluate_q_score(
                         groups,
                         q_value,
                         objective,
                         initial_x0=x0_fixed,
-                        initial_p0=p0_fixed,
+                        initial_p0=p0_for_q,
                         score_cache=score_cache,
                     )
                     computed.append(result)
@@ -1111,25 +1144,48 @@ def fit_global_q(
                         )
             else:
                 future_to_q = {
-                    executor.submit(_de_worker_evaluate, float(math.log(q_value)), x0_fixed, p0_fixed): q_value
+                    executor.submit(
+                        _de_worker_evaluate,
+                        float(math.log(q_value)),
+                        x0_fixed,
+                        float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed,
+                    ): q_value
                     for q_value in missing
                 }
                 computed_by_q: dict[float, tuple[float, int]] = {}
                 completed = 0
-                for future in concurrent.futures.as_completed(future_to_q):
-                    q_value = future_to_q[future]
-                    value = future.result()
-                    computed_by_q[q_value] = (float(value[0]), int(value[1]))
-                    completed += 1
-                    if progress_label and (completed % progress_every == 0 or completed == len(missing)):
-                        probe = results_by_q | computed_by_q
-                        best_q_local, best_res_local = min(probe.items(), key=lambda kv: kv[1][0])
-                        print(
-                            f"[QFIT {progress_label}] {stage_label} completed {len(probe)}/{len(unique_q_values)} "
-                            f"last q={q_value:.3e} obj={float(value[0]):.6f} "
-                            f"best objective={float(best_res_local[0]):.6f} q={best_q_local:.3e} obs={int(best_res_local[1])}",
-                            flush=True,
-                        )
+                pending: set[concurrent.futures.Future[tuple[float, int]]] = set(future_to_q.keys())
+                while pending:
+                    done, pending = concurrent.futures.wait(
+                        pending,
+                        timeout=15.0,
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    if not done:
+                        if progress_label:
+                            print(
+                                f"[QFIT {progress_label}] {stage_label} waiting... completed {completed}/{len(missing)} "
+                                f"pending={len(pending)}",
+                                flush=True,
+                            )
+                        continue
+                    for future in done:
+                        q_value = future_to_q[future]
+                        try:
+                            value = future.result()
+                        except Exception as exc:
+                            raise RuntimeError(f"Q evaluation worker failed for q={q_value:.3e} in stage '{stage_label}'") from exc
+                        computed_by_q[q_value] = (float(value[0]), int(value[1]))
+                        completed += 1
+                        if progress_label and (completed % progress_every == 0 or completed == len(missing)):
+                            probe = results_by_q | computed_by_q
+                            best_q_local, best_res_local = min(probe.items(), key=lambda kv: kv[1][0])
+                            print(
+                                f"[QFIT {progress_label}] {stage_label} completed {len(probe)}/{len(unique_q_values)} "
+                                f"last q={q_value:.3e} obj={float(value[0]):.6f} "
+                                f"best objective={float(best_res_local[0]):.6f} q={best_q_local:.3e} obs={int(best_res_local[1])}",
+                                flush=True,
+                            )
                 computed = [computed_by_q[q_value] for q_value in missing]
 
             for q_value, value in zip(missing, computed):
@@ -1153,35 +1209,136 @@ def fit_global_q(
     best_obs = 0
     if progress_label:
         worker_text = f"{n_workers} workers" if use_parallel else "single worker"
+        p0_text = f"{p0_scale:.1f}*q" if p0_scale is not None else f"{p0_fixed:.3e}"
         print(
-            f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0={p0_fixed:.3e} ({worker_text}, unordered completion in parallel mode)",
+            f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0={p0_text} "
+            f"({worker_text}, mp={mp_context_name}, unordered completion in parallel mode)",
             flush=True,
         )
     try:
         candidate_scores = evaluate_many(candidate_values, stage_label="grid")
+        best_grid_idx = 0
         for q_value in candidate_values:
             score, obs = candidate_scores[q_value]
             if score < best_score:
                 best_q = q_value
                 best_score = score
                 best_obs = obs
+                best_grid_idx = candidate_values.index(q_value)
 
-        for local_round in range(2):
-            local = sorted(set(max(search_min, min(Q_SEARCH_MAX, float(best_q * factor))) for factor in np.logspace(-0.7, 0.7, 21)))
-            if progress_label:
-                new_count = sum(1 for q in local if q not in evaluated_scores)
-                print(
-                    f"[QFIT {progress_label}] local-{local_round + 1} candidates={len(local)} new={new_count} "
-                    f"range=[{local[0]:.3e}, {local[-1]:.3e}]",
-                    flush=True,
+        # Stage 1.5: local log-space refinement around best grid region.
+        golden_bracket: tuple[float, float] | None = None
+        if len(candidate_values) >= 3:
+            left_idx = max(0, best_grid_idx - 1)
+            right_idx = min(len(candidate_values) - 1, best_grid_idx + 1)
+            q_left_local = float(candidate_values[left_idx])
+            q_right_local = float(candidate_values[right_idx])
+
+            if q_right_local < q_left_local:
+                q_left_local, q_right_local = q_right_local, q_left_local
+
+            # Expand if interval collapsed due clipping/duplicates.
+            if not (q_right_local > q_left_local):
+                q_left_local = float(max(search_min, best_q / 3.0))
+                q_right_local = float(min(Q_SEARCH_MAX, best_q * 3.0))
+
+            if q_right_local > q_left_local:
+                local_log_candidates = np.geomspace(q_left_local, q_right_local, 21, dtype=float)
+                local_values = sorted(
+                    set(
+                        float(max(search_min, min(Q_SEARCH_MAX, value)))
+                        for value in local_log_candidates
+                    )
+                    | {float(best_q)}
                 )
-            local_scores = evaluate_many(local, stage_label=f"local-{local_round + 1}")
-            for q_value in local:
-                score, obs = local_scores[q_value]
-                if score < best_score:
-                    best_q = q_value
-                    best_score = score
-                    best_obs = obs
+                local_scores = evaluate_many(local_values, stage_label="local-log")
+                best_local_idx = min(range(len(local_values)), key=lambda idx: local_scores[local_values[idx]][0])
+                for idx, q_value in enumerate(local_values):
+                    score, obs = local_scores[q_value]
+                    if score < best_score:
+                        best_q = q_value
+                        best_score = score
+                        best_obs = obs
+
+                if len(local_values) >= 3:
+                    lb_idx = max(0, best_local_idx - 1)
+                    rb_idx = min(len(local_values) - 1, best_local_idx + 1)
+                    golden_left = float(local_values[lb_idx])
+                    golden_right = float(local_values[rb_idx])
+                    if golden_right > golden_left:
+                        golden_bracket = (golden_left, golden_right)
+
+        # Stage 2: golden-section refinement in linear q-space, bracketed around best point.
+        if len(candidate_values) >= 3:
+            if golden_bracket is not None:
+                q_left, q_right = golden_bracket
+            else:
+                if best_grid_idx <= 0:
+                    q_left = candidate_values[0]
+                    q_right = candidate_values[1]
+                elif best_grid_idx >= len(candidate_values) - 1:
+                    q_left = candidate_values[-2]
+                    q_right = candidate_values[-1]
+                else:
+                    q_left = candidate_values[best_grid_idx - 1]
+                    q_right = candidate_values[best_grid_idx + 1]
+
+            q_left = float(max(search_min, min(Q_SEARCH_MAX, q_left)))
+            q_right = float(max(search_min, min(Q_SEARCH_MAX, q_right)))
+            if q_right < q_left:
+                q_left, q_right = q_right, q_left
+
+            # Expand if interval collapsed due clipping/duplicates.
+            if not (q_right > q_left):
+                q_left = float(max(search_min, best_q / 3.0))
+                q_right = float(min(Q_SEARCH_MAX, best_q * 3.0))
+
+            if q_right > q_left:
+                a = float(q_left)
+                b = float(q_right)
+                phi = (1.0 + math.sqrt(5.0)) / 2.0
+                invphi = 1.0 / phi
+                c = b - (b - a) * invphi
+                d = a + (b - a) * invphi
+
+                cd_scores = evaluate_many([float(c), float(d)], stage_label="golden-init")
+                fc, oc = cd_scores[float(c)]
+                fd, od = cd_scores[float(d)]
+                golden_iterations = 40
+                if progress_label:
+                    print(
+                        f"[QFIT {progress_label}] golden bracket=[{q_left:.3e}, {q_right:.3e}] iters={golden_iterations}",
+                        flush=True,
+                    )
+
+                for it in range(golden_iterations):
+                    if fc <= fd:
+                        b = d
+                        d = c
+                        fd = fc
+                        od = oc
+                        c = b - (b - a) * invphi
+                        q_c = float(c)
+                        eval_c = evaluate_many([q_c], stage_label=f"golden-{it + 1}")
+                        fc, oc = eval_c[q_c]
+                    else:
+                        a = c
+                        c = d
+                        fc = fd
+                        oc = od
+                        d = a + (b - a) * invphi
+                        q_d = float(d)
+                        eval_d = evaluate_many([q_d], stage_label=f"golden-{it + 1}")
+                        fd, od = eval_d[q_d]
+
+                    if progress_label and ((it + 1) % progress_every == 0 or it + 1 == golden_iterations):
+                        q_best_iter = float(c) if fc <= fd else float(d)
+                        f_best_iter = float(fc if fc <= fd else fd)
+                        print(
+                            f"[QFIT {progress_label}] golden iter {it + 1}/{golden_iterations} "
+                            f"best objective={f_best_iter:.6f} q={q_best_iter:.3e}",
+                            flush=True,
+                        )
     finally:
         if executor is not None:
             executor.shutdown(wait=True, cancel_futures=True)

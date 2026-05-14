@@ -22,13 +22,22 @@ def build_parser() -> argparse.ArgumentParser:
 		default="analysis",
 		help="Directory for generated CSV and TeX artifacts.",
 	)
+	parser.add_argument(
+		"--with-qdiag",
+		action="store_true",
+		help="Run q diagnostics sweep and export redress_2025_q_diagnostics.csv with full scores.",
+	)
 	return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
 	parser = build_parser()
 	args = parser.parse_args(list(argv) if argv is not None else None)
-	return run_pipeline(output_dir=Path(args.output_dir), q_objective=str(args.q_objective))
+	return run_pipeline(
+		output_dir=Path(args.output_dir),
+		q_objective=str(args.q_objective),
+		run_q_diagnostics=bool(args.with_qdiag),
+	)
 
 
 __all__ = ["build_parser", "main"]

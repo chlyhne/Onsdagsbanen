@@ -68,7 +68,8 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
         raise ValueError("No competitors matched allowed_competitors for boat-plot export.")
 
     manifest_rows: list[dict[str, Any]] = []
-    for idx, competitor in enumerate(competitors, start=1):
+    used_slug_names: set[str] = set()
+    for competitor in competitors:
         c = work[work["competitor"].astype(str) == competitor].copy()
         if c.empty:
             raise ValueError(f"No rows for competitor '{competitor}' during plot export.")
@@ -99,6 +100,7 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
 
         local_y_values = (
             plot_data["x_prior"].dropna().astype(float).tolist()
+            + plot_data["x_post"].dropna().astype(float).tolist()
             + plot_data["x_proc_q25"].dropna().astype(float).tolist()
             + plot_data["x_proc_q75"].dropna().astype(float).tolist()
             + plot_data["x_total_q25"].dropna().astype(float).tolist()
@@ -114,21 +116,29 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
         local_y_min -= local_pad
         local_y_max += local_pad
 
-        slug = slugify_filename(competitor)
-        data_name = f"boat_plot_{idx:02d}_{slug}.csv"
+        base_slug = slugify_filename(competitor) or "competitor"
+        slug = base_slug
+        suffix = 2
+        while slug in used_slug_names:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slug_names.add(slug)
+
+        data_name = f"boat_plot_{slug}.csv"
         data_path = output_dir / data_name
         plot_data.to_csv(data_path, index=False)
 
         percent_data = plot_data.loc[:, ["x_pos", "race_local", "race_display", "group", "series"]].copy()
         for source_col, target_col in [
-            ("x_prior", "prior_pct"), ("x_obs", "obs_pct"), ("x_proc_q25", "proc_q25_pct"), ("x_proc_q75", "proc_q75_pct"),
+            ("x_prior", "prior_pct"), ("x_post", "post_pct"), ("x_obs", "obs_pct"), ("x_proc_q25", "proc_q25_pct"), ("x_proc_q75", "proc_q75_pct"),
             ("x_total_q25", "total_q25_pct"), ("x_total_q75", "total_q75_pct"), ("x_q25", "q25_pct"), ("x_q75", "q75_pct"),
         ]:
             values_pct = 100.0 * (np.exp(pd.to_numeric(plot_data[source_col], errors="coerce")) - 1.0)
             values_pct = pd.to_numeric(values_pct, errors="coerce")
             values_pct = values_pct.where(np.isfinite(values_pct), np.nan)
             percent_data[target_col] = values_pct
-        percent_path = output_dir / f"boat_plot_{idx:02d}_{slug}_percent.csv"
+        percent_name = f"boat_plot_{slug}_percent.csv"
+        percent_path = output_dir / percent_name
         percent_data.to_csv(percent_path, index=False)
 
         group_for_competitor = str(plot_data["group"].dropna().astype(str).iloc[0]) if not plot_data["group"].dropna().empty else ""
@@ -141,6 +151,7 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
                 "group": group_for_competitor,
                 "group_display": display_name(group_for_competitor),
                 "data_csv": data_name,
+                "percent_data_csv": percent_name,
                 "x_max": int(plot_data["x_pos"].max()),
                 "y_min": float(local_y_min),
                 "y_max": float(local_y_max),
@@ -248,6 +259,145 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
     return tex_path
 
 
+def export_stor_bane_split_recommendation(
+    *,
+    manifest_path: Path,
+    boat_plot_data_dir: Path,
+    output_dir: Path,
+    group_name: str = "Stor Bane",
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tex_path = output_dir / "stor_bane_split_recommendation.tex"
+
+    manifest = pd.read_csv(manifest_path)
+    required_manifest_cols = ["competitor_display", "percent_data_csv"]
+    missing_manifest_cols = [column for column in required_manifest_cols if column not in manifest.columns]
+    if missing_manifest_cols:
+        raise ValueError(f"Missing required manifest columns for lane-split export: {', '.join(missing_manifest_cols)}")
+
+    rows: list[dict[str, Any]] = []
+    for row in manifest.itertuples(index=False):
+        competitor_display = str(getattr(row, "competitor_display", "")).strip()
+        percent_data_csv = str(getattr(row, "percent_data_csv", "")).strip()
+        if not percent_data_csv:
+            continue
+        percent_path = boat_plot_data_dir / percent_data_csv
+        if not percent_path.exists():
+            raise FileNotFoundError(f"Missing boat-plot percent CSV for lane-split export: {percent_path}")
+
+        series = pd.read_csv(percent_path)
+        required_series_cols = ["group", "prior_pct", "post_pct", "obs_pct"]
+        missing_series_cols = [column for column in required_series_cols if column not in series.columns]
+        if missing_series_cols:
+            raise ValueError(f"Missing required columns in {percent_data_csv}: {', '.join(missing_series_cols)}")
+
+        in_group = series[series["group"].astype(str) == str(group_name)].copy()
+        if in_group.empty:
+            continue
+
+        in_group = in_group.reset_index(drop=True)
+        latest = in_group.iloc[-1]
+        estimate_pct = pd.to_numeric(latest.get("post_pct"), errors="coerce")
+        if not np.isfinite(estimate_pct):
+            estimate_pct = pd.to_numeric(latest.get("prior_pct"), errors="coerce")
+        if not np.isfinite(estimate_pct):
+            continue
+
+        observation_rate = float(pd.to_numeric(in_group["obs_pct"], errors="coerce").notna().mean())
+        if not np.isfinite(observation_rate):
+            observation_rate = 0.0
+
+        rows.append(
+            {
+                "competitor_display": competitor_display,
+                "estimate_pct": float(estimate_pct),
+                "observation_rate": observation_rate,
+            }
+        )
+
+    if len(rows) < 2:
+        tex_path.write_text(
+            "\n".join(
+                [
+                    r"\subsection*{Forslag til opdeling af Stor Bane i to løb}",
+                    r"Der er ikke tilstrækkelige data til automatisk opdeling i to løb.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return tex_path
+
+    candidates = pd.DataFrame(rows).sort_values("estimate_pct", ascending=True).reset_index(drop=True)
+    n_boats = len(candidates)
+    best_split: dict[str, Any] | None = None
+    for split_index in range(1, n_boats):
+        fast = candidates.iloc[:split_index]
+        slow = candidates.iloc[split_index:]
+        expected_fast = float(fast["observation_rate"].sum())
+        expected_slow = float(slow["observation_rate"].sum())
+        expected_diff = abs(expected_fast - expected_slow)
+        n_fast = len(fast)
+        n_slow = len(slow)
+        tie_prefers_more_slow = 0 if n_slow > n_fast else 1
+        key = (expected_diff, tie_prefers_more_slow, abs(n_fast - n_slow), split_index)
+        candidate_split = {
+            "split_index": split_index,
+            "expected_fast": expected_fast,
+            "expected_slow": expected_slow,
+            "fast": fast,
+            "slow": slow,
+            "key": key,
+        }
+        if best_split is None or candidate_split["key"] < best_split["key"]:
+            best_split = candidate_split
+
+    if best_split is None:
+        raise RuntimeError("Could not determine a valid lane split for Stor Bane.")
+
+    fast = best_split["fast"]
+    slow = best_split["slow"]
+    expected_fast = float(best_split["expected_fast"])
+    expected_slow = float(best_split["expected_slow"])
+
+    def format_competitor_row(name: Any, estimate_pct: Any) -> str:
+        name_text = latex_escape_text(str(name))
+        estimate_value = float(estimate_pct)
+        return f"{name_text} (\\({estimate_value:+.2f}\\%\\))"
+
+    table_rows: list[str] = []
+    max_rows = max(len(fast), len(slow))
+    for i in range(max_rows):
+        left = ""
+        right = ""
+        if i < len(fast):
+            left_row = fast.iloc[i]
+            left = format_competitor_row(left_row["competitor_display"], left_row["estimate_pct"])
+        if i < len(slow):
+            right_row = slow.iloc[i]
+            right = format_competitor_row(right_row["competitor_display"], right_row["estimate_pct"])
+        table_rows.append(f"{left} & {right} \\\\")
+
+    tex_lines = [
+        r"\subsection*{Forslag til opdeling af Stor Bane i to løb}",
+        r"Hvis Stor Bane opdeles i to løb med de hurtigste både i løb 1 og de langsomste i løb 2, laves opdelingen automatisk fra de seneste færdighedsestimater.",
+        r"Her bruges seneste estimate pr. båd (posteriori ved tid $t$, ellers a priori). Splitpunktet vælges, så forventet antal startende pr. race bliver så ens som muligt baseret på historisk ikke-DNC-rate.",
+        f"Der er {n_boats} både i Stor Bane, og bedste balance fås med {len(fast)} både i Stor bane 1 og {len(slow)} både i Stor bane 2 (forventet fremmøde ca. {expected_fast:.2f} mod {expected_slow:.2f} både pr. race):",
+        r"",
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\begin{tabular}{ll}",
+        r"\toprule",
+        f"Stor bane 1 (hurtigste, {len(fast)} både) & Stor bane 2 (langsomste, {len(slow)} både) \\\\",
+        r"\midrule",
+        *table_rows,
+        r"\bottomrule",
+        r"\end{tabular}",
+        r"\end{table}",
+    ]
+    tex_path.write_text("\n".join(tex_lines), encoding="utf-8")
+    return tex_path
+
+
 def export_ml_fit_example(history: pd.DataFrame, *, output_dir: Path) -> list[Path]:
     observed = history[history["observed"] == True].copy()  # noqa: E712
     if observed.empty:
@@ -298,3 +448,159 @@ def export_ml_fit_example(history: pd.DataFrame, *, output_dir: Path) -> list[Pa
     pd.DataFrame({"time_seconds": empirical_sorted, "cdf": empirical_cdf}).to_csv(empirical_cdf_path, index=False)
     pd.DataFrame({"time_seconds": x_grid, "cdf": model_cdf}).to_csv(model_cdf_path, index=False)
     return [empirical_cdf_path, model_cdf_path]
+
+
+def _weighted_empirical_cdf(values: np.ndarray, weights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    order = np.argsort(values)
+    sorted_values = values[order]
+    sorted_weights = weights[order]
+    weight_sum = float(np.sum(sorted_weights))
+    if not np.isfinite(weight_sum) or weight_sum <= 0.0:
+        sorted_weights = np.ones_like(sorted_values, dtype=float)
+        weight_sum = float(len(sorted_weights))
+    cdf = np.cumsum(sorted_weights, dtype=float) / weight_sum
+    return sorted_values, cdf
+
+
+def export_race_cdf_appendix(history: pd.DataFrame, *, output_dir: Path, years: tuple[int, ...] = (2025, 2026)) -> tuple[Path, Path]:
+    required_columns = ["group", "race", "race_local", "year", "observed", "beregnet_seconds", "x_prior", "p_prior", "b_t_hat", "r_t"]
+    missing = [column for column in required_columns if column not in history.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for race CDF appendix export: {', '.join(missing)}")
+
+    work = history.copy()
+    work["year_num"] = pd.to_numeric(work["year"], errors="coerce")
+    work = work[work["year_num"].isin([int(year) for year in years])].copy()
+    work = work[work["observed"] == True].copy()  # noqa: E712
+    if work.empty:
+        raise ValueError(f"No observed rows found for race CDF appendix export for years {years}.")
+
+    work["race_local_norm"] = work["race_local"].astype(str).str.strip()
+    work["race_num"] = work["race_local_norm"].map(race_num)
+    work = work.dropna(subset=["race_num"]).copy()
+    if work.empty:
+        raise ValueError(f"No valid race labels found for race CDF appendix export for years {years}.")
+
+    data_dir = output_dir / "race_cdf_data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_rows: list[dict[str, Any]] = []
+    race_keys = (
+        work.loc[:, ["year_num", "race_num", "race_local_norm", "group", "race"]]
+        .drop_duplicates()
+        .sort_values(["year_num", "race_num", "race_local_norm", "group", "race"])
+        .itertuples(index=False, name=None)
+    )
+    for year_num, race_num_value, race_local_norm, group_name, race_label in race_keys:
+        sub = work[
+            (work["year_num"] == year_num)
+            & (work["race_local_norm"] == race_local_norm)
+            & (work["group"].astype(str) == str(group_name))
+            & (work["race"].astype(str) == str(race_label))
+        ].copy()
+        if sub.empty:
+            continue
+
+        beregnet_seconds = pd.to_numeric(sub["beregnet_seconds"], errors="coerce")
+        x_prior = pd.to_numeric(sub["x_prior"], errors="coerce")
+        p_prior = pd.to_numeric(sub["p_prior"], errors="coerce")
+        r_values = pd.to_numeric(sub["r_t"], errors="coerce")
+        b_values = pd.to_numeric(sub["b_t_hat"], errors="coerce")
+        r_finite = r_values[np.isfinite(r_values)]
+        b_finite = b_values[np.isfinite(b_values)]
+        if r_finite.empty or b_finite.empty:
+            continue
+        r_t = float(r_finite.iloc[0])
+        mu_hat = float(b_finite.iloc[0])
+
+        corrected_time_seconds = beregnet_seconds / np.exp(x_prior)
+        valid_mask = (
+            np.isfinite(corrected_time_seconds.to_numpy(dtype=float))
+            & np.isfinite(p_prior.to_numpy(dtype=float))
+            & (corrected_time_seconds.to_numpy(dtype=float) > 0.0)
+            & (p_prior.to_numpy(dtype=float) >= 0.0)
+        )
+        if int(np.sum(valid_mask)) < 3:
+            continue
+
+        corrected = corrected_time_seconds.to_numpy(dtype=float)[valid_mask]
+        p_vec = p_prior.to_numpy(dtype=float)[valid_mask]
+        weight_den = np.maximum(EPS, p_vec + max(EPS, float(r_t)))
+        weights = 1.0 / weight_den
+        weights = np.where(np.isfinite(weights) & (weights > 0.0), weights, 0.0)
+        if float(np.sum(weights)) <= 0.0:
+            weights = np.ones_like(corrected, dtype=float)
+        weights = weights / float(np.sum(weights))
+
+        empirical_sorted, empirical_cdf = _weighted_empirical_cdf(corrected, weights)
+
+        sigma_components = np.sqrt(np.maximum(EPS, p_vec + max(EPS, float(r_t))))
+        sigma_ref = float(np.sqrt(np.average(np.square(sigma_components), weights=weights)))
+        x_min = min(float(np.min(corrected)) * 0.92, float(np.exp(mu_hat - 4.0 * sigma_ref)))
+        x_max = max(float(np.max(corrected)) * 1.08, float(np.exp(mu_hat + 4.0 * sigma_ref)))
+        x_grid = np.linspace(max(EPS, x_min), x_max, 500, dtype=float)
+        log_x = np.log(x_grid)
+        model_cdf_parts: list[np.ndarray] = []
+        for sigma_i in sigma_components:
+            z = (log_x - mu_hat) / (float(sigma_i) * math.sqrt(2.0))
+            cdf_i = 0.5 * (1.0 + np.array([math.erf(float(zv)) for zv in z], dtype=float))
+            model_cdf_parts.append(cdf_i)
+        model_cdf = np.average(np.vstack(model_cdf_parts), axis=0, weights=weights)
+        model_cdf = np.clip(model_cdf, 0.0, 1.0)
+
+        race_slug = slugify_filename(str(race_local_norm)) or f"race-{int(race_num_value)}"
+        group_slug = slugify_filename(str(group_name)) or "group"
+        stem = f"race_cdf_{int(year_num)}_{group_slug}_{race_slug}"
+        empirical_name = f"{stem}_empirical.csv"
+        model_name = f"{stem}_model.csv"
+        empirical_path = data_dir / empirical_name
+        model_path = data_dir / model_name
+
+        pd.DataFrame({"time_seconds": empirical_sorted, "cdf": empirical_cdf}).to_csv(empirical_path, index=False)
+        pd.DataFrame({"time_seconds": x_grid, "cdf": model_cdf}).to_csv(model_path, index=False)
+
+        manifest_rows.append(
+            {
+                "year": int(year_num),
+                "race_num": int(race_num_value),
+                "race_local": str(race_local_norm),
+                "race": str(race_label),
+                "group": str(group_name),
+                "group_display": display_name(str(group_name)),
+                "n_observed": int(len(corrected)),
+                "empirical_csv": empirical_name,
+                "model_csv": model_name,
+            }
+        )
+
+    if not manifest_rows:
+        raise ValueError(f"No race CDF files could be exported for years {years}.")
+
+    manifest = pd.DataFrame(manifest_rows).sort_values(["year", "race_num", "group", "race"]).reset_index(drop=True)
+    manifest_path = output_dir / "race_cdf_manifest.csv"
+    manifest.to_csv(manifest_path, index=False)
+
+    tex_lines: list[str] = [
+        r"\clearpage",
+        r"\section{Racevise CDF-plots (2025--2026)}",
+        r"Dette afsnit viser for hvert r\ae s en empirisk CDF af korrigerede tider samt model-CDF'en.",
+        r"Empirisk CDF er v\ae gtet med inverse variansv\ae gte, \(w_i \propto 1/(p_{i,t}^- + \hat{\sigma}_{y,t}^2)\), normaliseret til sum 1.",
+        r"",
+    ]
+
+    for row in manifest.itertuples(index=False):
+        title = f"{int(row.year)} {str(row.race_local)} ({str(row.group_display)})"
+        title_escaped = latex_escape_text(title)
+        empirical_rel = f"../analysis/race_cdf_data/{row.empirical_csv}"
+        model_rel = f"../analysis/race_cdf_data/{row.model_csv}"
+        tex_lines.extend(
+            [
+                r"\clearpage",
+                rf"\RaceCdfPlotFromCsv{{{title_escaped}}}{{{empirical_rel}}}{{{model_rel}}}{{{int(row.n_observed)}}}",
+                r"",
+            ]
+        )
+
+    tex_path = output_dir / "race_cdf_appendix.tex"
+    tex_path.write_text("\n".join(tex_lines), encoding="utf-8")
+    return manifest_path, tex_path
