@@ -21,7 +21,10 @@ from .constants import Z50
 from .exports import export_boat_plot_data
 from .exports import export_missing_race_prediction_tables
 from .exports import export_ml_fit_example
+from .exports import export_stor_bane_split_recommendation
 from .model import estimate_global_q
+from .model import estimate_initial_p0_from_first_observations
+from .model import estimate_initial_x0_from_first_observations
 from .model import evaluate_q_score
 from .model import fit_global_q
 from .model import load_group_q_cache
@@ -32,75 +35,53 @@ from .model import run_all_groups_with_transfer
 from .model import save_group_q_cache
 
 
-def _fit_group_qs(groups: list[dict[str, Any]], *, output_dir: Path, q_objective: str) -> tuple[dict[str, float], list[dict[str, Any]], pd.DataFrame, bool, Path]:
+def _fit_group_qs(
+    groups: list[dict[str, Any]],
+    *,
+    output_dir: Path,
+    q_objective: str,
+) -> tuple[dict[str, float], dict[str, float], dict[str, float], list[dict[str, Any]], pd.DataFrame, bool, Path]:
     q_grid = np.logspace(math.log10(Q_SEARCH_MIN), math.log10(Q_SEARCH_MAX), 61, dtype=float)
     q_cache_path = q_cache_path_for_objective(output_dir, q_objective)
     cached_q_map = load_group_q_cache(q_cache_path)
-    missing_q_groups = [str(group["group"]) for group in groups if str(group["group"]) not in cached_q_map]
-    using_cached_q = bool(cached_q_map) and not missing_q_groups
+    using_cached_q = bool(cached_q_map)
 
     q_by_group: dict[str, float] = {}
+    x0_by_group: dict[str, float] = {}
+    p0_by_group: dict[str, float] = {}
     q_fit_rows: list[dict[str, Any]] = []
     q_diag_frames: list[pd.DataFrame] = []
 
-    if using_cached_q:
-        for group in groups:
-            group_name = str(group["group"])
-            initial_q = estimate_global_q(group["combined"])
-            group_q = float(cached_q_map[group_name])
-            rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse")
-            mle_score, mle_obs = evaluate_q_score([group], group_q, "mle")
-            fit_score, fit_obs = (mle_score, mle_obs) if q_objective == "mle" else (rmse_score, rmse_obs)
-            q_by_group[group_name] = group_q
-            q_fit_rows.append(
-                {
-                    "group": group_name,
-                    "initial_q": float(initial_q),
-                    "fitted_q": group_q,
-                    "fit_objective": q_objective,
-                    "fit_score": float(fit_score),
-                    "fit_obs": int(fit_obs),
-                    "one_step_rmse_seconds": float(rmse_score),
-                    "rmse_observations": int(rmse_obs),
-                    "negative_log_likelihood": float(mle_score),
-                    "nll_observations": int(mle_obs),
-                    "q_source": "cache",
-                }
-            )
-            q_diag_frames.append(
-                pd.DataFrame(
-                    [
-                        {
-                            "group": group_name,
-                            "q_value": group_q,
-                            "fit_objective": q_objective,
-                            "one_step_rmse_seconds": float(rmse_score),
-                            "rmse_observations": int(rmse_obs),
-                            "negative_log_likelihood": float(mle_score),
-                            "nll_observations": int(mle_obs),
-                            "observations": int(rmse_obs),
-                            "source": "cache",
-                        }
-                    ]
-                )
-            )
-        return q_by_group, q_fit_rows, pd.concat(q_diag_frames, ignore_index=True), using_cached_q, q_cache_path
-
     for group in groups:
         group_name = str(group["group"])
-        initial_q = estimate_global_q(group["combined"])
-        rmse_score_cache: dict[float, tuple[float, int]] = {}
-        mle_score_cache: dict[float, tuple[float, int]] = {}
-        fit_score_cache = mle_score_cache if q_objective == "mle" else rmse_score_cache
-        group_q, fit_score, fit_obs = fit_global_q([group], initial_q=initial_q, objective=q_objective, score_cache=fit_score_cache)
-        rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse", score_cache=rmse_score_cache)
-        mle_score, mle_obs = evaluate_q_score([group], group_q, "mle", score_cache=mle_score_cache)
+        estimated_initial_q = estimate_global_q(group["combined"])
+        initial_q_for_fit = float(cached_q_map.get(group_name, estimated_initial_q))
+        group_x0 = float(estimate_initial_x0_from_first_observations(group))
+        group_p0 = float(estimate_initial_p0_from_first_observations(group))
+        group_q, fit_score, fit_obs = fit_global_q(
+            [group],
+            initial_q=initial_q_for_fit,
+            objective=q_objective,
+            initial_x0=group_x0,
+            initial_p0=group_p0,
+            progress_label=group_name,
+            progress_every=1,
+        )
+        rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse", initial_x0=group_x0, initial_p0=group_p0)
+        mle_score, mle_obs = evaluate_q_score([group], group_q, "mle", initial_x0=group_x0, initial_p0=group_p0)
         q_by_group[group_name] = float(group_q)
+        x0_by_group[group_name] = float(group_x0)
+        p0_by_group[group_name] = float(group_p0)
         q_fit_rows.append(
             {
                 "group": group_name,
-                "initial_q": float(initial_q),
+                "initial_q": float(initial_q_for_fit),
+                "estimated_initial_q": float(estimated_initial_q),
                 "fitted_q": float(group_q),
+                "fitted_x0": float(group_x0),
+                "fitted_p0": float(group_p0),
+                "x0_source": "fixed-first-observation-mean",
+                "p0_source": "fixed-first-observation-variance",
                 "fit_objective": q_objective,
                 "fit_score": float(fit_score),
                 "fit_obs": int(fit_obs),
@@ -108,18 +89,20 @@ def _fit_group_qs(groups: list[dict[str, Any]], *, output_dir: Path, q_objective
                 "rmse_observations": int(rmse_obs),
                 "negative_log_likelihood": float(mle_score),
                 "nll_observations": int(mle_obs),
-                "q_source": "fitted",
+                "q_source": "q-only-fit",
             }
         )
-        group_diag = q_diagnostics([group], q_grid, rmse_cache=rmse_score_cache, mle_cache=mle_score_cache)
+        group_diag = q_diagnostics([group], q_grid, initial_x0=group_x0, initial_p0=group_p0)
         group_diag["group"] = group_name
         group_diag["fit_objective"] = q_objective
-        group_diag["source"] = "fitted"
+        group_diag["x0_value"] = float(group_x0)
+        group_diag["p0_value"] = float(group_p0)
+        group_diag["source"] = "joint-fit"
         q_diag_frames.append(group_diag)
 
     save_group_q_cache(q_cache_path, q_by_group)
     q_diag = pd.concat(q_diag_frames, ignore_index=True) if q_diag_frames else pd.DataFrame()
-    return q_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path
+    return q_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path
 
 
 def _enrich_history(history: pd.DataFrame, competitor_year_group: dict[tuple[str, int], str]) -> pd.DataFrame:
@@ -222,9 +205,16 @@ def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | N
     if not groups or all_data.empty:
         raise RuntimeError("No group data could be built.")
 
-    q_by_group, _, _, _, _ = _fit_group_qs(groups, output_dir=cache_dir, q_objective=q_objective)
+    q_by_group, x0_by_group, p0_by_group, _, _, _, _ = _fit_group_qs(groups, output_dir=cache_dir, q_objective=q_objective)
     competitor_year_group = build_competitor_year_group_map(all_data, NON_OBS_STATUSES)
-    history, _, _ = run_all_groups_with_transfer(groups, q_by_group, competitor_year_group, collect_history=True)
+    history, _, _ = run_all_groups_with_transfer(
+        groups,
+        q_by_group,
+        competitor_year_group,
+        initial_x0_by_group=x0_by_group,
+        initial_p0_by_group=p0_by_group,
+        collect_history=True,
+    )
     history = history.sort_values(["group", "competitor", "race_date", "race"], ascending=[True, True, True, True]).reset_index(drop=True)
     history = _enrich_history(history, competitor_year_group)
 
@@ -249,9 +239,20 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
     if not groups or all_data.empty:
         raise RuntimeError("No group data could be built.")
 
-    q_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path = _fit_group_qs(groups, output_dir=output_dir, q_objective=q_objective)
+    q_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path = _fit_group_qs(
+        groups,
+        output_dir=output_dir,
+        q_objective=q_objective,
+    )
     competitor_year_group = build_competitor_year_group_map(all_data, NON_OBS_STATUSES)
-    history, _, _ = run_all_groups_with_transfer(groups, q_by_group, competitor_year_group, collect_history=True)
+    history, _, _ = run_all_groups_with_transfer(
+        groups,
+        q_by_group,
+        competitor_year_group,
+        initial_x0_by_group=x0_by_group,
+        initial_p0_by_group=p0_by_group,
+        collect_history=True,
+    )
     history = history.sort_values(["group", "competitor", "race_date", "race"], ascending=[True, True, True, True]).reset_index(drop=True)
     history = _enrich_history(history, competitor_year_group)
 
@@ -259,12 +260,19 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
     active_2026_competitors = {competitor for (competitor, year), _group in competitor_year_group.items() if int(year) == int(PLOT_ACTIVE_YEAR)}
 
     all_predictions = history.copy()
-    manifest_path = export_boat_plot_data(all_predictions, allowed_competitors=active_2026_competitors, output_dir=output_dir / "boat_plot_data")
+    boat_plot_data_dir = output_dir / "boat_plot_data"
+    manifest_path = export_boat_plot_data(all_predictions, allowed_competitors=active_2026_competitors, output_dir=boat_plot_data_dir)
+    stor_bane_split_tex_path = export_stor_bane_split_recommendation(
+        manifest_path=manifest_path,
+        boat_plot_data_dir=boat_plot_data_dir,
+        output_dir=output_dir,
+        group_name="Stor Bane",
+    )
     missing_race_prediction_tables_tex_path = export_missing_race_prediction_tables(history, output_dir=output_dir, years=(2026,))
     ml_fit_example_paths = export_ml_fit_example(history, output_dir=output_dir)
 
     if using_cached_q:
-        print(f"Loaded group Q from cache: {q_cache_path} (fit objective={q_objective})")
+        print(f"Loaded group Q cache (as start values): {q_cache_path} (fit objective={q_objective})")
     else:
         print(f"Saved fitted group Q to cache: {q_cache_path} (fit objective={q_objective})")
 
@@ -273,13 +281,25 @@ def run_pipeline(*, output_dir: Path, q_objective: str) -> int:
         print(
             f"{row['group']}: initial Q={row['initial_q']:.3e}, "
             f"fitted Q={row['fitted_q']:.3e}, "
+            f"x0(fixed)={row['fitted_x0']:+.4f}, "
+            f"p0(fixed)={row['fitted_p0']:.3e}, "
             f"fit-objective={row['fit_objective']}, {metric_text} over {int(row['fit_obs'])} observations, "
             f"RMSE@Q={float(row['one_step_rmse_seconds']):.3f}, "
             f"NLL@Q={float(row['negative_log_likelihood']):.3f} "
             f"({row['q_source']})"
         )
 
-    for path in [core_paths["history"], core_paths["observed"], core_paths["latest"], core_paths["race"], core_paths["q_diag"], manifest_path, missing_race_prediction_tables_tex_path, *ml_fit_example_paths]:
+    for path in [
+        core_paths["history"],
+        core_paths["observed"],
+        core_paths["latest"],
+        core_paths["race"],
+        core_paths["q_diag"],
+        manifest_path,
+        stor_bane_split_tex_path,
+        missing_race_prediction_tables_tex_path,
+        *ml_fit_example_paths,
+    ]:
         print(f"Wrote: {path}")
     print("Note: This pipeline exports analysis artifacts and TeX fragments, but does not build the PDF report.")
     return 0

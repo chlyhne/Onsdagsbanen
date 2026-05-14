@@ -105,7 +105,7 @@ MLE-estimatet for procesvariansen vælges derefter som
 \begin{flalign}
 \hspace{2cm} \hat{\sigma}_x^2 &= \arg\min_{\sigma_x^2\in[\sigma_{x,\min}^2,\sigma_{x,\max}^2]} \mathcal{L}(\sigma_x^2). &&
 \end{flalign}
-I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$, hvor målfunktionen evalueres for kandidatværdier, og den bedste vælges.
+I praksis findes denne værdi med en endimensional (1D) søgemetode over intervallet $[\sigma_{x,\min}^2,\sigma_{x,\max}^2]$, hvor målfunktionen evalueres for kandidatværdier, og den bedste vælges. Implementeringen bruger en fast kandidatlinje med lokal forfining omkring bedste punkt; kandidat-evalueringerne kan køres parallelt af hensyn til runtime.
 
 Intuitionen er den samme som før: en for lille $\sigma_x^2$ gør modellen for træg, mens en for stor $\sigma_x^2$ gør den for nervøs. Balancen bestemmes her af den samlede sandsynlighed under modellen.
 
@@ -174,3 +174,47 @@ legend columns=2,
 \end{figure}
 
 Hvis et ræs ser usædvanligt uroligt ud, bliver $\hat{\sigma}_{y,t}^2$ høj, og så bliver Kalman-forstærkningen automatisk lav. Modellen lærer altså kun lidt af et mærkeligt ræs.
+
+\subsection{Eftertanke: Fuld kovarians og identifikation}
+Den foregående fremstilling bruger en diagonal approximation af usikkerheden mellem bådene. I den endelige implementering er dette løftet til en fuld kovariansmodel uden nye strukturelle frihedsgrader. Her fitter vi kun $\sigma_x^2$. Parametrene $(x_0,p_0)$ fastsættes direkte fra data for nye både: $x_0$ sættes til gennemsnittet af første observerede performance, og $p_0$ sættes til variansen af disse første performance-observationer.
+
+Idéen er at samle alle bådes niveauer i en vektor $x_t\in\mathbb{R}^n$ med kovariansmatrix $P_t\in\mathbb{R}^{n\times n}$. Prediktionen skrives da som
+\begin{flalign}
+\hspace{2cm} \hat{x}_t^- &= \hat{x}_{t-1}^+, \qquad
+P_t^- = P_{t-1}^+ + Q_t, &&
+\end{flalign}
+hvor $Q_t$ er diagonal med elementer $\Delta T_{i,t}\sigma_x^2$.
+
+For de både, der observeres i ræs $t$, skrives målemodellen i vektorform
+\begin{flalign}
+\hspace{2cm} y_t &= H_t x_t + \mu_{y,t}\mathbf{1} + \varepsilon_t, \qquad
+\varepsilon_t\sim \mathcal{N}(0,\sigma_{y,t}^2 I). &&
+\end{flalign}
+Her er $H_t$ en selektionsmatrix, og den relevante prior-kovarians er $P_{oo,t}^- = H_t P_t^- H_t^\top$. For en fast $\sigma_{y,t}^2$ fås
+\begin{flalign}
+\hspace{2cm} \hat{\mu}_{y,t}(\sigma^2) &=
+\frac{\mathbf{1}^\top S_t(\sigma^2)^{-1}\left(y_t-H_t\hat{x}_t^-\right)}
+{\mathbf{1}^\top S_t(\sigma^2)^{-1}\mathbf{1}}, \qquad
+S_t(\sigma^2)=P_{oo,t}^-+\sigma^2 I, &&
+\end{flalign}
+og $\hat{\sigma}_{y,t}^2$ findes igen ved 1D ML-søgning.
+
+Posterior-opdateringen er den sædvanlige multivariate Kalman-opdatering
+\begin{flalign}
+\hspace{2cm} K_t &= P_t^-H_t^\top\!\left(H_tP_t^-H_t^\top+\hat{\sigma}_{y,t}^2I\right)^{-1}, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} \hat{x}_t^+ &= \hat{x}_t^- + K_t\!\left(y_t-H_t\hat{x}_t^- - \hat{\mu}_{y,t}\mathbf{1}\right), &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} P_t^+ &= P_t^- - K_tH_tP_t^-. &&
+\end{flalign}
+
+For at fjerne identifikationsproblemet (fælles drift i $x$ modsat drift i race-mean) pålægges gauge-constrainten $\mathbf{1}^\top x_t=0$ ved projektion efter hvert step:
+\begin{flalign}
+\hspace{2cm} \hat{x}_t &\leftarrow \hat{x}_t - P_t\mathbf{1}\left(\mathbf{1}^\top P_t\mathbf{1}\right)^{-1}\mathbf{1}^\top\hat{x}_t, &&
+\end{flalign}
+\begin{flalign}
+\hspace{2cm} P_t &\leftarrow P_t - P_t\mathbf{1}\left(\mathbf{1}^\top P_t\mathbf{1}\right)^{-1}\mathbf{1}^\top P_t. &&
+\end{flalign}
+Det er samme modelidé som ovenfor, men i en strammere og mere konsistent multivariat udgave.
