@@ -265,6 +265,7 @@ def export_stor_bane_split_recommendation(
     boat_plot_data_dir: Path,
     output_dir: Path,
     group_name: str = "Stor Bane",
+    include_year: int = 2026,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     tex_path = output_dir / "stor_bane_split_recommendation.tex"
@@ -295,6 +296,18 @@ def export_stor_bane_split_recommendation(
         if in_group.empty:
             continue
 
+        # Keep only rows for the requested year from race_display format "'YY-Rn".
+        year_suffix = f"'{int(include_year) % 100:02d}-"
+        if "race_display" in in_group.columns:
+            in_group = in_group[in_group["race_display"].astype(str).str.startswith(year_suffix)].copy()
+        if in_group.empty:
+            continue
+
+        # "Har sejlet" -> at least one observed datapoint in the requested year.
+        observed_in_year = pd.to_numeric(in_group["obs_pct"], errors="coerce").notna().any()
+        if not bool(observed_in_year):
+            continue
+
         in_group = in_group.reset_index(drop=True)
         latest = in_group.iloc[-1]
         estimate_pct = pd.to_numeric(latest.get("post_pct"), errors="coerce")
@@ -320,7 +333,7 @@ def export_stor_bane_split_recommendation(
             "\n".join(
                 [
                     r"\subsection*{Forslag til opdeling af Stor Bane i to løb}",
-                    r"Der er ikke tilstrækkelige data til automatisk opdeling i to løb.",
+                    rf"Der er ikke tilstrækkelige data for både, der har sejlet i {int(include_year)}, til automatisk opdeling i to løb.",
                 ]
             ),
             encoding="utf-8",
@@ -380,6 +393,7 @@ def export_stor_bane_split_recommendation(
     tex_lines = [
         r"\subsection*{Forslag til opdeling af Stor Bane i to løb}",
         r"Hvis Stor Bane opdeles i to løb med de hurtigste både i løb 1 og de langsomste i løb 2, laves opdelingen automatisk fra de seneste færdighedsestimater.",
+        rf"Kun både med observationer i {int(include_year)} er medtaget i denne tabel.",
         r"Her bruges seneste estimate pr. båd (posteriori ved tid $t$, ellers a priori). Splitpunktet vælges, så forventet antal startende pr. race bliver så ens som muligt baseret på historisk ikke-DNC-rate.",
         f"Der er {n_boats} både i Stor Bane, og bedste balance fås med {len(fast)} både i Stor bane 1 og {len(slow)} både i Stor bane 2 (forventet fremmøde ca. {expected_fast:.2f} mod {expected_slow:.2f} både pr. race):",
         r"",

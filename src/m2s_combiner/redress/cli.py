@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
 		"--q-objective",
 		choices=Q_OBJECTIVE_CHOICES,
 		default=Q_OBJECTIVE_DEFAULT,
-		help="Objective used for q fitting: rmse or mle (default).",
+		help="Objective used for q fitting: rmse_loo (alias: rmse) or mle (default).",
 	)
 	parser.add_argument(
 		"--output-dir",

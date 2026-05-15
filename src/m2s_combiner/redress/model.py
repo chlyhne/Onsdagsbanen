@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import concurrent.futures
 import json
 import math
-import multiprocessing
 import os
-import time
+from multiprocessing import Pool
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,15 +11,22 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import differential_evolution
+from scipy.optimize import minimize
 
 from .common import race_num
 from .constants import EPS
 from .constants import GROUP_Q_CACHE_FILENAME
+from .constants import MAX_DELTA_T_DAYS
+from .constants import MU_Y_LOG_MAX
+from .constants import MU_Y_LOG_MIN
 from .constants import NON_OBS_STATUSES
 from .constants import P_COV_CAP_FLOOR
 from .constants import Q_OBJECTIVE_CHOICES
 from .constants import Q_SEARCH_MAX
 from .constants import Q_SEARCH_MIN
+from .constants import R_T_SEARCH_MAX
+from .constants import R_T_SEARCH_MIN
 
 
 @dataclass
@@ -40,30 +45,180 @@ class GroupFilterResult:
     loo_error_count: int
 
 
-_DE_WORKER_GROUPS: list[dict[str, Any]] | None = None
-_DE_WORKER_OBJECTIVE: str | None = None
+@dataclass
+class _DEObjectiveContext:
+    groups: list[dict[str, Any]]
+    objective: str
+    log_q_min: float
+    log_q_max: float
+    x0_fixed: float
+    p0_fixed: float
+    p0_scale: float | None
 
 
-def _de_worker_initialize(groups: list[dict[str, Any]], objective: str) -> None:
-    global _DE_WORKER_GROUPS, _DE_WORKER_OBJECTIVE
-    _DE_WORKER_GROUPS = groups
-    _DE_WORKER_OBJECTIVE = objective
+_DE_CONTEXT: _DEObjectiveContext | None = None
 
 
-def _de_worker_evaluate(log_q: float, x0_value: float, p0_value: float) -> tuple[float, int]:
-    if _DE_WORKER_GROUPS is None or _DE_WORKER_OBJECTIVE is None:
-        raise RuntimeError("DE worker is not initialized.")
-    q_value = float(np.exp(float(log_q)))
-    x0 = float(x0_value)
-    p0 = float(max(EPS, p0_value))
-    score, obs = evaluate_q_score(
-        _DE_WORKER_GROUPS,
+def _de_worker_init(context: _DEObjectiveContext) -> None:
+    global _DE_CONTEXT
+    _DE_CONTEXT = context
+
+
+def _de_worker_objective(theta: np.ndarray) -> float:
+    context = _DE_CONTEXT
+    if context is None:
+        return 1e300
+    theta_vec = np.asarray(theta, dtype=float)
+    log_q = float(max(context.log_q_min, min(context.log_q_max, float(theta_vec[0]))))
+    ar_a = float(min(1.0, max(0.0, float(theta_vec[1]))))
+    q_value = float(math.exp(log_q))
+    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
+    score, _obs = evaluate_q_score(
+        context.groups,
         q_value,
-        _DE_WORKER_OBJECTIVE,
-        initial_x0=x0,
-        initial_p0=p0,
+        context.objective,
+        ar_a=ar_a,
+        initial_x0=context.x0_fixed,
+        initial_p0=p0_for_q,
+        score_cache=None,
+    )
+    if not np.isfinite(float(score)):
+        return 1e300
+    return float(score)
+
+
+class _DEProcessMap:
+    def __init__(self, pool: Pool) -> None:
+        self.pool = pool
+
+    def __call__(self, _func: Any, iterable: Any) -> list[float]:
+        theta_list = [np.asarray(theta, dtype=float) for theta in iterable]
+        return self.pool.map(_de_worker_objective, theta_list)
+
+
+@dataclass
+class _RefineTask:
+    idx: int
+    rank: int
+    theta0: tuple[float, float]
+    objective: str
+    log_q_min: float
+    log_q_max: float
+    maxiter: int = 120
+    ftol: float = 1e-12
+
+
+@dataclass
+class _RefineResult:
+    idx: int
+    rank: int
+    q_value: float
+    ar_a: float
+    score: float
+    obs: int
+    success: bool
+    message: str
+
+
+def _score_for_context(context: _DEObjectiveContext, q_value: float, ar_a_value: float) -> tuple[float, int]:
+    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
+    score, obs = evaluate_q_score(
+        context.groups,
+        float(q_value),
+        context.objective,
+        ar_a=float(min(1.0, max(0.0, ar_a_value))),
+        initial_x0=float(context.x0_fixed),
+        initial_p0=float(p0_for_q),
+        score_cache=None,
     )
     return float(score), int(obs)
+
+
+def _mle_objective_and_gradient_for_context(context: _DEObjectiveContext, theta: np.ndarray) -> tuple[float, np.ndarray, int, float, float]:
+    log_q = float(max(context.log_q_min, min(context.log_q_max, float(theta[0]))))
+    ar_a = float(min(1.0, max(0.0, float(theta[1]))))
+    q_value = float(math.exp(log_q))
+    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
+    score, obs, grad_q, grad_a = q_objective_mle_with_gradient(
+        context.groups,
+        q_value,
+        ar_a=ar_a,
+        initial_x0=float(context.x0_fixed),
+        initial_p0=float(p0_for_q),
+    )
+    if not np.isfinite(score):
+        return 1e300, np.array([0.0, 0.0], dtype=float), int(obs), q_value, ar_a
+    grad_log_q = float(grad_q * q_value)
+    return float(score), np.array([grad_log_q, float(grad_a)], dtype=float), int(obs), q_value, ar_a
+
+
+def _refine_candidate_worker(task: _RefineTask) -> _RefineResult:
+    context = _DE_CONTEXT
+    if context is None:
+        return _RefineResult(
+            idx=int(task.idx),
+            rank=int(task.rank),
+            q_value=float("nan"),
+            ar_a=float("nan"),
+            score=1e300,
+            obs=0,
+            success=False,
+            message="missing worker context",
+        )
+
+    theta0 = np.asarray(task.theta0, dtype=float).copy()
+    theta0[0] = float(max(task.log_q_min, min(task.log_q_max, float(theta0[0]))))
+    theta0[1] = float(min(1.0, max(0.0, float(theta0[1]))))
+
+    if task.objective == "mle":
+        last_theta: np.ndarray | None = None
+        last_score = float("inf")
+        last_grad = np.array([0.0, 0.0], dtype=float)
+
+        def _eval(theta: np.ndarray) -> tuple[float, np.ndarray]:
+            nonlocal last_theta, last_score, last_grad
+            theta_vec = np.asarray(theta, dtype=float)
+            if last_theta is not None and np.array_equal(theta_vec, last_theta):
+                return float(last_score), np.asarray(last_grad, dtype=float)
+            score, grad, _obs, _qv, _av = _mle_objective_and_gradient_for_context(context, theta_vec)
+            last_theta = theta_vec.copy()
+            last_score = float(score)
+            last_grad = np.asarray(grad, dtype=float).copy()
+            return float(last_score), np.asarray(last_grad, dtype=float)
+
+        result = minimize(
+            lambda t: _eval(t)[0],
+            x0=theta0,
+            method="L-BFGS-B",
+            jac=lambda t: _eval(t)[1],
+            bounds=[(task.log_q_min, task.log_q_max), (0.0, 1.0)],
+            options={"maxiter": int(task.maxiter), "ftol": float(task.ftol)},
+        )
+    else:
+        result = minimize(
+            _de_worker_objective,
+            x0=theta0,
+            method="L-BFGS-B",
+            bounds=[(task.log_q_min, task.log_q_max), (0.0, 1.0)],
+            options={"maxiter": int(task.maxiter), "ftol": float(task.ftol)},
+        )
+
+    theta_star = np.asarray(result.x, dtype=float).copy()
+    theta_star[0] = float(max(task.log_q_min, min(task.log_q_max, float(theta_star[0]))))
+    theta_star[1] = float(min(1.0, max(0.0, float(theta_star[1]))))
+    q_star = float(math.exp(float(theta_star[0])))
+    a_star = float(theta_star[1])
+    score_star, obs_star = _score_for_context(context, q_star, a_star)
+    return _RefineResult(
+        idx=int(task.idx),
+        rank=int(task.rank),
+        q_value=float(q_star),
+        ar_a=float(a_star),
+        score=float(score_star),
+        obs=int(obs_star),
+        success=bool(result.success),
+        message=str(result.message),
+    )
 
 
 def estimate_global_q(all_data: pd.DataFrame) -> float:
@@ -160,9 +315,9 @@ def estimate_initial_p0_from_first_observations(group: dict[str, Any]) -> float:
     return float(max(EPS, p0_value))
 
 
-def load_group_q_cache(path: Path) -> dict[str, float]:
+def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float]]:
     if not path.exists():
-        return {}
+        return {}, {}
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -172,26 +327,45 @@ def load_group_q_cache(path: Path) -> dict[str, float]:
         raise ValueError(f"Invalid Q cache JSON in {path}") from exc
 
     if isinstance(payload, dict) and isinstance(payload.get("group_q"), dict):
-        source = payload["group_q"]
+        q_source = payload["group_q"]
+        a_source = payload.get("group_a", {})
     elif isinstance(payload, dict):
-        source = payload
+        q_source = payload
+        a_source = {}
     else:
         raise ValueError(f"Invalid Q cache payload in {path}")
 
     q_map: dict[str, float] = {}
-    for key, value in source.items():
+    for key, value in q_source.items():
         q_val = float(value)
         if np.isfinite(q_val) and q_val > 0.0:
             q_map[str(key)] = q_val
+    a_map: dict[str, float] = {}
+    if isinstance(a_source, dict):
+        for key, value in a_source.items():
+            a_val = float(value)
+            if np.isfinite(a_val):
+                a_map[str(key)] = float(min(1.0, max(0.0, a_val)))
+    return q_map, a_map
+
+
+def load_group_q_cache(path: Path) -> dict[str, float]:
+    q_map, _ = load_group_qa_cache(path)
     return q_map
 
 
-def save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
+def save_group_qa_cache(path: Path, q_by_group: dict[str, float], a_by_group: dict[str, float] | None = None) -> None:
+    a_by_group = a_by_group or {}
     payload = {
         "saved_at": datetime.now().isoformat(timespec="seconds"),
         "group_q": {str(k): float(v) for k, v in sorted(q_by_group.items())},
+        "group_a": {str(k): float(min(1.0, max(0.0, v))) for k, v in sorted(a_by_group.items()) if np.isfinite(float(v))},
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
+    save_group_qa_cache(path, q_by_group, {})
 
 
 def q_cache_path_for_objective(output_dir: Path, objective: str) -> Path:
@@ -248,128 +422,206 @@ def prepare_group_runtime(group: dict[str, Any]) -> dict[str, Any]:
 
 def _symmetrize_and_floor_covariance(covariance: np.ndarray, *, floor: float = EPS) -> np.ndarray:
     cov = 0.5 * (np.asarray(covariance, dtype=float) + np.asarray(covariance, dtype=float).T)
-    diag = np.diag(cov).copy()
-    diag = np.where(np.isfinite(diag), diag, floor)
-    diag = np.maximum(diag, floor)
-    np.fill_diagonal(cov, diag)
+    if floor > 0.0:
+        cov = cov + float(floor) * np.eye(cov.shape[0], dtype=float)
     return cov
 
 
-def _project_zero_sum_full_state(mean_values: np.ndarray, covariance: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    mean = np.asarray(mean_values, dtype=float).copy()
-    cov = _symmetrize_and_floor_covariance(covariance)
-    if mean.size == 0:
-        return mean, cov
-
-    # Gauge constraint is sum(x)=0, so the constraint vector is all-ones.
-    # For this case we can avoid generic matrix products and use row sums directly.
-    v = np.sum(cov, axis=1, dtype=float)
-    denom = float(np.sum(v, dtype=float))
-    if not np.isfinite(denom) or denom <= EPS:
-        return mean - float(np.mean(mean)), cov
-    correction = float(np.sum(mean, dtype=float)) / denom
-    mean_projected = mean - v * correction
-    cov_projected = cov - np.outer(v, v) / denom
-    cov_projected = _symmetrize_and_floor_covariance(cov_projected)
-    return mean_projected, cov_projected
+def _apply_state_transition(
+    state_mean: np.ndarray,
+    state_cov: np.ndarray,
+    *,
+    ar_a: float,
+    process_diag: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    a = float(min(1.0, max(0.0, ar_a)))
+    coeff = 1.0 - a
+    prior_mean = coeff * np.asarray(state_mean, dtype=float)
+    prior_cov = (coeff * coeff) * np.asarray(state_cov, dtype=float) + np.diag(np.asarray(process_diag, dtype=float))
+    prior_cov = _symmetrize_and_floor_covariance(prior_cov)
+    return prior_mean, prior_cov
 
 
-def _project_active_zero_sum(mean_values: np.ndarray, covariance: np.ndarray, active_indices: list[int]) -> tuple[np.ndarray, np.ndarray]:
-    mean = np.asarray(mean_values, dtype=float).copy()
-    cov = _symmetrize_and_floor_covariance(covariance)
-    if not active_indices:
-        return mean, cov
-    active = np.array(sorted(set(int(idx) for idx in active_indices)), dtype=int)
-
-    sub_cov = cov[np.ix_(active, active)]
-    sub_mean = mean[active]
-
-    # Same sum(x_active)=0 gauge projection specialized to ones-constraint.
-    v = np.sum(sub_cov, axis=1, dtype=float)
-    denom = float(np.sum(v, dtype=float))
-    if not np.isfinite(denom) or denom <= EPS:
-        mean[active] = sub_mean - float(np.mean(sub_mean))
-        return mean, cov
-
-    correction = float(np.sum(sub_mean, dtype=float)) / denom
-    mean[active] = sub_mean - v * correction
-    cov[np.ix_(active, active)] = sub_cov - np.outer(v, v) / denom
-    cov = _symmetrize_and_floor_covariance(cov)
-    return mean, cov
+def _active_indices_from_flags(
+    competitors: list[str],
+    competitor_index: dict[str, int],
+    active_by_competitor: dict[str, bool],
+) -> np.ndarray:
+    active_indices = [competitor_index[c] for c in competitors if bool(active_by_competitor.get(c, False))]
+    return np.asarray(active_indices, dtype=int)
 
 
-def _profiled_day_nll_full(measurement_variance: float, centered_values: np.ndarray, prior_covariance: np.ndarray) -> tuple[float, float]:
+def _project_active_vector_zero_sum(values: np.ndarray, active_indices: np.ndarray) -> np.ndarray:
+    projected = np.asarray(values, dtype=float).copy()
+    if active_indices.size <= 1:
+        return projected
+    active_vals = projected[active_indices]
+    projected[active_indices] = active_vals - float(np.mean(active_vals))
+    return projected
+
+
+def _project_active_covariance_zero_sum(matrix: np.ndarray, active_indices: np.ndarray) -> np.ndarray:
+    projected = np.asarray(matrix, dtype=float).copy()
+    if active_indices.size <= 1:
+        return projected
+    n = projected.shape[0]
+    active = np.asarray(active_indices, dtype=int)
+    active_set = set(int(x) for x in active.tolist())
+    other = np.asarray([idx for idx in range(n) if idx not in active_set], dtype=int)
+
+    aa = projected[np.ix_(active, active)]
+    row_mean = aa.mean(axis=1, keepdims=True)
+    col_mean = aa.mean(axis=0, keepdims=True)
+    grand_mean = float(aa.mean())
+    projected[np.ix_(active, active)] = aa - row_mean - col_mean + grand_mean
+
+    if other.size > 0:
+        ao = projected[np.ix_(active, other)]
+        projected[np.ix_(active, other)] = ao - ao.mean(axis=0, keepdims=True)
+        oa = projected[np.ix_(other, active)]
+        projected[np.ix_(other, active)] = oa - oa.mean(axis=1, keepdims=True)
+
+    projected = 0.5 * (projected + projected.T)
+    return projected
+
+
+def _profiled_day_nll_and_grad_sigma2(
+    measurement_variance: float,
+    centered_values: np.ndarray,
+    prior_covariance: np.ndarray,
+) -> tuple[float, float, float]:
     m = centered_values.size
     if m == 0:
-        return 0.0, float("nan")
+        return 0.0, float("nan"), 0.0
     sigma2 = float(max(EPS, measurement_variance))
     s_matrix = _symmetrize_and_floor_covariance(prior_covariance + sigma2 * np.eye(m, dtype=float))
     sign, logdet = np.linalg.slogdet(s_matrix)
     if sign <= 0 or not np.isfinite(logdet):
-        return float("inf"), float("nan")
+        return float("inf"), float("nan"), 0.0
     ones = np.ones(m, dtype=float)
     inv_times_ones = np.linalg.solve(s_matrix, ones)
     inv_times_centered = np.linalg.solve(s_matrix, centered_values)
     denom = float(ones @ inv_times_ones)
     if not np.isfinite(denom) or denom <= EPS:
-        return float("inf"), float("nan")
-    mu_hat = float((ones @ inv_times_centered) / denom)
-    inv_times_residual = inv_times_centered - mu_hat * inv_times_ones
+        return float("inf"), float("nan"), 0.0
+    mu_hat_unclipped = float((ones @ inv_times_centered) / denom)
+    mu_hat = float(min(MU_Y_LOG_MAX, max(MU_Y_LOG_MIN, mu_hat_unclipped)))
     residual = centered_values - mu_hat * ones
+    inv_times_residual = np.linalg.solve(s_matrix, residual)
     quad = float(residual @ inv_times_residual)
     nll = 0.5 * float(m * math.log(2.0 * math.pi) + logdet + quad)
-    return nll, mu_hat
+    s_inv = np.linalg.inv(s_matrix)
+    trace_s_inv = float(np.trace(s_inv))
+    grad_sigma2 = 0.5 * (trace_s_inv - float(inv_times_residual @ inv_times_residual))
+    if not np.isfinite(grad_sigma2):
+        grad_sigma2 = 0.0
+    return nll, mu_hat, float(grad_sigma2)
 
 
-def fit_measurement_variance_full(centered_values: np.ndarray, prior_covariance: np.ndarray) -> float:
+def _profiled_day_nll_full(measurement_variance: float, centered_values: np.ndarray, prior_covariance: np.ndarray) -> tuple[float, float]:
+    nll, mu_hat, _ = _profiled_day_nll_and_grad_sigma2(measurement_variance, centered_values, prior_covariance)
+    return float(nll), float(mu_hat)
+
+
+def fit_measurement_variance_full(
+    centered_values: np.ndarray,
+    prior_covariance: np.ndarray,
+    *,
+    warm_start_sigma2: float | None = None,
+    warm_start_only: bool = False,
+) -> float:
     if centered_values.size == 0:
         return float("nan")
 
-    lower = EPS
+    lower = float(max(EPS, R_T_SEARCH_MIN))
+    upper_bound = float(max(lower * (1.0 + 1e-12), R_T_SEARCH_MAX))
     m = centered_values.size
-    diag_mean = float(np.mean(np.diag(prior_covariance))) if m > 0 else EPS
-    base_scale = max(EPS, float(np.var(centered_values, ddof=0)), float(np.mean(np.square(centered_values))), diag_mean)
-    upper = max(lower * 16.0, base_scale)
-    upper_nll, _ = _profiled_day_nll_full(upper, centered_values, prior_covariance)
-
-    for _ in range(8):
-        candidate_upper = upper * 4.0
-        candidate_nll, _ = _profiled_day_nll_full(candidate_upper, centered_values, prior_covariance)
+    diag_mean = float(np.mean(np.diag(prior_covariance))) if m > 0 else lower
+    base_scale_raw = max(lower, float(np.var(centered_values, ddof=0)), float(np.mean(np.square(centered_values))), diag_mean)
+    base_scale = float(max(lower, min(upper_bound, base_scale_raw)))
+    upper = float(max(lower * 16.0, base_scale))
+    upper = float(min(upper_bound, upper))
+    upper_nll, _, _ = _profiled_day_nll_and_grad_sigma2(upper, centered_values, prior_covariance)
+    for _ in range(10):
+        if upper >= upper_bound:
+            break
+        candidate_upper = float(min(upper_bound, upper * 4.0))
+        if candidate_upper <= upper:
+            break
+        candidate_nll, _, _ = _profiled_day_nll_and_grad_sigma2(candidate_upper, centered_values, prior_covariance)
         if candidate_nll < upper_nll:
             upper = candidate_upper
             upper_nll = candidate_nll
         else:
             break
+    log_lower = float(math.log(lower))
+    log_upper = float(math.log(max(lower * (1.0 + 1e-12), upper)))
+    log_initial = float(math.log(max(lower, min(upper, base_scale))))
 
-    phi = (1.0 + math.sqrt(5.0)) / 2.0
-    left = lower
-    right = upper
-    c = right - (right - left) / phi
-    d = left + (right - left) / phi
-    fc, _ = _profiled_day_nll_full(c, centered_values, prior_covariance)
-    fd, _ = _profiled_day_nll_full(d, centered_values, prior_covariance)
+    def _objective_and_grad_log_sigma2(theta: np.ndarray) -> tuple[float, np.ndarray]:
+        log_sigma2 = float(max(log_lower, min(log_upper, float(theta[0]))))
+        sigma2 = float(math.exp(log_sigma2))
+        nll, _mu_hat, grad_sigma2 = _profiled_day_nll_and_grad_sigma2(sigma2, centered_values, prior_covariance)
+        if not np.isfinite(nll):
+            return 1e300, np.array([0.0], dtype=float)
+        grad_log_sigma2 = float(grad_sigma2 * sigma2)
+        if not np.isfinite(grad_log_sigma2):
+            grad_log_sigma2 = 0.0
+        return float(nll), np.array([grad_log_sigma2], dtype=float)
 
-    for _ in range(32):
-        if fc <= fd:
-            right = d
-            d = c
-            fd = fc
-            c = right - (right - left) / phi
-            fc, _ = _profiled_day_nll_full(c, centered_values, prior_covariance)
-        else:
-            left = c
-            c = d
-            fc = fd
-            d = left + (right - left) / phi
-            fd, _ = _profiled_day_nll_full(d, centered_values, prior_covariance)
+    candidate_logs = np.linspace(log_lower, log_upper, num=9, dtype=float)
+    extra_logs = [log_initial]
+    if warm_start_sigma2 is not None and np.isfinite(float(warm_start_sigma2)) and float(warm_start_sigma2) > 0.0:
+        warm_log = float(math.log(max(lower, min(upper, float(warm_start_sigma2)))))
+        extra_logs.append(warm_log)
+    candidate_logs = np.unique(np.concatenate([candidate_logs, np.asarray(extra_logs, dtype=float)]))
+    if warm_start_only:
+        candidate_logs = np.asarray([float(extra_logs[-1])], dtype=float)
 
-    return max(EPS, float(0.5 * (left + right)))
+    best_nll = float("inf")
+    best_log_sigma2 = float(log_initial)
+
+    for start_log_sigma2 in candidate_logs:
+        theta0 = np.array([float(start_log_sigma2)], dtype=float)
+        start_nll, _ = _objective_and_grad_log_sigma2(theta0)
+        if np.isfinite(start_nll) and start_nll < best_nll:
+            best_nll = float(start_nll)
+            best_log_sigma2 = float(start_log_sigma2)
+
+    result = minimize(
+        lambda t: _objective_and_grad_log_sigma2(t)[0],
+        x0=np.array([best_log_sigma2], dtype=float),
+        method="L-BFGS-B",
+        jac=lambda t: _objective_and_grad_log_sigma2(t)[1],
+        bounds=[(log_lower, log_upper)],
+        options={"maxiter": 80, "ftol": 1e-12},
+    )
+
+    result_log_sigma2 = float(max(log_lower, min(log_upper, float(result.x[0]))))
+    result_nll, _ = _objective_and_grad_log_sigma2(np.array([result_log_sigma2], dtype=float))
+    if np.isfinite(result_nll) and result_nll < best_nll:
+        best_nll = float(result_nll)
+        best_log_sigma2 = float(result_log_sigma2)
+
+    sigma2_star = float(max(EPS, math.exp(best_log_sigma2)))
+    return sigma2_star
 
 
-def fit_day_parameters_full(centered_values: np.ndarray, prior_covariance: np.ndarray) -> tuple[float, float, float]:
+def fit_day_parameters_full(
+    centered_values: np.ndarray,
+    prior_covariance: np.ndarray,
+    *,
+    warm_start_r_t: float | None = None,
+    warm_start_only: bool = False,
+) -> tuple[float, float, float]:
     if centered_values.size == 0:
         return float("nan"), float("nan"), 0.0
-    r_t = fit_measurement_variance_full(centered_values, prior_covariance)
+    r_t = fit_measurement_variance_full(
+        centered_values,
+        prior_covariance,
+        warm_start_sigma2=warm_start_r_t,
+        warm_start_only=warm_start_only,
+    )
     nll_sum, mu_hat = _profiled_day_nll_full(r_t, centered_values, prior_covariance)
     return mu_hat, r_t, nll_sum
 
@@ -429,7 +681,12 @@ def compute_observation_step(
             mask[local_idx] = False
             centered_values_loo = centered_values[mask]
             p_prior_loo = p_prior_obs[np.ix_(mask, mask)]
-            b_hat_loo, _, _ = fit_day_parameters_full(centered_values_loo, p_prior_loo)
+            b_hat_loo, _, _ = fit_day_parameters_full(
+                centered_values_loo,
+                p_prior_loo,
+                warm_start_r_t=r_t,
+                warm_start_only=True,
+            )
             y_pred_loo_by_competitor[competitor] = float(b_hat_loo + x_prior_obs[local_idx])
 
     loo_sq_error_sum = 0.0
@@ -460,6 +717,7 @@ def run_group_filter(
     group: dict[str, Any],
     global_q: float,
     *,
+    ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     collect_history: bool = True,
@@ -468,6 +726,7 @@ def run_group_filter(
     selected_races: list[str] = list(group["selected_races"])
     race_dates: dict[str, datetime] = dict(group["race_dates"])
     group_label = str(group["group"])
+    ar_a = float(min(1.0, max(0.0, ar_a)))
 
     competitors: list[str] = runtime["competitors"]
     race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
@@ -475,7 +734,6 @@ def run_group_filter(
     race_order_by_label: dict[str, int] = runtime.get("race_order_by_label", {})
     debut_order_by_competitor: dict[str, int] = runtime.get("debut_order_by_competitor", {})
     initial_p0 = float(max(EPS, initial_p0))
-    p_cap = float(max(initial_p0, P_COV_CAP_FLOOR))
     initial_x0 = float(initial_x0)
     competitor_index = {competitor: idx for idx, competitor in enumerate(competitors)}
     n_competitors = len(competitors)
@@ -513,9 +771,6 @@ def run_group_filter(
                     last_state_date_by_competitor[competitor] = None
                     active_by_competitor[competitor] = True
 
-        active_indices = [competitor_index[c] for c in competitors if active_by_competitor[c]]
-        state_mean, state_cov = _project_active_zero_sum(state_mean, state_cov, active_indices)
-
         delta_days_by_competitor: dict[str, int] = {}
         process_diag = np.zeros(n_competitors, dtype=float)
         for competitor in competitors:
@@ -523,16 +778,18 @@ def run_group_filter(
                 delta_days_by_competitor[competitor] = 0
                 continue
             last_state_date = last_state_date_by_competitor[competitor]
-            delta_days = 0 if last_state_date is None else max(0, (race_date - last_state_date).days)
+            delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
             delta_days_by_competitor[competitor] = int(delta_days)
             process_diag[competitor_index[competitor]] = float(delta_days) * float(global_q)
-        prior_mean = state_mean.copy()
-        prior_cov = _symmetrize_and_floor_covariance(state_cov + np.diag(process_diag))
-        max_diag = float(np.max(np.diag(prior_cov))) if n_competitors > 0 else 0.0
-        if np.isfinite(max_diag) and max_diag > p_cap:
-            prior_cov *= float(p_cap / max_diag)
-            prior_cov = _symmetrize_and_floor_covariance(prior_cov)
-
+        active_indices = _active_indices_from_flags(competitors, competitor_index, active_by_competitor)
+        prior_mean, prior_cov = _apply_state_transition(
+            state_mean,
+            state_cov,
+            ar_a=ar_a,
+            process_diag=process_diag,
+        )
+        prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
+        prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
         observed_step = compute_observation_step(observed, competitors, competitor_index, prior_mean, prior_cov)
@@ -548,7 +805,8 @@ def run_group_filter(
         observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
         state_mean = np.asarray(observed_step["post_mean"], dtype=float).copy()
         state_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_covariance"], dtype=float))
-        state_mean, state_cov = _project_active_zero_sum(state_mean, state_cov, active_indices)
+        state_mean = _project_active_vector_zero_sum(state_mean, active_indices)
+        state_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(state_cov, active_indices))
 
         row_payload_by_competitor: dict[str, dict[str, Any]] = {}
         for competitor in competitors:
@@ -642,6 +900,7 @@ def run_group_filter(
                         "b_t_hat": b_hat,
                         "delta_t_days": row_payload["delta_t_days"],
                         "global_q": global_q,
+                        "global_ar_a": ar_a,
                         "x0_group": initial_x0,
                         "x_prior": row_payload["x_prior"],
                         "p_prior": row_payload["p_prior"],
@@ -663,6 +922,7 @@ def run_all_groups_with_transfer(
     q_by_group: dict[str, float],
     competitor_year_group: dict[tuple[str, int], str],
     *,
+    ar_a_by_group: dict[str, float] | None = None,
     initial_x0_by_group: dict[str, float] | None = None,
     initial_p0_by_group: dict[str, float] | None = None,
     collect_history: bool = True,
@@ -672,10 +932,6 @@ def run_all_groups_with_transfer(
 
     groups_by_name = {str(group["group"]): group for group in groups}
     initial_p0_by_group = initial_p0_by_group or {}
-    p_cap_by_group = {
-        group_name: float(max(P_COV_CAP_FLOOR, float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR)))))
-        for group_name in groups_by_name
-    }
     state_mean_by_group: dict[str, np.ndarray] = {}
     state_cov_by_group: dict[str, np.ndarray] = {}
     last_state_date_by_group: dict[str, dict[str, datetime | None]] = {}
@@ -687,6 +943,7 @@ def run_all_groups_with_transfer(
     events: list[dict[str, Any]] = []
 
     initial_x0_by_group = initial_x0_by_group or {}
+    ar_a_by_group = ar_a_by_group or {}
     for group_name, group in groups_by_name.items():
         runtime = prepare_group_runtime(group)
         competitors = runtime["competitors"]
@@ -733,7 +990,7 @@ def run_all_groups_with_transfer(
         race_date = event["race_date"]
         year = int(event["year"])
         global_q = float(q_by_group[group_name])
-        p_cap = float(p_cap_by_group[group_name])
+        ar_a = float(min(1.0, max(0.0, ar_a_by_group.get(group_name, 0.0))))
         group_mean = state_mean_by_group[group_name]
         group_cov = state_cov_by_group[group_name]
         group_last_dates = last_state_date_by_group[group_name]
@@ -782,8 +1039,6 @@ def run_all_groups_with_transfer(
                     group_last_dates[competitor] = None
                     group_active[competitor] = True
 
-        active_indices = [competitor_index[c] for c in competitors if group_active[c]]
-        group_mean, group_cov = _project_active_zero_sum(group_mean, group_cov, active_indices)
         delta_days_by_competitor: dict[str, int] = {}
         process_diag = np.zeros(n_competitors, dtype=float)
         for competitor in competitors:
@@ -791,16 +1046,18 @@ def run_all_groups_with_transfer(
                 delta_days_by_competitor[competitor] = 0
                 continue
             last_state_date = group_last_dates[competitor]
-            delta_days = 0 if last_state_date is None else max(0, (race_date - last_state_date).days)
+            delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
             delta_days_by_competitor[competitor] = int(delta_days)
             process_diag[competitor_index[competitor]] = float(delta_days) * float(global_q)
-        prior_mean = group_mean.copy()
-        prior_cov = _symmetrize_and_floor_covariance(group_cov + np.diag(process_diag))
-        max_diag = float(np.max(np.diag(prior_cov))) if n_competitors > 0 else 0.0
-        if np.isfinite(max_diag) and max_diag > p_cap:
-            prior_cov *= float(p_cap / max_diag)
-            prior_cov = _symmetrize_and_floor_covariance(prior_cov)
-
+        active_indices = _active_indices_from_flags(competitors, competitor_index, group_active)
+        prior_mean, prior_cov = _apply_state_transition(
+            group_mean,
+            group_cov,
+            ar_a=ar_a,
+            process_diag=process_diag,
+        )
+        prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
+        prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
         observed_step = compute_observation_step(observed, competitors, competitor_index, prior_mean, prior_cov)
@@ -814,7 +1071,8 @@ def run_all_groups_with_transfer(
         observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
         group_mean = np.asarray(observed_step["post_mean"], dtype=float).copy()
         group_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_covariance"], dtype=float))
-        group_mean, group_cov = _project_active_zero_sum(group_mean, group_cov, active_indices)
+        group_mean = _project_active_vector_zero_sum(group_mean, active_indices)
+        group_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(group_cov, active_indices))
         state_mean_by_group[group_name] = group_mean
         state_cov_by_group[group_name] = group_cov
 
@@ -910,6 +1168,7 @@ def run_all_groups_with_transfer(
                         "b_t_hat": b_hat,
                         "delta_t_days": row_payload["delta_t_days"],
                         "global_q": global_q,
+                        "global_ar_a": ar_a,
                         "x0_group": float(initial_x0_by_group.get(group_name, 0.0)),
                         "p0_group": float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR))),
                         "x_prior": row_payload["x_prior"],
@@ -938,17 +1197,234 @@ def run_all_groups_with_transfer(
     return history, nll_by_group, obs_by_group
 
 
+def _run_group_filter_mle_with_gradient(
+    group: dict[str, Any],
+    global_q: float,
+    *,
+    ar_a: float,
+    initial_x0: float,
+    initial_p0: float,
+) -> tuple[float, int, float, float]:
+    runtime = prepare_group_runtime(group)
+    selected_races: list[str] = list(group["selected_races"])
+    race_dates: dict[str, datetime] = dict(group["race_dates"])
+    ar_a = float(min(1.0, max(0.0, ar_a)))
+    q_value = float(max(EPS, global_q))
+    c = 1.0 - ar_a
+
+    competitors: list[str] = runtime["competitors"]
+    race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
+    race_order_by_label: dict[str, int] = runtime.get("race_order_by_label", {})
+    debut_order_by_competitor: dict[str, int] = runtime.get("debut_order_by_competitor", {})
+    initial_p0 = float(max(EPS, initial_p0))
+    initial_x0 = float(initial_x0)
+    competitor_index = {competitor: idx for idx, competitor in enumerate(competitors)}
+    n_competitors = len(competitors)
+
+    state_mean = np.zeros(n_competitors, dtype=float)
+    state_cov = np.eye(n_competitors, dtype=float) * EPS
+    dmean_dq = np.zeros(n_competitors, dtype=float)
+    dmean_da = np.zeros(n_competitors, dtype=float)
+    dcov_dq = np.zeros((n_competitors, n_competitors), dtype=float)
+    dcov_da = np.zeros((n_competitors, n_competitors), dtype=float)
+
+    active_by_competitor = {competitor: False for competitor in competitors}
+    last_state_date_by_competitor = {competitor: None for competitor in competitors}
+
+    nll_sum = 0.0
+    observed_count = 0
+    grad_q = 0.0
+    grad_a = 0.0
+
+    for race_label in selected_races:
+        race_date = race_dates.get(race_label)
+        if race_date is None:
+            continue
+
+        race_rows = race_rows_by_label.get(race_label)
+        if race_rows is None:
+            continue
+
+        race_order = race_order_by_label.get(str(race_label))
+        if race_order is not None:
+            for competitor in competitors:
+                if active_by_competitor[competitor]:
+                    continue
+                if debut_order_by_competitor.get(competitor) == race_order:
+                    idx = competitor_index[competitor]
+                    state_mean[idx] = float(initial_x0)
+                    state_cov[idx, :] = 0.0
+                    state_cov[:, idx] = 0.0
+                    state_cov[idx, idx] = float(initial_p0)
+                    dmean_dq[idx] = 0.0
+                    dmean_da[idx] = 0.0
+                    dcov_dq[idx, :] = 0.0
+                    dcov_dq[:, idx] = 0.0
+                    dcov_da[idx, :] = 0.0
+                    dcov_da[:, idx] = 0.0
+                    last_state_date_by_competitor[competitor] = None
+                    active_by_competitor[competitor] = True
+
+        delta_days_diag = np.zeros(n_competitors, dtype=float)
+        for competitor in competitors:
+            if not active_by_competitor[competitor]:
+                continue
+            last_state_date = last_state_date_by_competitor[competitor]
+            delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
+            delta_days_diag[competitor_index[competitor]] = float(delta_days)
+        active_indices = _active_indices_from_flags(competitors, competitor_index, active_by_competitor)
+
+        process_diag = delta_days_diag * q_value
+        prior_mean = c * state_mean
+        prior_cov = (c * c) * state_cov + np.diag(process_diag)
+        dprior_mean_dq = c * dmean_dq
+        dprior_mean_da = c * dmean_da - state_mean
+        dprior_cov_dq = (c * c) * dcov_dq + np.diag(delta_days_diag)
+        dprior_cov_da = (c * c) * dcov_da - (2.0 * c) * state_cov
+
+        prior_cov = _symmetrize_and_floor_covariance(prior_cov)
+        dprior_cov_dq = 0.5 * (dprior_cov_dq + dprior_cov_dq.T)
+        dprior_cov_da = 0.5 * (dprior_cov_da + dprior_cov_da.T)
+        prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
+        prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
+        dprior_mean_dq = _project_active_vector_zero_sum(dprior_mean_dq, active_indices)
+        dprior_mean_da = _project_active_vector_zero_sum(dprior_mean_da, active_indices)
+        dprior_cov_dq = _project_active_covariance_zero_sum(dprior_cov_dq, active_indices)
+        dprior_cov_da = _project_active_covariance_zero_sum(dprior_cov_da, active_indices)
+        dprior_cov_dq = 0.5 * (dprior_cov_dq + dprior_cov_dq.T)
+        dprior_cov_da = 0.5 * (dprior_cov_da + dprior_cov_da.T)
+
+        obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
+        observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
+        if observed.empty:
+            state_mean = prior_mean
+            state_cov = prior_cov
+            dmean_dq = dprior_mean_dq
+            dmean_da = dprior_mean_da
+            dcov_dq = dprior_cov_dq
+            dcov_da = dprior_cov_da
+            for competitor in competitors:
+                if active_by_competitor[competitor]:
+                    last_state_date_by_competitor[competitor] = race_date
+            continue
+
+        observed_competitors = observed["competitor"].astype(str).tolist()
+        observed_indices = np.array([competitor_index[cx] for cx in observed_competitors], dtype=int)
+        y_values = np.log(np.clip(observed["beregnet_seconds"].to_numpy(dtype=float), EPS, None))
+        x_prior_obs = prior_mean[observed_indices]
+        p_prior_obs = prior_cov[np.ix_(observed_indices, observed_indices)]
+        centered_values = y_values - x_prior_obs
+        b_hat, r_t, race_nll = fit_day_parameters_full(centered_values, p_prior_obs)
+        nll_sum += float(race_nll)
+        observed_count += int(observed_indices.size)
+
+        s_matrix = _symmetrize_and_floor_covariance(p_prior_obs + float(r_t) * np.eye(observed_indices.size, dtype=float))
+        s_inv = np.linalg.inv(s_matrix)
+        residual = centered_values - float(b_hat)
+        s_inv_res = s_inv @ residual
+
+        dL_dx_obs = -s_inv_res
+        dL_dP_obs = 0.5 * (s_inv - np.outer(s_inv_res, s_inv_res))
+
+        dprior_obs_mean_dq = dprior_mean_dq[observed_indices]
+        dprior_obs_mean_da = dprior_mean_da[observed_indices]
+        dprior_obs_cov_dq = dprior_cov_dq[np.ix_(observed_indices, observed_indices)]
+        dprior_obs_cov_da = dprior_cov_da[np.ix_(observed_indices, observed_indices)]
+
+        grad_q += float(dL_dx_obs @ dprior_obs_mean_dq) + float(np.sum(dL_dP_obs * dprior_obs_cov_dq))
+        grad_a += float(dL_dx_obs @ dprior_obs_mean_da) + float(np.sum(dL_dP_obs * dprior_obs_cov_da))
+
+        p_cross = prior_cov[:, observed_indices]
+        dp_cross_dq = dprior_cov_dq[:, observed_indices]
+        dp_cross_da = dprior_cov_da[:, observed_indices]
+        k_matrix = p_cross @ s_inv
+
+        dS_dq = dprior_obs_cov_dq
+        dS_da = dprior_obs_cov_da
+        dS_inv_dq = -s_inv @ dS_dq @ s_inv
+        dS_inv_da = -s_inv @ dS_da @ s_inv
+        dres_dq = -dprior_obs_mean_dq
+        dres_da = -dprior_obs_mean_da
+
+        dk_dq = dp_cross_dq @ s_inv + p_cross @ dS_inv_dq
+        dk_da = dp_cross_da @ s_inv + p_cross @ dS_inv_da
+
+        post_mean = prior_mean + (k_matrix @ residual)
+        post_cov = prior_cov - (k_matrix @ p_cross.T)
+        dpost_mean_dq = dprior_mean_dq + (dk_dq @ residual) + (k_matrix @ dres_dq)
+        dpost_mean_da = dprior_mean_da + (dk_da @ residual) + (k_matrix @ dres_da)
+        dpost_cov_dq = dprior_cov_dq - (dk_dq @ p_cross.T) - (k_matrix @ dp_cross_dq.T)
+        dpost_cov_da = dprior_cov_da - (dk_da @ p_cross.T) - (k_matrix @ dp_cross_da.T)
+
+        state_mean = np.asarray(post_mean, dtype=float).copy()
+        state_cov = _symmetrize_and_floor_covariance(np.asarray(post_cov, dtype=float))
+        dmean_dq = np.asarray(dpost_mean_dq, dtype=float)
+        dmean_da = np.asarray(dpost_mean_da, dtype=float)
+        dcov_dq = 0.5 * (np.asarray(dpost_cov_dq, dtype=float) + np.asarray(dpost_cov_dq, dtype=float).T)
+        dcov_da = 0.5 * (np.asarray(dpost_cov_da, dtype=float) + np.asarray(dpost_cov_da, dtype=float).T)
+        state_mean = _project_active_vector_zero_sum(state_mean, active_indices)
+        state_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(state_cov, active_indices))
+        dmean_dq = _project_active_vector_zero_sum(dmean_dq, active_indices)
+        dmean_da = _project_active_vector_zero_sum(dmean_da, active_indices)
+        dcov_dq = _project_active_covariance_zero_sum(dcov_dq, active_indices)
+        dcov_da = _project_active_covariance_zero_sum(dcov_da, active_indices)
+        dcov_dq = 0.5 * (dcov_dq + dcov_dq.T)
+        dcov_da = 0.5 * (dcov_da + dcov_da.T)
+        for competitor in competitors:
+            if active_by_competitor[competitor]:
+                last_state_date_by_competitor[competitor] = race_date
+
+    return float(nll_sum), int(observed_count), float(grad_q), float(grad_a)
+
+
+def q_objective_mle_with_gradient(
+    groups: list[dict[str, Any]],
+    q_value: float,
+    *,
+    ar_a: float = 0.0,
+    initial_x0: float = 0.0,
+    initial_p0: float = P_COV_CAP_FLOOR,
+) -> tuple[float, int, float, float]:
+    nll_sum = 0.0
+    obs_count = 0
+    grad_q = 0.0
+    grad_a = 0.0
+    for group in groups:
+        gnll, gobs, gq, ga = _run_group_filter_mle_with_gradient(
+            group,
+            float(q_value),
+            ar_a=float(ar_a),
+            initial_x0=float(initial_x0),
+            initial_p0=float(initial_p0),
+        )
+        nll_sum += float(gnll)
+        obs_count += int(gobs)
+        grad_q += float(gq)
+        grad_a += float(ga)
+    if obs_count == 0:
+        return float("inf"), 0, 0.0, 0.0
+    return float(nll_sum), int(obs_count), float(grad_q), float(grad_a)
+
+
 def q_objective(
     groups: list[dict[str, Any]],
     q_value: float,
     *,
+    ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
 ) -> tuple[float, int]:
     sq_error_sum = 0.0
     obs_count = 0
     for group in groups:
-        result = run_group_filter(group, q_value, initial_x0=initial_x0, initial_p0=initial_p0, collect_history=False)
+        result = run_group_filter(
+            group,
+            q_value,
+            ar_a=ar_a,
+            initial_x0=initial_x0,
+            initial_p0=initial_p0,
+            collect_history=False,
+        )
         sq_error_sum += float(result.loo_sq_error_sum)
         obs_count += int(result.loo_error_count)
     if obs_count == 0:
@@ -960,13 +1436,21 @@ def q_objective_mle(
     groups: list[dict[str, Any]],
     q_value: float,
     *,
+    ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
 ) -> tuple[float, int]:
     nll_sum = 0.0
     obs_count = 0
     for group in groups:
-        result = run_group_filter(group, q_value, initial_x0=initial_x0, initial_p0=initial_p0, collect_history=False)
+        result = run_group_filter(
+            group,
+            q_value,
+            ar_a=ar_a,
+            initial_x0=initial_x0,
+            initial_p0=initial_p0,
+            collect_history=False,
+        )
         nll_sum += float(result.nll_sum)
         obs_count += int(result.observed_count)
     if obs_count == 0:
@@ -976,6 +1460,13 @@ def q_objective_mle(
 
 def resolve_q_objective(value: str) -> str:
     objective = str(value or "").strip().lower()
+    aliases = {
+        "rmse": "rmse_loo",
+        "rmse-loo": "rmse_loo",
+        "one_step_rmse_loo": "rmse_loo",
+        "one-step-rmse-loo": "rmse_loo",
+    }
+    objective = aliases.get(objective, objective)
     if objective not in Q_OBJECTIVE_CHOICES:
         choices = ", ".join(Q_OBJECTIVE_CHOICES)
         raise ValueError(f"Unsupported q objective '{value}'. Choose one of: {choices}")
@@ -987,19 +1478,22 @@ def evaluate_q_score(
     q_value: float,
     objective: str,
     *,
+    ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
-    score_cache: dict[float, tuple[float, int]] | None = None,
+    score_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
 ) -> tuple[float, int]:
     objective = resolve_q_objective(objective)
-    key = float(q_value)
+    q_key = float(q_value)
+    a_key = float(min(1.0, max(0.0, ar_a)))
+    key = (q_key, a_key)
     if score_cache is not None and key in score_cache:
         return score_cache[key]
 
     result = (
-        q_objective(groups, key, initial_x0=initial_x0, initial_p0=initial_p0)
-        if objective == "rmse"
-        else q_objective_mle(groups, key, initial_x0=initial_x0, initial_p0=initial_p0)
+        q_objective(groups, q_key, ar_a=a_key, initial_x0=initial_x0, initial_p0=initial_p0)
+        if objective == "rmse_loo"
+        else q_objective_mle(groups, q_key, ar_a=a_key, initial_x0=initial_x0, initial_p0=initial_p0)
     )
     if score_cache is not None:
         score_cache[key] = result
@@ -1010,11 +1504,12 @@ def q_diagnostics(
     groups: list[dict[str, Any]],
     q_values: np.ndarray,
     *,
+    ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     p0_from_q_scale: float | None = None,
-    rmse_cache: dict[float, tuple[float, int]] | None = None,
-    mle_cache: dict[float, tuple[float, int]] | None = None,
+    rmse_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
+    mle_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
     progress_label: str | None = None,
     progress_every: int = 10,
 ) -> pd.DataFrame:
@@ -1026,10 +1521,10 @@ def q_diagnostics(
         q_float = float(q_value)
         p0_for_q = float(max(EPS, p0_scale * q_float)) if p0_scale is not None else p0_fixed
         rmse_score, rmse_obs = evaluate_q_score(
-            groups, q_float, "rmse", initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
+            groups, q_float, "rmse", ar_a=ar_a, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
         )
         mle_score, mle_obs = evaluate_q_score(
-            groups, q_float, "mle", initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
+            groups, q_float, "mle", ar_a=ar_a, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
         )
         rows.append(
             {
@@ -1056,306 +1551,359 @@ def fit_global_q(
     initial_q: float,
     objective: str,
     *,
+    initial_ar_a: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     p0_from_q_scale: float | None = None,
-    score_cache: dict[float, tuple[float, int]] | None = None,
+    score_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
     n_workers: int | None = None,
     progress_label: str | None = None,
     progress_every: int = 5,
-) -> tuple[float, float, int]:
+) -> tuple[float, float, float, int]:
     objective = resolve_q_objective(objective)
+    log_label = progress_label if progress_label else "GLOBAL"
+    de_popsize = max(15, int(os.cpu_count() or 1))
+    de_workers = de_popsize
+    de_updating = "deferred" if de_workers > 1 else "immediate"
+    de_workers_map = None
+    de_pool: Pool | None = None
+    if de_workers > 1:
+        de_context = _DEObjectiveContext(
+            groups=groups,
+            objective=objective,
+            log_q_min=float(math.log(float(Q_SEARCH_MIN))),
+            log_q_max=float(math.log(float(Q_SEARCH_MAX))),
+            x0_fixed=float(initial_x0),
+            p0_fixed=float(max(EPS, initial_p0)),
+            p0_scale=float(p0_from_q_scale) if p0_from_q_scale is not None else None,
+        )
+        de_pool = Pool(processes=de_workers, initializer=_de_worker_init, initargs=(de_context,))
+        de_workers_map = _DEProcessMap(de_pool)
     x0_fixed = float(initial_x0)
     p0_fixed = float(max(EPS, initial_p0))
     p0_scale = float(p0_from_q_scale) if p0_from_q_scale is not None else None
     progress_every = max(1, int(progress_every))
+    q_min = float(Q_SEARCH_MIN)
+    q_max = float(Q_SEARCH_MAX)
+    log_q_min = float(math.log(q_min))
+    log_q_max = float(math.log(q_max))
+    initial_q_clamped = float(max(q_min, min(q_max, float(initial_q))))
+    initial_a_clamped = float(min(1.0, max(0.0, float(initial_ar_a))))
 
-    if n_workers is None:
-        env_workers = os.getenv("REDRESS_Q_WORKERS")
-        if env_workers is not None and str(env_workers).strip() != "":
-            try:
-                n_workers = int(env_workers)
-            except ValueError:
-                n_workers = None
-        if n_workers is None:
-            n_workers = max(1, (os.cpu_count() or 1) - 1)
-    n_workers = max(1, int(n_workers))
-    use_parallel = n_workers > 1
-
-    executor: concurrent.futures.ProcessPoolExecutor | None = None
-    parallel_cache: dict[float, tuple[float, int]] = {}
-    evaluated_scores: dict[float, tuple[float, int]] = {}
-    mp_context_name = str(os.getenv("REDRESS_MP_CONTEXT", "spawn")).strip().lower()
-    if mp_context_name not in {"spawn", "fork", "forkserver"}:
-        mp_context_name = "spawn"
-
-    if use_parallel:
-        mp_context = multiprocessing.get_context(mp_context_name)
-        executor = concurrent.futures.ProcessPoolExecutor(
-            max_workers=n_workers,
-            mp_context=mp_context,
-            initializer=_de_worker_initialize,
-            initargs=(groups, objective),
-        )
-
-    def evaluate_many(q_values: list[float], *, stage_label: str) -> dict[float, tuple[float, int]]:
-        unique_q_values = [float(q) for q in q_values]
-        results_by_q: dict[float, tuple[float, int]] = {}
-        missing: list[float] = []
-
-        for q_value in unique_q_values:
-            if score_cache is not None and q_value in score_cache:
-                results_by_q[q_value] = score_cache[q_value]
-            elif q_value in parallel_cache:
-                results_by_q[q_value] = parallel_cache[q_value]
-            else:
-                missing.append(q_value)
-
-        if progress_label:
-            cached_count = len(unique_q_values) - len(missing)
-            if cached_count > 0:
-                print(
-                    f"[QFIT {progress_label}] {stage_label} reused {cached_count}/{len(unique_q_values)} cached evaluations",
-                    flush=True,
-                )
-
-        if missing:
-            if executor is None:
-                computed: list[tuple[float, int]] = []
-                for idx, q_value in enumerate(missing, start=1):
-                    p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
-                    result = evaluate_q_score(
-                        groups,
-                        q_value,
-                        objective,
-                        initial_x0=x0_fixed,
-                        initial_p0=p0_for_q,
-                        score_cache=score_cache,
-                    )
-                    computed.append(result)
-                    if progress_label and (idx % progress_every == 0 or idx == len(missing)):
-                        probe = results_by_q | {qv: (float(rv[0]), int(rv[1])) for qv, rv in zip(missing[:idx], computed)}
-                        best_q_local, best_res_local = min(probe.items(), key=lambda kv: kv[1][0])
-                        print(
-                            f"[QFIT {progress_label}] {stage_label} completed {len(probe)}/{len(unique_q_values)} "
-                            f"last q={q_value:.3e} obj={float(result[0]):.6f} "
-                            f"best objective={float(best_res_local[0]):.6f} q={best_q_local:.3e} obs={int(best_res_local[1])}",
-                            flush=True,
-                        )
-            else:
-                future_to_q = {
-                    executor.submit(
-                        _de_worker_evaluate,
-                        float(math.log(q_value)),
-                        x0_fixed,
-                        float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed,
-                    ): q_value
-                    for q_value in missing
-                }
-                computed_by_q: dict[float, tuple[float, int]] = {}
-                completed = 0
-                pending: set[concurrent.futures.Future[tuple[float, int]]] = set(future_to_q.keys())
-                while pending:
-                    done, pending = concurrent.futures.wait(
-                        pending,
-                        timeout=15.0,
-                        return_when=concurrent.futures.FIRST_COMPLETED,
-                    )
-                    if not done:
-                        if progress_label:
-                            print(
-                                f"[QFIT {progress_label}] {stage_label} waiting... completed {completed}/{len(missing)} "
-                                f"pending={len(pending)}",
-                                flush=True,
-                            )
-                        continue
-                    for future in done:
-                        q_value = future_to_q[future]
-                        try:
-                            value = future.result()
-                        except Exception as exc:
-                            raise RuntimeError(f"Q evaluation worker failed for q={q_value:.3e} in stage '{stage_label}'") from exc
-                        computed_by_q[q_value] = (float(value[0]), int(value[1]))
-                        completed += 1
-                        if progress_label and (completed % progress_every == 0 or completed == len(missing)):
-                            probe = results_by_q | computed_by_q
-                            best_q_local, best_res_local = min(probe.items(), key=lambda kv: kv[1][0])
-                            print(
-                                f"[QFIT {progress_label}] {stage_label} completed {len(probe)}/{len(unique_q_values)} "
-                                f"last q={q_value:.3e} obj={float(value[0]):.6f} "
-                                f"best objective={float(best_res_local[0]):.6f} q={best_q_local:.3e} obs={int(best_res_local[1])}",
-                                flush=True,
-                            )
-                computed = [computed_by_q[q_value] for q_value in missing]
-
-            for q_value, value in zip(missing, computed):
-                result = (float(value[0]), int(value[1]))
-                parallel_cache[q_value] = result
-                if score_cache is not None:
-                    score_cache[q_value] = result
-                results_by_q[q_value] = result
-
-        for q_value, result in results_by_q.items():
-            evaluated_scores[float(q_value)] = (float(result[0]), int(result[1]))
-
-        return results_by_q
-
-    search_min = Q_SEARCH_MIN
-    candidates = np.logspace(math.log10(search_min), math.log10(Q_SEARCH_MAX), 61, dtype=float)
-    candidate_values = sorted(set(float(max(search_min, min(Q_SEARCH_MAX, value))) for value in candidates) | {float(max(search_min, min(Q_SEARCH_MAX, initial_q)))})
-
-    best_q = candidate_values[0]
+    evaluations = 0
+    best_q = initial_q_clamped
+    best_a = initial_a_clamped
     best_score = float("inf")
     best_obs = 0
+
     if progress_label:
-        worker_text = f"{n_workers} workers" if use_parallel else "single worker"
         p0_text = f"{p0_scale:.1f}*q" if p0_scale is not None else f"{p0_fixed:.3e}"
+        worker_text = f"{de_workers} workers (DE phases)" if de_workers > 1 else "1 worker (DE phases)"
+        requested_workers = f", requested n_workers={int(n_workers)} (ignored; using workers=popsize={de_popsize})" if n_workers is not None else ""
         print(
             f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0={p0_text} "
-            f"({worker_text}, mp={mp_context_name}, unordered completion in parallel mode)",
+            f"a0={initial_a_clamped:.3e} "
+            f"(optimizer=DE(1)+GD+DE(19)+GD, parallel={worker_text}{requested_workers})",
             flush=True,
         )
+
+    def _register(score: float, obs: int, q_value: float, ar_a_value: float) -> None:
+        nonlocal evaluations, best_q, best_a, best_score, best_obs
+        evaluations += 1
+        if score < best_score:
+            best_q = float(q_value)
+            best_a = float(ar_a_value)
+            best_score = float(score)
+            best_obs = int(obs)
+        if progress_label and (evaluations % progress_every == 0 or evaluations == 1):
+            print(
+                f"[QFIT {progress_label}] eval {evaluations} q={q_value:.3e} a={ar_a_value:.3e} obj={score:.6f} "
+                f"best objective={best_score:.6f} q={best_q:.3e} a={best_a:.3e} obs={best_obs}",
+                flush=True,
+            )
+
+    def _score_for(q_value: float, ar_a_value: float) -> tuple[float, int]:
+        p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
+        score, obs = evaluate_q_score(
+            groups,
+            float(q_value),
+            objective,
+            ar_a=float(min(1.0, max(0.0, ar_a_value))),
+            initial_x0=x0_fixed,
+            initial_p0=p0_for_q,
+            score_cache=score_cache,
+        )
+        return float(score), int(obs)
+
+    def _objective(theta: np.ndarray) -> float:
+        log_q = float(theta[0])
+        ar_a = float(min(1.0, max(0.0, theta[1])))
+        log_q = float(max(log_q_min, min(log_q_max, log_q)))
+        q_value = float(math.exp(log_q))
+        score, obs = _score_for(q_value, ar_a)
+        _register(float(score), int(obs), q_value, ar_a)
+        if not np.isfinite(float(score)):
+            return 1e300
+        return float(score)
+
+    def _mle_objective_and_gradient(theta: np.ndarray) -> tuple[float, np.ndarray, int, float, float]:
+        log_q = float(max(log_q_min, min(log_q_max, float(theta[0]))))
+        ar_a = float(min(1.0, max(0.0, float(theta[1]))))
+        q_value = float(math.exp(log_q))
+        p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
+        score, obs, grad_q, grad_a = q_objective_mle_with_gradient(
+            groups,
+            q_value,
+            ar_a=ar_a,
+            initial_x0=x0_fixed,
+            initial_p0=p0_for_q,
+        )
+        if not np.isfinite(score):
+            return 1e300, np.array([0.0, 0.0], dtype=float), int(obs), q_value, ar_a
+        grad_log_q = float(grad_q * q_value)
+        # If p0 tracks q, chain rule adds dp0/dlogq = p0_scale*q
+        if p0_scale is not None:
+            # p0 enters as initializer/cap; this term is intentionally omitted for stability.
+            pass
+        grad = np.array([grad_log_q, float(grad_a)], dtype=float)
+        return float(score), grad, int(obs), q_value, ar_a
+
+    # Seed from initial guess.
+    _objective(np.array([math.log(initial_q_clamped), initial_a_clamped], dtype=float))
+
+    de_gen1 = 0
+
+    def _de_callback_phase1(_xk: np.ndarray, _convergence: float) -> bool:
+        nonlocal de_gen1
+        de_gen1 += 1
+        print(f"[QFIT {log_label}] DE phase 1 generation {de_gen1}/20", flush=True)
+        return False
+
     try:
-        candidate_scores = evaluate_many(candidate_values, stage_label="grid")
-        best_grid_idx = 0
-        for q_value in candidate_values:
-            score, obs = candidate_scores[q_value]
-            if score < best_score:
-                best_q = q_value
-                best_score = score
-                best_obs = obs
-                best_grid_idx = candidate_values.index(q_value)
+        de_result_early = differential_evolution(
+            _objective,
+            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
+            maxiter=1,
+            popsize=de_popsize,
+            polish=False,
+            updating=de_updating,
+            workers=de_workers_map if de_workers_map is not None else de_workers,
+            seed=42,
+            callback=_de_callback_phase1,
+        )
+        _objective(np.asarray(de_result_early.x, dtype=float))
+        print(f"[QFIT {log_label}] PHASE1_EARLY_DONE generations={de_gen1}", flush=True)
 
-        # Stage 1.5: local log-space refinement around best grid region.
-        golden_bracket: tuple[float, float] | None = None
-        if len(candidate_values) >= 3:
-            left_idx = max(0, best_grid_idx - 1)
-            right_idx = min(len(candidate_values) - 1, best_grid_idx + 1)
-            q_left_local = float(candidate_values[left_idx])
-            q_right_local = float(candidate_values[right_idx])
+        refine_progress_every = max(1, progress_every)
 
-            if q_right_local < q_left_local:
-                q_left_local, q_right_local = q_right_local, q_left_local
+        def _refine_half_population(
+            population: np.ndarray,
+            energies: np.ndarray,
+            *,
+            phase_name: str,
+        ) -> np.ndarray:
+            pop = np.asarray(population, dtype=float)
+            eng = np.asarray(energies, dtype=float)
+            if eng.size != pop.shape[0]:
+                eng = np.array([_objective(theta) for theta in pop], dtype=float)
+            order_local = np.argsort(eng)
+            refine_count_local = max(1, int(math.ceil(0.5 * float(len(order_local)))))
+            refine_indices_local = order_local[:refine_count_local]
 
-            # Expand if interval collapsed due clipping/duplicates.
-            if not (q_right_local > q_left_local):
-                q_left_local = float(max(search_min, best_q / 3.0))
-                q_right_local = float(min(Q_SEARCH_MAX, best_q * 3.0))
+            print(
+                f"[QFIT {log_label}] DE {phase_name} finished: pop={len(order_local)} refining top {refine_count_local} "
+                f"with SciPy L-BFGS-B (gradient-based)",
+                flush=True,
+            )
+            print(f"[QFIT {log_label}] REFINEMENT_START phase={phase_name} count={refine_count_local}", flush=True)
 
-            if q_right_local > q_left_local:
-                local_log_candidates = np.geomspace(q_left_local, q_right_local, 21, dtype=float)
-                local_values = sorted(
-                    set(
-                        float(max(search_min, min(Q_SEARCH_MAX, value)))
-                        for value in local_log_candidates
-                    )
-                    | {float(best_q)}
+            refined_population_local = np.asarray(pop, dtype=float).copy()
+            tasks: list[_RefineTask] = []
+            for refine_rank, idx in enumerate(refine_indices_local, start=1):
+                theta0 = np.asarray(pop[int(idx)], dtype=float).copy()
+                theta0[0] = float(max(log_q_min, min(log_q_max, theta0[0])))
+                theta0[1] = float(min(1.0, max(0.0, theta0[1])))
+                start_q = float(math.exp(float(theta0[0])))
+                start_a = float(theta0[1])
+                start_score, start_obs = _score_for(start_q, start_a)
+                _register(float(start_score), int(start_obs), start_q, start_a)
+                print(
+                    f"[QFIT {log_label}] refine {phase_name} {refine_rank}/{refine_count_local} start "
+                    f"q={start_q:.3e} a={start_a:.3e} obj={start_score:.6f}",
+                    flush=True,
                 )
-                local_scores = evaluate_many(local_values, stage_label="local-log")
-                best_local_idx = min(range(len(local_values)), key=lambda idx: local_scores[local_values[idx]][0])
-                for idx, q_value in enumerate(local_values):
-                    score, obs = local_scores[q_value]
-                    if score < best_score:
-                        best_q = q_value
-                        best_score = score
-                        best_obs = obs
+                tasks.append(
+                    _RefineTask(
+                        idx=int(idx),
+                        rank=int(refine_rank),
+                        theta0=(float(theta0[0]), float(theta0[1])),
+                        objective=str(objective),
+                        log_q_min=float(log_q_min),
+                        log_q_max=float(log_q_max),
+                    )
+                )
 
-                if len(local_values) >= 3:
-                    lb_idx = max(0, best_local_idx - 1)
-                    rb_idx = min(len(local_values) - 1, best_local_idx + 1)
-                    golden_left = float(local_values[lb_idx])
-                    golden_right = float(local_values[rb_idx])
-                    if golden_right > golden_left:
-                        golden_bracket = (golden_left, golden_right)
-
-        # Stage 2: golden-section refinement in linear q-space, bracketed around best point.
-        if len(candidate_values) >= 3:
-            if golden_bracket is not None:
-                q_left, q_right = golden_bracket
-            else:
-                if best_grid_idx <= 0:
-                    q_left = candidate_values[0]
-                    q_right = candidate_values[1]
-                elif best_grid_idx >= len(candidate_values) - 1:
-                    q_left = candidate_values[-2]
-                    q_right = candidate_values[-1]
-                else:
-                    q_left = candidate_values[best_grid_idx - 1]
-                    q_right = candidate_values[best_grid_idx + 1]
-
-            q_left = float(max(search_min, min(Q_SEARCH_MAX, q_left)))
-            q_right = float(max(search_min, min(Q_SEARCH_MAX, q_right)))
-            if q_right < q_left:
-                q_left, q_right = q_right, q_left
-
-            # Expand if interval collapsed due clipping/duplicates.
-            if not (q_right > q_left):
-                q_left = float(max(search_min, best_q / 3.0))
-                q_right = float(min(Q_SEARCH_MAX, best_q * 3.0))
-
-            if q_right > q_left:
-                a = float(q_left)
-                b = float(q_right)
-                phi = (1.0 + math.sqrt(5.0)) / 2.0
-                invphi = 1.0 / phi
-                c = b - (b - a) * invphi
-                d = a + (b - a) * invphi
-
-                cd_scores = evaluate_many([float(c), float(d)], stage_label="golden-init")
-                fc, oc = cd_scores[float(c)]
-                fd, od = cd_scores[float(d)]
-                golden_iterations = 40
-                if progress_label:
+            if de_pool is not None and len(tasks) > 1:
+                print(
+                    f"[QFIT {log_label}] REFINEMENT_PARALLEL phase={phase_name} workers={de_workers}",
+                    flush=True,
+                )
+                for result in de_pool.imap_unordered(_refine_candidate_worker, tasks, chunksize=1):
+                    refined_theta = np.array([math.log(result.q_value), result.ar_a], dtype=float)
+                    refined_theta[0] = float(max(log_q_min, min(log_q_max, refined_theta[0])))
+                    refined_theta[1] = float(min(1.0, max(0.0, refined_theta[1])))
+                    refined_population_local[int(result.idx), :] = refined_theta
+                    _register(float(result.score), int(result.obs), float(result.q_value), float(result.ar_a))
+                    status = "success" if bool(result.success) else f"not-converged ({result.message})"
                     print(
-                        f"[QFIT {progress_label}] golden bracket=[{q_left:.3e}, {q_right:.3e}] iters={golden_iterations}",
+                        f"[QFIT {log_label}] refine {phase_name} {result.rank}/{refine_count_local} done "
+                        f"q={result.q_value:.3e} a={result.ar_a:.3e} obj={result.score:.6f} optimizer={status}",
                         flush=True,
                     )
+                return refined_population_local
 
-                for it in range(golden_iterations):
-                    if fc <= fd:
-                        b = d
-                        d = c
-                        fd = fc
-                        od = oc
-                        c = b - (b - a) * invphi
-                        q_c = float(c)
-                        eval_c = evaluate_many([q_c], stage_label=f"golden-{it + 1}")
-                        fc, oc = eval_c[q_c]
-                    else:
-                        a = c
-                        c = d
-                        fc = fd
-                        oc = od
-                        d = a + (b - a) * invphi
-                        q_d = float(d)
-                        eval_d = evaluate_many([q_d], stage_label=f"golden-{it + 1}")
-                        fd, od = eval_d[q_d]
+            for task in tasks:
+                theta0 = np.array(task.theta0, dtype=float)
+                if objective == "mle":
+                    last_theta: np.ndarray | None = None
+                    last_score = float("inf")
+                    last_grad = np.array([0.0, 0.0], dtype=float)
+                    refine_iter = 0
 
-                    if progress_label and ((it + 1) % progress_every == 0 or it + 1 == golden_iterations):
-                        q_best_iter = float(c) if fc <= fd else float(d)
-                        f_best_iter = float(fc if fc <= fd else fd)
+                    def _eval_mle_cached(theta: np.ndarray) -> tuple[float, np.ndarray]:
+                        nonlocal last_theta, last_score, last_grad
+                        theta_vec = np.asarray(theta, dtype=float)
+                        if last_theta is not None and np.array_equal(theta_vec, last_theta):
+                            return float(last_score), np.asarray(last_grad, dtype=float)
+                        score, grad, obs, q_value, ar_a = _mle_objective_and_gradient(theta_vec)
+                        _register(float(score), int(obs), float(q_value), float(ar_a))
+                        last_theta = theta_vec.copy()
+                        last_score = float(score)
+                        last_grad = np.asarray(grad, dtype=float).copy()
+                        return float(last_score), np.asarray(last_grad, dtype=float)
+
+                    def _refine_callback_mle(xk: np.ndarray) -> None:
+                        nonlocal refine_iter
+                        refine_iter += 1
+                        if refine_iter % refine_progress_every != 0:
+                            return
+                        score, grad = _eval_mle_cached(np.asarray(xk, dtype=float))
+                        qk = float(math.exp(float(max(log_q_min, min(log_q_max, float(xk[0]))))))
+                        ak = float(min(1.0, max(0.0, float(xk[1]))))
+                        gnorm = float(np.linalg.norm(np.asarray(grad, dtype=float)))
                         print(
-                            f"[QFIT {progress_label}] golden iter {it + 1}/{golden_iterations} "
-                            f"best objective={f_best_iter:.6f} q={q_best_iter:.3e}",
+                            f"[QFIT {log_label}] refine {phase_name} {task.rank}/{refine_count_local} iter {refine_iter} "
+                            f"q={qk:.3e} a={ak:.3e} obj={score:.6f} |grad|={gnorm:.3e}",
                             flush=True,
                         )
-    finally:
-        if executor is not None:
-            executor.shutdown(wait=True, cancel_futures=True)
 
-    if evaluated_scores:
-        final_q, final_res = min(evaluated_scores.items(), key=lambda kv: kv[1][0])
-        best_q = float(final_q)
-        best_score = float(final_res[0])
-        best_obs = int(final_res[1])
+                    local_result = minimize(
+                        lambda t: _eval_mle_cached(t)[0],
+                        x0=theta0,
+                        method="L-BFGS-B",
+                        jac=lambda t: _eval_mle_cached(t)[1],
+                        callback=_refine_callback_mle,
+                        bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
+                        options={"maxiter": 120, "ftol": 1e-12},
+                    )
+                else:
+                    local_result = minimize(
+                        _objective,
+                        x0=theta0,
+                        method="L-BFGS-B",
+                        bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
+                        options={"maxiter": 120, "ftol": 1e-12},
+                    )
+
+                refined_theta = np.asarray(local_result.x, dtype=float)
+                refined_theta[0] = float(max(log_q_min, min(log_q_max, refined_theta[0])))
+                refined_theta[1] = float(min(1.0, max(0.0, refined_theta[1])))
+                refined_population_local[int(task.idx), :] = refined_theta
+
+                local_log_q = float(refined_theta[0])
+                local_ar_a = float(refined_theta[1])
+                local_q = float(math.exp(local_log_q))
+                local_score, local_obs = _score_for(local_q, local_ar_a)
+                _register(float(local_score), int(local_obs), local_q, local_ar_a)
+                status = "success" if bool(local_result.success) else f"not-converged ({local_result.message})"
+                print(
+                    f"[QFIT {log_label}] refine {phase_name} {task.rank}/{refine_count_local} done "
+                    f"q={local_q:.3e} a={local_ar_a:.3e} obj={local_score:.6f} optimizer={status}",
+                    flush=True,
+                )
+            return refined_population_local
+
+        de_early_population = np.asarray(getattr(de_result_early, "population", np.atleast_2d(de_result_early.x)), dtype=float)
+        de_early_energies = np.asarray(getattr(de_result_early, "population_energies", np.array([])), dtype=float)
+        refined_population_early = _refine_half_population(de_early_population, de_early_energies, phase_name="phase1-early")
+
+        print(
+            f"[QFIT {log_label}] continuing DE phase 1 for remaining generations after early refine",
+            flush=True,
+        )
+        de_result = differential_evolution(
+            _objective,
+            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
+            maxiter=19,
+            popsize=de_popsize,
+            polish=False,
+            updating=de_updating,
+            workers=de_workers_map if de_workers_map is not None else de_workers,
+            seed=142,
+            init=refined_population_early,
+            callback=_de_callback_phase1,
+        )
+        _objective(np.asarray(de_result.x, dtype=float))
+        print(f"[QFIT {log_label}] PHASE1_DONE generations={de_gen1}", flush=True)
+
+        de_population = np.asarray(getattr(de_result, "population", np.atleast_2d(de_result.x)), dtype=float)
+        de_energies = np.asarray(getattr(de_result, "population_energies", np.array([])), dtype=float)
+        refined_population = _refine_half_population(de_population, de_energies, phase_name="phase1")
+
+        print(
+            f"[QFIT {log_label}] restarting DE for 20 iterations with partially refined population",
+            flush=True,
+        )
+        print(f"[QFIT {log_label}] PHASE2_START", flush=True)
+
+        de_gen2 = 0
+
+        def _de_callback_phase2(_xk: np.ndarray, _convergence: float) -> bool:
+            nonlocal de_gen2
+            de_gen2 += 1
+            print(f"[QFIT {log_label}] DE phase 2 generation {de_gen2}/20", flush=True)
+            return False
+
+        de_result2 = differential_evolution(
+            _objective,
+            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
+            maxiter=20,
+            popsize=de_popsize,
+            polish=False,
+            updating=de_updating,
+            workers=de_workers_map if de_workers_map is not None else de_workers,
+            seed=43,
+            init=refined_population,
+            callback=_de_callback_phase2,
+        )
+        _objective(np.asarray(de_result2.x, dtype=float))
+        print(f"[QFIT {log_label}] PHASE2_DONE generations={de_gen2}", flush=True)
+        de2_population = np.asarray(getattr(de_result2, "population", np.atleast_2d(de_result2.x)), dtype=float)
+        de2_energies = np.asarray(getattr(de_result2, "population_energies", np.array([])), dtype=float)
+        _ = _refine_half_population(de2_population, de2_energies, phase_name="phase2")
+    finally:
+        if de_pool is not None:
+            de_pool.close()
+            de_pool.join()
 
     if progress_label:
-        at_lower = abs(best_q - float(Q_SEARCH_MIN)) <= max(1e-20, abs(Q_SEARCH_MIN) * 1e-9)
-        at_upper = abs(best_q - float(Q_SEARCH_MAX)) <= max(1e-20, abs(Q_SEARCH_MAX) * 1e-9)
+        at_lower = abs(best_q - q_min) <= max(1e-20, abs(q_min) * 1e-9)
+        at_upper = abs(best_q - q_max) <= max(1e-20, abs(q_max) * 1e-9)
         boundary_note = " [BOUNDARY]" if (at_lower or at_upper) else ""
         print(
-            f"[QFIT {progress_label}] done best objective={best_score:.6f} q={best_q:.3e} obs={best_obs}{boundary_note}",
+            f"[QFIT {progress_label}] done best objective={best_score:.6f} q={best_q:.3e} a={best_a:.3e} obs={best_obs} "
+            f"evals={evaluations} optimizer=DE(1)+SciPy-LBFGSB+DE(19)+SciPy-LBFGSB+DE(20){boundary_note}",
             flush=True,
         )
 
-    return best_q, best_score, best_obs
+    return float(best_q), float(best_a), float(best_score), int(best_obs)

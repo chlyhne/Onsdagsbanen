@@ -27,14 +27,15 @@ from .model import estimate_global_q
 from .model import estimate_initial_x0_from_first_observations
 from .model import evaluate_q_score
 from .model import fit_global_q
-from .model import load_group_q_cache
+from .model import load_group_qa_cache
 from .model import q_cache_path_for_objective
 from .model import q_diagnostics
 from .model import resolve_q_objective
 from .model import run_all_groups_with_transfer
-from .model import save_group_q_cache
+from .model import save_group_qa_cache
 
-P0_FROM_Q_SCALE = 365.0
+P0_FIXED = 365.0 * 5.423e-06
+QFIT_DE_WORKERS = 5
 
 
 def _fit_group_qs(
@@ -43,13 +44,14 @@ def _fit_group_qs(
     output_dir: Path,
     q_objective: str,
     run_q_diagnostics: bool = False,
-) -> tuple[dict[str, float], dict[str, float], dict[str, float], list[dict[str, Any]], pd.DataFrame, bool, Path]:
+) -> tuple[dict[str, float], dict[str, float], dict[str, float], dict[str, float], list[dict[str, Any]], pd.DataFrame, bool, Path]:
     q_grid = np.logspace(math.log10(Q_SEARCH_MIN), math.log10(Q_SEARCH_MAX), 61, dtype=float)
     q_cache_path = q_cache_path_for_objective(output_dir, q_objective)
-    cached_q_map = load_group_q_cache(q_cache_path)
+    cached_q_map, cached_a_map = load_group_qa_cache(q_cache_path)
     using_cached_q = bool(cached_q_map)
 
     q_by_group: dict[str, float] = {}
+    ar_a_by_group: dict[str, float] = {}
     x0_by_group: dict[str, float] = {}
     p0_by_group: dict[str, float] = {}
     q_fit_rows: list[dict[str, Any]] = []
@@ -58,35 +60,59 @@ def _fit_group_qs(
     for group in groups:
         group_name = str(group["group"])
         estimated_initial_q = estimate_global_q(group["combined"])
+        has_cached_q = group_name in cached_q_map
+        has_cached_a = group_name in cached_a_map
         initial_q_for_fit = float(cached_q_map.get(group_name, estimated_initial_q))
+        initial_ar_a_for_fit = float(min(1.0, max(0.0, cached_a_map.get(group_name, 0.5))))
         group_x0 = float(estimate_initial_x0_from_first_observations(group))
-        initial_p0_for_fit = float(max(EPS, P0_FROM_Q_SCALE * initial_q_for_fit))
-        group_q, fit_score, fit_obs = fit_global_q(
-            [group],
-            initial_q=initial_q_for_fit,
-            objective=q_objective,
-            initial_x0=group_x0,
-            initial_p0=initial_p0_for_fit,
-            p0_from_q_scale=P0_FROM_Q_SCALE,
-            progress_label=group_name,
-            progress_every=1,
-        )
-        group_p0 = float(max(EPS, P0_FROM_Q_SCALE * group_q))
-        rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse", initial_x0=group_x0, initial_p0=group_p0)
-        mle_score, mle_obs = evaluate_q_score([group], group_q, "mle", initial_x0=group_x0, initial_p0=group_p0)
+        initial_p0_for_fit = float(max(EPS, P0_FIXED))
+        if has_cached_q and has_cached_a:
+            group_q = float(initial_q_for_fit)
+            group_ar_a = float(initial_ar_a_for_fit)
+            group_p0_cached = float(max(EPS, P0_FIXED))
+            fit_score, fit_obs = evaluate_q_score(
+                [group],
+                group_q,
+                q_objective,
+                ar_a=group_ar_a,
+                initial_x0=group_x0,
+                initial_p0=group_p0_cached,
+            )
+            q_source = "q-and-a-cache"
+        else:
+            group_q, group_ar_a, fit_score, fit_obs = fit_global_q(
+                [group],
+                initial_q=initial_q_for_fit,
+                objective=q_objective,
+                initial_ar_a=initial_ar_a_for_fit,
+                initial_x0=group_x0,
+                initial_p0=initial_p0_for_fit,
+                n_workers=QFIT_DE_WORKERS,
+                progress_label=group_name,
+                progress_every=1,
+            )
+            q_source = "q-and-a-fit"
+        group_p0 = float(max(EPS, P0_FIXED))
+        rmse_score, rmse_obs = evaluate_q_score([group], group_q, "rmse", ar_a=group_ar_a, initial_x0=group_x0, initial_p0=group_p0)
+        mle_score, mle_obs = evaluate_q_score([group], group_q, "mle", ar_a=group_ar_a, initial_x0=group_x0, initial_p0=group_p0)
         q_by_group[group_name] = float(group_q)
+        ar_a_by_group[group_name] = float(group_ar_a)
         x0_by_group[group_name] = float(group_x0)
         p0_by_group[group_name] = float(group_p0)
+        # Write-through cache: persist successful q/a fit immediately so progress survives interruptions.
+        save_group_qa_cache(q_cache_path, q_by_group, ar_a_by_group)
         q_fit_rows.append(
             {
                 "group": group_name,
                 "initial_q": float(initial_q_for_fit),
+                "initial_ar_a": float(initial_ar_a_for_fit),
                 "estimated_initial_q": float(estimated_initial_q),
                 "fitted_q": float(group_q),
+                "fitted_ar_a": float(group_ar_a),
                 "fitted_x0": float(group_x0),
                 "fitted_p0": float(group_p0),
                 "x0_source": "fixed-first-observation-mean",
-                "p0_source": "fixed-as-365-times-q",
+                "p0_source": "fixed-constant-365-times-5.423e-06",
                 "fit_objective": q_objective,
                 "fit_score": float(fit_score),
                 "fit_obs": int(fit_obs),
@@ -94,29 +120,29 @@ def _fit_group_qs(
                 "rmse_observations": int(rmse_obs),
                 "negative_log_likelihood": float(mle_score),
                 "nll_observations": int(mle_obs),
-                "q_source": "q-only-fit",
+                "q_source": q_source,
             }
         )
         if run_q_diagnostics:
             group_diag = q_diagnostics(
                 [group],
                 q_grid,
+                ar_a=group_ar_a,
                 initial_x0=group_x0,
-                initial_p0=initial_p0_for_fit,
-                p0_from_q_scale=P0_FROM_Q_SCALE,
+                initial_p0=group_p0,
                 progress_label=group_name,
                 progress_every=10,
             )
             group_diag["group"] = group_name
             group_diag["fit_objective"] = q_objective
             group_diag["x0_value"] = float(group_x0)
-            group_diag["p0_formula_scale"] = float(P0_FROM_Q_SCALE)
+            group_diag["p0_value"] = float(group_p0)
             group_diag["source"] = "joint-fit"
             q_diag_frames.append(group_diag)
 
-    save_group_q_cache(q_cache_path, q_by_group)
+    save_group_qa_cache(q_cache_path, q_by_group, ar_a_by_group)
     q_diag = pd.concat(q_diag_frames, ignore_index=True) if q_diag_frames else pd.DataFrame()
-    return q_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path
+    return q_by_group, ar_a_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path
 
 
 def _enrich_history(history: pd.DataFrame, competitor_year_group: dict[tuple[str, int], str]) -> pd.DataFrame:
@@ -183,7 +209,7 @@ def _write_core_outputs(history: pd.DataFrame, q_diag: pd.DataFrame, *, output_d
         history.sort_values(["group", "competitor", "race_date", "race"])
         .groupby(["group", "competitor"], as_index=False)
         .tail(1)
-        .loc[:, ["group", "competitor", "race", "race_date", "x_post", "p_post", "global_q"]]
+        .loc[:, ["group", "competitor", "race", "race_date", "x_post", "p_post", "global_q", "global_ar_a"]]
         .rename(columns={"x_post": "x_estimate_latest", "p_post": "p_variance_latest"})
         .reset_index(drop=True)
     )
@@ -219,12 +245,13 @@ def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | N
     if not groups or all_data.empty:
         raise RuntimeError("No group data could be built.")
 
-    q_by_group, x0_by_group, p0_by_group, _, _, _, _ = _fit_group_qs(groups, output_dir=cache_dir, q_objective=q_objective)
+    q_by_group, ar_a_by_group, x0_by_group, p0_by_group, _, _, _, _ = _fit_group_qs(groups, output_dir=cache_dir, q_objective=q_objective)
     competitor_year_group = build_competitor_year_group_map(all_data, NON_OBS_STATUSES)
     history, _, _ = run_all_groups_with_transfer(
         groups,
         q_by_group,
         competitor_year_group,
+        ar_a_by_group=ar_a_by_group,
         initial_x0_by_group=x0_by_group,
         initial_p0_by_group=p0_by_group,
         collect_history=True,
@@ -253,7 +280,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
     if not groups or all_data.empty:
         raise RuntimeError("No group data could be built.")
 
-    q_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path = _fit_group_qs(
+    q_by_group, ar_a_by_group, x0_by_group, p0_by_group, q_fit_rows, q_diag, using_cached_q, q_cache_path = _fit_group_qs(
         groups,
         output_dir=output_dir,
         q_objective=q_objective,
@@ -264,6 +291,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
         groups,
         q_by_group,
         competitor_year_group,
+        ar_a_by_group=ar_a_by_group,
         initial_x0_by_group=x0_by_group,
         initial_p0_by_group=p0_by_group,
         collect_history=True,
@@ -297,15 +325,17 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
     race_cdf_manifest_path, race_cdf_appendix_tex_path = export_race_cdf_appendix(history, output_dir=output_dir, years=(2025, 2026))
 
     if using_cached_q:
-        print(f"Loaded group Q cache (as start values): {q_cache_path} (fit objective={q_objective})")
+        print(f"Loaded group Q/A cache: {q_cache_path} (fit objective={q_objective})")
     else:
-        print(f"Saved fitted group Q to cache: {q_cache_path} (fit objective={q_objective})")
+        print(f"Saved fitted group Q/A to cache: {q_cache_path} (fit objective={q_objective})")
 
     for row in q_fit_rows:
         metric_text = f"NLL={float(row['fit_score']):.3f}" if str(row["fit_objective"]) == "mle" else f"1-step RMSE={float(row['fit_score']):.3f}"
         print(
             f"{row['group']}: initial Q={row['initial_q']:.3e}, "
+            f"initial a={row['initial_ar_a']:.3e}, "
             f"fitted Q={row['fitted_q']:.3e}, "
+            f"fitted a={row['fitted_ar_a']:.3e}, "
             f"x0(fixed)={row['fitted_x0']:+.4f}, "
             f"p0(fixed)={row['fitted_p0']:.3e}, "
             f"fit-objective={row['fit_objective']}, {metric_text} over {int(row['fit_obs'])} observations, "

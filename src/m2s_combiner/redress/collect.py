@@ -24,6 +24,7 @@ from .common import sail_digits
 from .common import similarity
 from .constants import EXCLUDED_CLASS_PREFIXES_BY_YEAR
 from .constants import EVENT_URLS_BY_YEAR
+from .constants import NON_OBS_STATUSES
 
 
 def parse_race_date(item: dict[str, Any]) -> datetime | None:
@@ -378,8 +379,36 @@ def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
         updated["combined"] = stacked[stacked["_group_idx"] == idx].drop(columns=["_group_idx"]).reset_index(drop=True)
         updated_groups.append(updated)
 
-    all_data = stacked.drop(columns=["_group_idx"]).reset_index(drop=True)
-    return updated_groups, all_data
+    # Keep only competitors with strictly more than 3 observed data points.
+    # Observed means beregnet_seconds exists and race status is not a non-observed code.
+    filtered_groups: list[dict[str, Any]] = []
+    filtered_rows: list[pd.DataFrame] = []
+    for group in updated_groups:
+        combined = group["combined"].copy()
+        if combined.empty:
+            continue
+
+        status_series = combined["race_status_code"] if "race_status_code" in combined.columns else pd.Series("", index=combined.index)
+        combined["status_upper"] = status_series.fillna("").astype(str).str.upper().str.strip()
+        combined["is_obs"] = combined["beregnet_seconds"].notna() & (~combined["status_upper"].isin(NON_OBS_STATUSES))
+
+        obs_counts = combined.groupby("competitor")["is_obs"].sum()
+        eligible = set(obs_counts[obs_counts > 3].index.astype(str).tolist())
+        if not eligible:
+            continue
+
+        combined = combined.loc[combined["competitor"].astype(str).isin(eligible)].copy()
+        if combined.empty:
+            continue
+
+        combined = combined.drop(columns=["status_upper", "is_obs"], errors="ignore").reset_index(drop=True)
+        filtered_group = dict(group)
+        filtered_group["combined"] = combined
+        filtered_groups.append(filtered_group)
+        filtered_rows.append(combined)
+
+    all_data = pd.concat(filtered_rows, ignore_index=True) if filtered_rows else pd.DataFrame()
+    return filtered_groups, all_data
 
 
 def build_competitor_year_group_map(all_data: pd.DataFrame, non_observed_statuses: set[str]) -> dict[tuple[str, int], str]:
