@@ -46,7 +46,9 @@ def _rank_predictions_against_actual_field(group: pd.DataFrame) -> pd.Series:
 def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] | None, output_dir: Path) -> Path:
     required_columns = [
         "competitor", "group", "series", "race", "race_local", "race_date", "year", "observed",
-        "x_prior", "x_post", "x_obs", "x_proc_q25", "x_proc_q75", "x_total_q25", "x_total_q75", "x_q25", "x_q75",
+        "x_prior", "x_post", "p_prior",
+        "gamma_prior", "gamma_post", "p_gamma_prior",
+        "r_t", "b_t_hat", "beregnet_seconds",
     ]
     missing = [column for column in required_columns if column not in frame.columns]
     if missing:
@@ -89,14 +91,53 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
         c["x_pos"] = c["x_pos"].astype(int)
         c = c.sort_values(["x_pos"]).reset_index(drop=True)
 
+        # Plot in log-deviation space:
+        # - Data points: raw deviation from day baseline (without gamma compensation).
+        # - Priors/Posteriors: include gamma loading sqrt(r_t) * gamma.
+        gamma_loading = np.sqrt(np.clip(pd.to_numeric(c["r_t"], errors="coerce"), EPS, None))
+        x_prior = pd.to_numeric(c["x_prior"], errors="coerce")
+        x_post = pd.to_numeric(c["x_post"], errors="coerce")
+        gamma_prior = pd.to_numeric(c["gamma_prior"], errors="coerce")
+        gamma_post = pd.to_numeric(c["gamma_post"], errors="coerce")
+        p_prior = pd.to_numeric(c["p_prior"], errors="coerce")
+        p_gamma_prior = pd.to_numeric(c["p_gamma_prior"], errors="coerce")
+        b_t_hat = pd.to_numeric(c["b_t_hat"], errors="coerce")
+        beregnet_seconds = pd.to_numeric(c["beregnet_seconds"], errors="coerce")
+        y_obs = np.log(np.clip(beregnet_seconds, EPS, None))
+
+        c["plot_prior"] = x_prior + gamma_loading * gamma_prior
+        c["plot_post"] = x_post + gamma_loading * gamma_post
+        c["plot_obs"] = y_obs - b_t_hat
+        c.loc[c["observed"] != True, "plot_obs"] = np.nan  # noqa: E712
+
+        sigma_process_total = np.sqrt(np.clip(p_prior + np.square(gamma_loading) * p_gamma_prior, EPS, None))
+        sigma_total = np.sqrt(np.clip(p_prior + np.square(gamma_loading) * p_gamma_prior + pd.to_numeric(c["r_t"], errors="coerce"), EPS, None))
+        c["plot_proc_q25"] = c["plot_prior"] - Z50 * sigma_process_total
+        c["plot_proc_q75"] = c["plot_prior"] + Z50 * sigma_process_total
+        c["plot_total_q25"] = c["plot_prior"] - Z50 * sigma_total
+        c["plot_total_q75"] = c["plot_prior"] + Z50 * sigma_total
+
         base = events.loc[:, ["x_pos", "year", "race_local_display", "group"]].rename(columns={"race_local_display": "race_local"}).copy()
         base["race_display"] = base.apply(lambda row: f"'{int(row['year']) % 100:02d}-{str(row['race_local'])}", axis=1)
         base = base.drop(columns=["year"])
         series_values = c.loc[:, ["x_pos", "series"]].drop_duplicates(subset=["x_pos"], keep="first").copy()
-        values = c.loc[:, ["x_pos", "observed", "x_prior", "x_post", "x_obs", "x_proc_q25", "x_proc_q75", "x_total_q25", "x_total_q75", "x_q25", "x_q75"]].drop_duplicates(subset=["x_pos"], keep="first")
-        values["x_post"] = np.where(values["observed"].astype(bool), values["x_post"], np.nan)
+        values = c.loc[:, ["x_pos", "observed", "plot_prior", "plot_post", "plot_obs", "plot_proc_q25", "plot_proc_q75", "plot_total_q25", "plot_total_q75"]].drop_duplicates(subset=["x_pos"], keep="first")
+        values["plot_post"] = np.where(values["observed"].astype(bool), values["plot_post"], np.nan)
         values = values.drop(columns=["observed"])
         plot_data = base.merge(series_values, on="x_pos", how="left").merge(values, on="x_pos", how="left").sort_values("x_pos").reset_index(drop=True)
+        plot_data = plot_data.rename(
+            columns={
+                "plot_prior": "x_prior",
+                "plot_post": "x_post",
+                "plot_obs": "x_obs",
+                "plot_proc_q25": "x_proc_q25",
+                "plot_proc_q75": "x_proc_q75",
+                "plot_total_q25": "x_total_q25",
+                "plot_total_q75": "x_total_q75",
+            }
+        )
+        plot_data["x_q25"] = plot_data["x_proc_q25"]
+        plot_data["x_q75"] = plot_data["x_proc_q75"]
 
         local_y_values = (
             plot_data["x_prior"].dropna().astype(float).tolist()
@@ -164,6 +205,222 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
     manifest_path = output_dir / "boat_plot_manifest.csv"
     pd.DataFrame(manifest_rows).to_csv(manifest_path, index=False)
     return manifest_path
+
+
+def export_final_state_x_gamma_phase_plane(frame: pd.DataFrame, *, output_dir: Path) -> tuple[Path, Path]:
+    required_columns = ["competitor", "group", "race", "race_date", "x_post", "gamma_post"]
+    missing = [column for column in required_columns if column not in frame.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for final-state phase-plane export: {', '.join(missing)}")
+    if frame.empty:
+        raise ValueError("Cannot export final-state phase-plane from empty frame.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    work = frame.copy()
+    work["race_date_dt"] = pd.to_datetime(work["race_date"], errors="coerce")
+    work["race_num"] = work["race"].map(race_num)
+    work = work.dropna(subset=["race_date_dt", "race_num"])
+    if work.empty:
+        raise ValueError("No valid race_date/race values available for final-state phase-plane export.")
+
+    latest = (
+        work.sort_values(["competitor", "race_date_dt", "race_num", "race", "group"])
+        .groupby("competitor", as_index=False, sort=False)
+        .tail(1)
+        .reset_index(drop=True)
+    )
+    latest["x_final"] = pd.to_numeric(latest["x_post"], errors="coerce")
+    latest["gamma_final"] = pd.to_numeric(latest["gamma_post"], errors="coerce")
+    latest = latest.dropna(subset=["x_final", "gamma_final"]).copy()
+    if latest.empty:
+        raise ValueError("No finite x/gamma final states available for final-state phase-plane export.")
+
+    x_values = latest["x_final"].to_numpy(dtype=float)
+    gamma_values = latest["gamma_final"].to_numpy(dtype=float)
+    x_scale = float(max(EPS, np.mean(np.abs(x_values))))
+    gamma_scale = float(max(EPS, np.mean(np.abs(gamma_values))))
+    x_mean = float(np.mean(x_values))
+    gamma_mean = float(np.mean(gamma_values))
+
+    latest["x_scaled"] = latest["x_final"] / x_scale
+    latest["gamma_scaled"] = latest["gamma_final"] / gamma_scale
+
+    corr = float("nan")
+    if len(latest) >= 2:
+        x_std = float(np.std(latest["x_scaled"].to_numpy(dtype=float), ddof=0))
+        gamma_std = float(np.std(latest["gamma_scaled"].to_numpy(dtype=float), ddof=0))
+        if x_std > EPS and gamma_std > EPS:
+            corr = float(np.corrcoef(latest["x_scaled"].to_numpy(dtype=float), latest["gamma_scaled"].to_numpy(dtype=float))[0, 1])
+
+    slope = float("nan")
+    intercept = float("nan")
+    if len(latest) >= 2 and np.isfinite(corr):
+        x_vec = latest["x_scaled"].to_numpy(dtype=float)
+        y_vec = latest["gamma_scaled"].to_numpy(dtype=float)
+        x_var = float(np.var(x_vec, ddof=0))
+        if x_var > EPS:
+            slope = float(np.cov(x_vec, y_vec, ddof=0)[0, 1] / x_var)
+            intercept = float(np.mean(y_vec) - slope * float(np.mean(x_vec)))
+            latest["gamma_scaled_fit"] = intercept + slope * latest["x_scaled"]
+        else:
+            latest["gamma_scaled_fit"] = np.nan
+    else:
+        latest["gamma_scaled_fit"] = np.nan
+
+    export_columns = [
+        "competitor",
+        "group",
+        "race",
+        "race_date",
+        "x_final",
+        "gamma_final",
+        "x_scaled",
+        "gamma_scaled",
+        "gamma_scaled_fit",
+    ]
+    phase_plane_path = output_dir / "final_state_x_gamma_phase_plane.csv"
+    latest.loc[:, export_columns].sort_values(["group", "competitor"]).to_csv(phase_plane_path, index=False)
+
+    corr_text = "nan" if not np.isfinite(corr) else f"{corr:.4f}"
+    summary_lines = [
+        f"\\newcommand{{\\FinalStateBoatCount}}{{{int(len(latest))}}}",
+        f"\\newcommand{{\\FinalStateXMean}}{{{x_mean:.6g}}}",
+        f"\\newcommand{{\\FinalStateGammaMean}}{{{gamma_mean:.6g}}}",
+        f"\\newcommand{{\\FinalStateXScale}}{{{x_scale:.6g}}}",
+        f"\\newcommand{{\\FinalStateGammaScale}}{{{gamma_scale:.6g}}}",
+        f"\\newcommand{{\\FinalStateCorr}}{{{corr_text}}}",
+    ]
+    summary_path = output_dir / "final_state_x_gamma_phase_plane_summary.tex"
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    return phase_plane_path, summary_path
+
+
+def export_stor_bane_x_gamma_trajectories(
+    frame: pd.DataFrame,
+    *,
+    output_dir: Path,
+    years: tuple[int, ...] = (2025, 2026),
+    min_observed_races: int = 6,
+    group_name: str = "Stor Bane",
+) -> tuple[Path, Path, Path, Path]:
+    required_columns = ["group", "competitor", "race", "race_date", "year", "observed", "x_post", "gamma_post"]
+    missing = [column for column in required_columns if column not in frame.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for x-gamma trajectory export: {', '.join(missing)}")
+    if frame.empty:
+        raise ValueError("Cannot export x-gamma trajectories from empty frame.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    work = frame.copy()
+    work["group"] = work["group"].astype(str)
+    work["competitor"] = work["competitor"].astype(str)
+    work["year_num"] = pd.to_numeric(work["year"], errors="coerce")
+    work["observed_bool"] = work["observed"] == True  # noqa: E712
+    work["x_post"] = pd.to_numeric(work["x_post"], errors="coerce")
+    work["gamma_post"] = pd.to_numeric(work["gamma_post"], errors="coerce")
+    work["race_date_dt"] = pd.to_datetime(work["race_date"], errors="coerce")
+    work["race_num"] = work["race"].map(race_num)
+
+    year_set = {int(value) for value in years}
+    work = work[
+        (work["group"] == str(group_name))
+        & (work["year_num"].isin(year_set))
+        & (work["observed_bool"])
+    ].copy()
+    work = work.dropna(subset=["x_post", "gamma_post", "race_date_dt", "race_num"])
+    if work.empty:
+        raise ValueError(f"No observed rows for group '{group_name}' in years {sorted(year_set)}.")
+
+    counts = work.groupby("competitor", as_index=True).size()
+    competitors = sorted(counts[counts > int(max(0, min_observed_races - 1))].index.tolist())
+    work = work[work["competitor"].isin(competitors)].copy()
+    if work.empty:
+        raise ValueError(
+            f"No competitors in group '{group_name}' with more than {int(min_observed_races - 1)} observed races in years {sorted(year_set)}."
+        )
+
+    work = work.sort_values(["competitor", "race_date_dt", "race_num", "race"]).reset_index(drop=True)
+
+    detailed_rows: list[dict[str, Any]] = []
+    line_rows: list[dict[str, float | str]] = []
+    endpoint_rows: list[dict[str, float | str]] = []
+    per_competitor_dir = output_dir / "x_gamma_trajectories"
+    per_competitor_dir.mkdir(parents=True, exist_ok=True)
+    manifest_rows: list[dict[str, str]] = []
+    used_slugs: set[str] = set()
+    for competitor, sub in work.groupby("competitor", sort=True):
+        per_rows: list[dict[str, float | int | str]] = [{"x": 0.0, "gamma": 0.0, "step": 0}]
+        detailed_rows.append(
+            {
+                "competitor": competitor,
+                "step": 0,
+                "race_date": "",
+                "race": "",
+                "x": 0.0,
+                "gamma": 0.0,
+                "is_origin": True,
+            }
+        )
+        line_rows.append({"x": 0.0, "gamma": 0.0, "competitor": competitor})
+        for step_idx, (_, row) in enumerate(sub.iterrows(), start=1):
+            x_value = float(row["x_post"])
+            gamma_value = float(row["gamma_post"])
+            per_rows.append({"x": x_value, "gamma": gamma_value, "step": int(step_idx)})
+            detailed_rows.append(
+                {
+                    "competitor": competitor,
+                    "step": int(step_idx),
+                    "race_date": row["race_date_dt"].date().isoformat(),
+                    "race": str(row["race"]),
+                    "x": x_value,
+                    "gamma": gamma_value,
+                    "is_origin": False,
+                }
+            )
+            line_rows.append({"x": x_value, "gamma": gamma_value, "competitor": competitor})
+        # NaN row splits polylines in pgfplots with unbounded coords=jump.
+        line_rows.append({"x": float("nan"), "gamma": float("nan"), "competitor": ""})
+        endpoint = sub.iloc[-1]
+        endpoint_rows.append(
+            {
+                "competitor": competitor,
+                "x": float(endpoint["x_post"]),
+                "gamma": float(endpoint["gamma_post"]),
+            }
+        )
+        base_slug = slugify_filename(competitor) or "competitor"
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        trajectory_name = f"stor_bane_x_gamma_traj_{slug}.csv"
+        trajectory_path = per_competitor_dir / trajectory_name
+        pd.DataFrame(per_rows).to_csv(trajectory_path, index=False)
+        manifest_rows.append(
+            {
+                "competitor": competitor,
+                "competitor_display": display_name(competitor),
+                "competitor_label": latex_escape_text(display_name(competitor)),
+                "trajectory_csv": f"../analysis/x_gamma_trajectories/{trajectory_name}",
+            }
+        )
+
+    detailed = pd.DataFrame(detailed_rows)
+    line_data = pd.DataFrame(line_rows)
+    endpoints = pd.DataFrame(endpoint_rows).sort_values(["competitor"]).reset_index(drop=True)
+    manifest = pd.DataFrame(manifest_rows).sort_values(["competitor_display"]).reset_index(drop=True)
+
+    detailed_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026.csv"
+    line_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_plot.csv"
+    endpoints_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_endpoints.csv"
+    manifest_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_manifest.csv"
+    detailed.to_csv(detailed_path, index=False)
+    line_data.to_csv(line_path, index=False)
+    endpoints.to_csv(endpoints_path, index=False)
+    manifest.to_csv(manifest_path, index=False)
+    return detailed_path, line_path, endpoints_path, manifest_path
 
 
 def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Path, years: tuple[int, ...]) -> Path:

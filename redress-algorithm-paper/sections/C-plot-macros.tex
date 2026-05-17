@@ -1,8 +1,25 @@
 \newcommand{\BoatPlotDataDir}{../analysis/boat_plot_data}
 \newcommand{\MissingRacePredictionTablesTex}{../analysis/missing_race_prediction_tables.tex}
 \newcommand{\StorBaneSplitRecommendationTex}{../analysis/stor_bane_split_recommendation.tex}
+\newcommand{\StorBaneXGammaTrajectoryManifestCsv}{../analysis/stor_bane_x_gamma_trajectories_2025_2026_manifest.csv}
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
+
+\newcommand{\XGammaColorByIndex}[1]{%
+\ifcase\numexpr#1\relax
+blue!80!black%
+\or red!75!black%
+\or teal!70!black%
+\or orange!85!black%
+\or violet!75!black%
+\or cyan!70!black%
+\or olive!80!black%
+\or brown!75!black%
+\or magenta!80!black%
+\or gray!20!black%
+\else black%
+\fi
+}
 
 \newcommand{\AddBoatStateSeriesToAxis}[4]{%
 \addplot[name path=#4totalLow, draw=none, forget plot] table[x=x_pos,y=x_total_q25] {#1};
@@ -101,6 +118,106 @@ legend columns=2,
 \end{axis}
 \end{tikzpicture}
 \caption{#1. Antal observerede b\aa de: #4.}
+\end{figure}
+}
+
+\pgfkeys{
+  /x gamma trajectories/.is family,
+  /x gamma trajectories,
+  title/.store in=\XGammaTrajTitle,
+  manifest-csv/.store in=\XGammaTrajManifestCsv,
+  caption/.store in=\XGammaTrajCaption,
+  width/.store in=\XGammaTrajWidth,
+  height/.store in=\XGammaTrajHeight,
+  xmin/.store in=\XGammaTrajXMin,
+  xmax/.store in=\XGammaTrajXMax,
+  ymin/.store in=\XGammaTrajYMin,
+  ymax/.store in=\XGammaTrajYMax,
+  title={Stor Bane: Trajektorier i $(x,\gamma)$ (2025--2026)},
+  manifest-csv={\StorBaneXGammaTrajectoryManifestCsv},
+  caption={Trajektorier i $(x,\gamma)$ for Stor Bane (2025--2026), kun både med mere end 5 observerede sejladser. Alle trajektorier starter i $(0,0)$.},
+  width={0.88\textwidth},
+  height={0.72\textwidth},
+  xmin={auto},
+  xmax={auto},
+  ymin={auto},
+  ymax={auto},
+}
+
+\newcommand{\XGammaTrajectoryPlotFromCsv}[1]{%
+\pgfkeys{/x gamma trajectories/.cd,#1}%
+\pgfplotstableread[col sep=comma]{\XGammaTrajManifestCsv}\xgtrajmanifest
+\pgfplotstablegetrowsof{\xgtrajmanifest}
+\pgfmathtruncatemacro{\xgtrajrows}{\pgfplotsretval-1}
+\subsubsection*{\XGammaTrajTitle}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+width=\XGammaTrajWidth,
+height=\XGammaTrajHeight,
+xlabel={$x$},
+ylabel={$\gamma$},
+grid=major,
+major grid style={draw=black!25},
+axis lines=left,
+clip=false,
+unbounded coords=jump,
+filter discard warning=false,
+]
+\foreach \xgrow in {0,...,\xgtrajrows}{%
+  \pgfplotstablegetelem{\xgrow}{trajectory_csv}\of\xgtrajmanifest
+  \edef\xgtrajfile{\pgfplotsretval}
+  \pgfplotstablegetelem{\xgrow}{competitor_label}\of\xgtrajmanifest
+  \edef\xgtrajlabel{\pgfplotsretval}
+  \pgfmathtruncatemacro{\xgtrajcoloridx}{mod(\xgrow,10)}
+  \edef\xgtrajcolor{\XGammaColorByIndex{\xgtrajcoloridx}}
+  \pgfplotstableread[col sep=comma]{\xgtrajfile}\xgtrajboat
+  \pgfplotstablegetrowsof{\xgtrajboat}
+  \pgfmathtruncatemacro{\xgtrajlastrow}{\pgfplotsretval-1}
+  \ifnum\xgtrajlastrow>0
+    \pgfmathtruncatemacro{\xgtrajdenom}{\xgtrajlastrow-1}
+    \foreach \xgtrajseg in {1,...,\xgtrajlastrow}{%
+      \pgfmathtruncatemacro{\xgtrajprevrow}{\xgtrajseg-1}
+      \pgfplotstablegetelem{\xgtrajprevrow}{x}\of\xgtrajboat
+      \edef\xgtrajxa{\pgfplotsretval}
+      \pgfplotstablegetelem{\xgtrajprevrow}{gamma}\of\xgtrajboat
+      \edef\xgtrajya{\pgfplotsretval}
+      \pgfplotstablegetelem{\xgtrajseg}{x}\of\xgtrajboat
+      \edef\xgtrajxb{\pgfplotsretval}
+      \pgfplotstablegetelem{\xgtrajseg}{gamma}\of\xgtrajboat
+      \edef\xgtrajyb{\pgfplotsretval}
+      \ifnum\xgtrajlastrow>1
+        \pgfmathsetmacro{\xgtrajalpha}{0.2 + 0.8*((\xgtrajseg-1)/\xgtrajdenom)}
+      \else
+        \pgfmathsetmacro{\xgtrajalpha}{1.0}
+      \fi
+      \edef\xgtrajsegmentcmd{%
+        \noexpand\addplot+[mark=none, line width=0.95pt, color=\xgtrajcolor, opacity=\xgtrajalpha, forget plot]
+          coordinates {(\xgtrajxa,\xgtrajya) (\xgtrajxb,\xgtrajyb)};%
+      }
+      \xgtrajsegmentcmd
+      \edef\xgtrajmarkcmd{%
+        \noexpand\addplot+[only marks, mark=*, mark size=1.15pt, color=\xgtrajcolor, mark options={fill=\xgtrajcolor,draw=\xgtrajcolor}, opacity=\xgtrajalpha, forget plot]
+          coordinates {(\xgtrajxb,\xgtrajyb)};%
+      }
+      \xgtrajmarkcmd
+    }%
+    \pgfplotstablegetelem{\xgtrajlastrow}{x}\of\xgtrajboat
+    \edef\xgtrajxend{\pgfplotsretval}
+    \pgfplotstablegetelem{\xgtrajlastrow}{gamma}\of\xgtrajboat
+    \edef\xgtrajyend{\pgfplotsretval}
+    \edef\xgtrajlabelcmd{%
+      \noexpand\node[anchor=west, font=\noexpand\scriptsize, inner sep=1pt, fill=white, fill opacity=0.75, text opacity=1]
+        at (axis cs:\xgtrajxend,\xgtrajyend) {\xgtrajlabel};%
+    }
+    \xgtrajlabelcmd
+  \fi
+}
+\addplot[only marks, mark=x, mark size=2.2pt, black, forget plot] coordinates {(0,0)};
+\end{axis}
+\end{tikzpicture}
+\caption{\XGammaTrajCaption}
 \end{figure}
 }
 

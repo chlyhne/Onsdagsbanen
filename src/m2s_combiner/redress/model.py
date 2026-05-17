@@ -16,23 +16,45 @@ from scipy.optimize import minimize
 
 from .common import race_num
 from .constants import EPS
+from .constants import Q_GAMMA_SEARCH_MAX
+from .constants import Q_GAMMA_SEARCH_MIN
 from .constants import GROUP_Q_CACHE_FILENAME
 from .constants import MAX_DELTA_T_DAYS
 from .constants import MU_Y_LOG_MAX
 from .constants import MU_Y_LOG_MIN
 from .constants import NON_OBS_STATUSES
 from .constants import P_COV_CAP_FLOOR
+from .constants import P0_SCALE_SEARCH_MAX
+from .constants import P0_SCALE_SEARCH_MIN
 from .constants import Q_OBJECTIVE_CHOICES
 from .constants import Q_SEARCH_MAX
 from .constants import Q_SEARCH_MIN
 from .constants import R_T_SEARCH_MAX
 from .constants import R_T_SEARCH_MIN
 
+LOG_EXP_MAX = math.log(np.finfo(float).max)
+LOG_EXP_MIN = math.log(np.nextafter(0.0, 1.0))
+
+
+def _safe_exp_scalar(log_value: float) -> float:
+    value = float(log_value)
+    if not np.isfinite(value):
+        return float("nan")
+    clipped = float(min(LOG_EXP_MAX, max(LOG_EXP_MIN, value)))
+    return float(math.exp(clipped))
+
+
+def _gamma_loading_from_r_t(r_t: float) -> float:
+    safe_r_t = float(max(EPS, float(r_t)))
+    return float(math.sqrt(safe_r_t))
+
 
 @dataclass
 class BoatState:
     x: float
     p: float
+    gamma: float
+    p_gamma: float
     last_state_date: datetime | None
 
 
@@ -41,6 +63,8 @@ class GroupFilterResult:
     history: pd.DataFrame
     nll_sum: float
     observed_count: int
+    informed_sq_error_sum: float
+    informed_error_count: int
     loo_sq_error_sum: float
     loo_error_count: int
 
@@ -51,9 +75,11 @@ class _DEObjectiveContext:
     objective: str
     log_q_min: float
     log_q_max: float
+    q_gamma_min: float
+    q_gamma_max: float
+    log_k_min: float
+    log_k_max: float
     x0_fixed: float
-    p0_fixed: float
-    p0_scale: float | None
 
 
 _DE_CONTEXT: _DEObjectiveContext | None = None
@@ -68,20 +94,26 @@ def _de_worker_objective(theta: np.ndarray) -> float:
     context = _DE_CONTEXT
     if context is None:
         return 1e300
-    theta_vec = np.asarray(theta, dtype=float)
-    log_q = float(max(context.log_q_min, min(context.log_q_max, float(theta_vec[0]))))
-    ar_a = float(min(1.0, max(0.0, float(theta_vec[1]))))
-    q_value = float(math.exp(log_q))
-    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
-    score, _obs = evaluate_q_score(
-        context.groups,
-        q_value,
-        context.objective,
-        ar_a=ar_a,
-        initial_x0=context.x0_fixed,
-        initial_p0=p0_for_q,
-        score_cache=None,
-    )
+    try:
+        theta_vec = np.asarray(theta, dtype=float)
+        log_q = float(max(context.log_q_min, min(context.log_q_max, float(theta_vec[0]))))
+        log_q_gamma = float(max(context.q_gamma_min, min(context.q_gamma_max, float(theta_vec[1]))))
+        log_k = float(max(context.log_k_min, min(context.log_k_max, float(theta_vec[2]))))
+        q_value = float(math.exp(log_q))
+        q_gamma = float(math.exp(log_q_gamma))
+        k_value = float(math.exp(log_k))
+        p0_for_q = float(max(EPS, k_value * q_value))
+        score, _obs = evaluate_q_score(
+            context.groups,
+            q_value,
+            context.objective,
+            q_gamma=q_gamma,
+            initial_x0=context.x0_fixed,
+            initial_p0=p0_for_q,
+            score_cache=None,
+        )
+    except Exception:
+        return 1e300
     if not np.isfinite(float(score)):
         return 1e300
     return float(score)
@@ -94,131 +126,6 @@ class _DEProcessMap:
     def __call__(self, _func: Any, iterable: Any) -> list[float]:
         theta_list = [np.asarray(theta, dtype=float) for theta in iterable]
         return self.pool.map(_de_worker_objective, theta_list)
-
-
-@dataclass
-class _RefineTask:
-    idx: int
-    rank: int
-    theta0: tuple[float, float]
-    objective: str
-    log_q_min: float
-    log_q_max: float
-    maxiter: int = 120
-    ftol: float = 1e-12
-
-
-@dataclass
-class _RefineResult:
-    idx: int
-    rank: int
-    q_value: float
-    ar_a: float
-    score: float
-    obs: int
-    success: bool
-    message: str
-
-
-def _score_for_context(context: _DEObjectiveContext, q_value: float, ar_a_value: float) -> tuple[float, int]:
-    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
-    score, obs = evaluate_q_score(
-        context.groups,
-        float(q_value),
-        context.objective,
-        ar_a=float(min(1.0, max(0.0, ar_a_value))),
-        initial_x0=float(context.x0_fixed),
-        initial_p0=float(p0_for_q),
-        score_cache=None,
-    )
-    return float(score), int(obs)
-
-
-def _mle_objective_and_gradient_for_context(context: _DEObjectiveContext, theta: np.ndarray) -> tuple[float, np.ndarray, int, float, float]:
-    log_q = float(max(context.log_q_min, min(context.log_q_max, float(theta[0]))))
-    ar_a = float(min(1.0, max(0.0, float(theta[1]))))
-    q_value = float(math.exp(log_q))
-    p0_for_q = float(max(EPS, context.p0_scale * q_value)) if context.p0_scale is not None else float(context.p0_fixed)
-    score, obs, grad_q, grad_a = q_objective_mle_with_gradient(
-        context.groups,
-        q_value,
-        ar_a=ar_a,
-        initial_x0=float(context.x0_fixed),
-        initial_p0=float(p0_for_q),
-    )
-    if not np.isfinite(score):
-        return 1e300, np.array([0.0, 0.0], dtype=float), int(obs), q_value, ar_a
-    grad_log_q = float(grad_q * q_value)
-    return float(score), np.array([grad_log_q, float(grad_a)], dtype=float), int(obs), q_value, ar_a
-
-
-def _refine_candidate_worker(task: _RefineTask) -> _RefineResult:
-    context = _DE_CONTEXT
-    if context is None:
-        return _RefineResult(
-            idx=int(task.idx),
-            rank=int(task.rank),
-            q_value=float("nan"),
-            ar_a=float("nan"),
-            score=1e300,
-            obs=0,
-            success=False,
-            message="missing worker context",
-        )
-
-    theta0 = np.asarray(task.theta0, dtype=float).copy()
-    theta0[0] = float(max(task.log_q_min, min(task.log_q_max, float(theta0[0]))))
-    theta0[1] = float(min(1.0, max(0.0, float(theta0[1]))))
-
-    if task.objective == "mle":
-        last_theta: np.ndarray | None = None
-        last_score = float("inf")
-        last_grad = np.array([0.0, 0.0], dtype=float)
-
-        def _eval(theta: np.ndarray) -> tuple[float, np.ndarray]:
-            nonlocal last_theta, last_score, last_grad
-            theta_vec = np.asarray(theta, dtype=float)
-            if last_theta is not None and np.array_equal(theta_vec, last_theta):
-                return float(last_score), np.asarray(last_grad, dtype=float)
-            score, grad, _obs, _qv, _av = _mle_objective_and_gradient_for_context(context, theta_vec)
-            last_theta = theta_vec.copy()
-            last_score = float(score)
-            last_grad = np.asarray(grad, dtype=float).copy()
-            return float(last_score), np.asarray(last_grad, dtype=float)
-
-        result = minimize(
-            lambda t: _eval(t)[0],
-            x0=theta0,
-            method="L-BFGS-B",
-            jac=lambda t: _eval(t)[1],
-            bounds=[(task.log_q_min, task.log_q_max), (0.0, 1.0)],
-            options={"maxiter": int(task.maxiter), "ftol": float(task.ftol)},
-        )
-    else:
-        result = minimize(
-            _de_worker_objective,
-            x0=theta0,
-            method="L-BFGS-B",
-            bounds=[(task.log_q_min, task.log_q_max), (0.0, 1.0)],
-            options={"maxiter": int(task.maxiter), "ftol": float(task.ftol)},
-        )
-
-    theta_star = np.asarray(result.x, dtype=float).copy()
-    theta_star[0] = float(max(task.log_q_min, min(task.log_q_max, float(theta_star[0]))))
-    theta_star[1] = float(min(1.0, max(0.0, float(theta_star[1]))))
-    q_star = float(math.exp(float(theta_star[0])))
-    a_star = float(theta_star[1])
-    score_star, obs_star = _score_for_context(context, q_star, a_star)
-    return _RefineResult(
-        idx=int(task.idx),
-        rank=int(task.rank),
-        q_value=float(q_star),
-        ar_a=float(a_star),
-        score=float(score_star),
-        obs=int(obs_star),
-        success=bool(result.success),
-        message=str(result.message),
-    )
 
 
 def estimate_global_q(all_data: pd.DataFrame) -> float:
@@ -315,9 +222,9 @@ def estimate_initial_p0_from_first_observations(group: dict[str, Any]) -> float:
     return float(max(EPS, p0_value))
 
 
-def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float]]:
+def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
     if not path.exists():
-        return {}, {}
+        return {}, {}, {}
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -326,46 +233,59 @@ def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float]]
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid Q cache JSON in {path}") from exc
 
-    if isinstance(payload, dict) and isinstance(payload.get("group_q"), dict):
-        q_source = payload["group_q"]
-        a_source = payload.get("group_a", {})
-    elif isinstance(payload, dict):
-        q_source = payload
-        a_source = {}
-    else:
+    if not isinstance(payload, dict):
         raise ValueError(f"Invalid Q cache payload in {path}")
+    if not isinstance(payload.get("group_q"), dict) or not isinstance(payload.get("group_q_gamma"), dict) or not isinstance(payload.get("group_k"), dict):
+        return {}, {}, {}
+    q_source = payload["group_q"]
+    q_gamma_source = payload["group_q_gamma"]
+    k_source = payload["group_k"]
 
     q_map: dict[str, float] = {}
     for key, value in q_source.items():
         q_val = float(value)
         if np.isfinite(q_val) and q_val > 0.0:
             q_map[str(key)] = q_val
-    a_map: dict[str, float] = {}
-    if isinstance(a_source, dict):
-        for key, value in a_source.items():
-            a_val = float(value)
-            if np.isfinite(a_val):
-                a_map[str(key)] = float(min(1.0, max(0.0, a_val)))
-    return q_map, a_map
+    q_gamma_map: dict[str, float] = {}
+    for key, value in q_gamma_source.items():
+        q_gamma_val = float(value)
+        if np.isfinite(q_gamma_val):
+            q_gamma_map[str(key)] = float(q_gamma_val)
+    k_map: dict[str, float] = {}
+    for key, value in k_source.items():
+        k_val = float(value)
+        if np.isfinite(k_val) and k_val > 0.0:
+            k_map[str(key)] = float(k_val)
+    return q_map, q_gamma_map, k_map
 
 
 def load_group_q_cache(path: Path) -> dict[str, float]:
-    q_map, _ = load_group_qa_cache(path)
+    q_map, _, _ = load_group_qa_cache(path)
     return q_map
 
 
-def save_group_qa_cache(path: Path, q_by_group: dict[str, float], a_by_group: dict[str, float] | None = None) -> None:
-    a_by_group = a_by_group or {}
+def save_group_qa_cache(
+    path: Path,
+    q_by_group: dict[str, float],
+    q_gamma_by_group: dict[str, float] | None = None,
+    k_by_group: dict[str, float] | None = None,
+) -> None:
+    q_gamma_by_group = q_gamma_by_group or {}
+    k_by_group = k_by_group or {}
     payload = {
         "saved_at": datetime.now().isoformat(timespec="seconds"),
         "group_q": {str(k): float(v) for k, v in sorted(q_by_group.items())},
-        "group_a": {str(k): float(min(1.0, max(0.0, v))) for k, v in sorted(a_by_group.items()) if np.isfinite(float(v))},
+        "group_q_gamma": {str(k): float(v) for k, v in sorted(q_gamma_by_group.items()) if np.isfinite(float(v))},
+        "group_k": {str(k): float(v) for k, v in sorted(k_by_group.items()) if np.isfinite(float(v)) and float(v) > 0.0},
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(serialized, encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
-    save_group_qa_cache(path, q_by_group, {})
+    save_group_qa_cache(path, q_by_group, {}, {})
 
 
 def q_cache_path_for_objective(output_dir: Path, objective: str) -> Path:
@@ -396,17 +316,32 @@ def prepare_group_runtime(group: dict[str, Any]) -> dict[str, Any]:
     for idx, race_label in enumerate(group.get("selected_races", [])):
         race_order_by_label[str(race_label)] = int(idx)
 
+    race_dates_by_label: dict[str, datetime] = {}
+    for race_label in group.get("selected_races", []):
+        label = str(race_label)
+        race_date = group.get("race_dates", {}).get(race_label)
+        if race_date is None:
+            race_date = group.get("race_dates", {}).get(label)
+        if race_date is not None:
+            race_dates_by_label[label] = race_date
+
     debut_order_by_competitor: dict[str, int] = {}
+    debut_date_by_competitor: dict[str, datetime] = {}
     for race_label in group.get("selected_races", []):
         label = str(race_label)
         race_lookup = race_lookup_by_label.get(label, {})
         race_order = race_order_by_label.get(label)
+        race_date = race_dates_by_label.get(label)
         if race_order is None:
             continue
         for competitor in race_lookup:
             existing = debut_order_by_competitor.get(str(competitor))
             if existing is None or race_order < existing:
                 debut_order_by_competitor[str(competitor)] = race_order
+            if race_date is not None:
+                existing_date = debut_date_by_competitor.get(str(competitor))
+                if existing_date is None or race_date < existing_date:
+                    debut_date_by_competitor[str(competitor)] = race_date
 
     runtime = {
         "combined": combined,
@@ -415,6 +350,7 @@ def prepare_group_runtime(group: dict[str, Any]) -> dict[str, Any]:
         "race_lookup_by_label": race_lookup_by_label,
         "race_order_by_label": race_order_by_label,
         "debut_order_by_competitor": debut_order_by_competitor,
+        "debut_date_by_competitor": debut_date_by_competitor,
     }
     group["_runtime"] = runtime
     return runtime
@@ -427,17 +363,45 @@ def _symmetrize_and_floor_covariance(covariance: np.ndarray, *, floor: float = E
     return cov
 
 
+def _invert_covariance_with_jitter(
+    covariance: np.ndarray,
+    *,
+    floor: float = EPS,
+    max_attempts: int = 8,
+) -> tuple[np.ndarray, np.ndarray]:
+    matrix = _symmetrize_and_floor_covariance(covariance, floor=floor)
+    n = matrix.shape[0]
+    if n == 0:
+        return matrix, matrix.copy()
+    eye = np.eye(n, dtype=float)
+    diag_mean = float(np.mean(np.diag(matrix))) if n > 0 else 1.0
+    jitter_base = float(max(floor, EPS, 1e-12 * max(1.0, abs(diag_mean))))
+    attempt_matrix = matrix
+
+    for attempt in range(max_attempts):
+        try:
+            inv = np.linalg.inv(attempt_matrix)
+            if np.all(np.isfinite(inv)):
+                return attempt_matrix, inv
+        except np.linalg.LinAlgError:
+            pass
+        jitter = float(jitter_base * (10.0 ** attempt))
+        attempt_matrix = _symmetrize_and_floor_covariance(matrix + jitter * eye, floor=0.0)
+
+    inv = np.linalg.pinv(attempt_matrix, rcond=1e-12)
+    if not np.all(np.isfinite(inv)):
+        raise np.linalg.LinAlgError("Failed to invert covariance matrix after jitter and pseudo-inverse fallback.")
+    return attempt_matrix, inv
+
+
 def _apply_state_transition(
     state_mean: np.ndarray,
     state_cov: np.ndarray,
     *,
-    ar_a: float,
     process_diag: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    a = float(min(1.0, max(0.0, ar_a)))
-    coeff = 1.0 - a
-    prior_mean = coeff * np.asarray(state_mean, dtype=float)
-    prior_cov = (coeff * coeff) * np.asarray(state_cov, dtype=float) + np.diag(np.asarray(process_diag, dtype=float))
+    prior_mean = np.asarray(state_mean, dtype=float).copy()
+    prior_cov = np.asarray(state_cov, dtype=float) + np.diag(np.asarray(process_diag, dtype=float))
     prior_cov = _symmetrize_and_floor_covariance(prior_cov)
     return prior_mean, prior_cov
 
@@ -494,23 +458,25 @@ def _profiled_day_nll_and_grad_sigma2(
     if m == 0:
         return 0.0, float("nan"), 0.0
     sigma2 = float(max(EPS, measurement_variance))
-    s_matrix = _symmetrize_and_floor_covariance(prior_covariance + sigma2 * np.eye(m, dtype=float))
+    try:
+        s_matrix, s_inv = _invert_covariance_with_jitter(prior_covariance + sigma2 * np.eye(m, dtype=float))
+    except np.linalg.LinAlgError:
+        return float("inf"), float("nan"), 0.0
     sign, logdet = np.linalg.slogdet(s_matrix)
     if sign <= 0 or not np.isfinite(logdet):
         return float("inf"), float("nan"), 0.0
     ones = np.ones(m, dtype=float)
-    inv_times_ones = np.linalg.solve(s_matrix, ones)
-    inv_times_centered = np.linalg.solve(s_matrix, centered_values)
+    inv_times_ones = s_inv @ ones
+    inv_times_centered = s_inv @ centered_values
     denom = float(ones @ inv_times_ones)
     if not np.isfinite(denom) or denom <= EPS:
         return float("inf"), float("nan"), 0.0
     mu_hat_unclipped = float((ones @ inv_times_centered) / denom)
     mu_hat = float(min(MU_Y_LOG_MAX, max(MU_Y_LOG_MIN, mu_hat_unclipped)))
     residual = centered_values - mu_hat * ones
-    inv_times_residual = np.linalg.solve(s_matrix, residual)
+    inv_times_residual = s_inv @ residual
     quad = float(residual @ inv_times_residual)
     nll = 0.5 * float(m * math.log(2.0 * math.pi) + logdet + quad)
-    s_inv = np.linalg.inv(s_matrix)
     trace_s_inv = float(np.trace(s_inv))
     grad_sigma2 = 0.5 * (trace_s_inv - float(inv_times_residual @ inv_times_residual))
     if not np.isfinite(grad_sigma2):
@@ -632,6 +598,10 @@ def compute_observation_step(
     competitor_index: dict[str, int],
     prior_mean: np.ndarray,
     prior_covariance: np.ndarray,
+    prior_gamma_mean: np.ndarray,
+    prior_gamma_covariance: np.ndarray,
+    *,
+    compute_loo_predictions: bool = False,
 ) -> dict[str, Any]:
     if observed.empty:
         return {
@@ -639,11 +609,16 @@ def compute_observation_step(
             "r_t": float("nan"),
             "innovation_by_competitor": {},
             "gain_by_competitor": {},
+            "gain_gamma_by_competitor": {},
             "y_pred_loo_by_competitor": {},
             "post_mean": prior_mean,
             "post_covariance": prior_covariance,
+            "post_gamma_mean": prior_gamma_mean,
+            "post_gamma_covariance": prior_gamma_covariance,
             "nll_sum": 0.0,
             "observed_count": 0,
+            "informed_sq_error_sum": 0.0,
+            "informed_error_count": 0,
             "loo_sq_error_sum": 0.0,
             "loo_error_count": 0,
         }
@@ -654,60 +629,159 @@ def compute_observation_step(
 
     x_prior_obs = prior_mean[observed_indices]
     p_prior_obs = prior_covariance[np.ix_(observed_indices, observed_indices)]
-    centered_values = y_values - x_prior_obs
-    b_hat, r_t, nll_sum = fit_day_parameters_full(centered_values, p_prior_obs)
+    centered_values_base = y_values - x_prior_obs
+    b_hat, r_t, nll_sum = fit_day_parameters_full(centered_values_base, p_prior_obs)
+    if not np.isfinite(float(b_hat)) or not np.isfinite(float(r_t)):
+        return {
+            "b_hat": float("nan"),
+            "r_t": float("nan"),
+            "innovation_by_competitor": {},
+            "gain_by_competitor": {},
+            "gain_gamma_by_competitor": {},
+            "y_pred_loo_by_competitor": {},
+            "post_mean": prior_mean,
+            "post_covariance": prior_covariance,
+            "post_gamma_mean": prior_gamma_mean,
+            "post_gamma_covariance": prior_gamma_covariance,
+            "nll_sum": float("inf"),
+            "observed_count": len(observed_competitors),
+            "informed_sq_error_sum": 0.0,
+            "informed_error_count": 0,
+            "loo_sq_error_sum": 0.0,
+            "loo_error_count": 0,
+        }
 
-    s_matrix = _symmetrize_and_floor_covariance(p_prior_obs + float(r_t) * np.eye(observed_indices.size, dtype=float))
-    s_inv = np.linalg.inv(s_matrix)
+    gamma_prior_obs = prior_gamma_mean[observed_indices]
+    p_gamma_prior_obs = prior_gamma_covariance[np.ix_(observed_indices, observed_indices)]
+    h = _gamma_loading_from_r_t(r_t)
+    p_meas = p_prior_obs + (h * h) * p_gamma_prior_obs
+    centered_values = y_values - x_prior_obs - h * gamma_prior_obs
     innovations = centered_values - b_hat
+
+    try:
+        s_matrix, s_inv = _invert_covariance_with_jitter(p_meas + float(r_t) * np.eye(observed_indices.size, dtype=float))
+    except np.linalg.LinAlgError:
+        return {
+            "b_hat": float("nan"),
+            "r_t": float("nan"),
+            "innovation_by_competitor": {},
+            "gain_by_competitor": {},
+            "gain_gamma_by_competitor": {},
+            "y_pred_loo_by_competitor": {},
+            "post_mean": prior_mean,
+            "post_covariance": prior_covariance,
+            "post_gamma_mean": prior_gamma_mean,
+            "post_gamma_covariance": prior_gamma_covariance,
+            "nll_sum": float("inf"),
+            "observed_count": len(observed_competitors),
+            "informed_sq_error_sum": 0.0,
+            "informed_error_count": 0,
+            "loo_sq_error_sum": 0.0,
+            "loo_error_count": 0,
+        }
     p_cross = prior_covariance[:, observed_indices]
-    k_matrix = p_cross @ s_inv
-    post_mean = prior_mean + (k_matrix @ innovations)
-    post_covariance = prior_covariance - (k_matrix @ p_cross.T)
+    p_gamma_cross = prior_gamma_covariance[:, observed_indices]
+    k_matrix_x = p_cross @ s_inv
+    k_matrix_gamma = (h * p_gamma_cross) @ s_inv
+    sign, logdet = np.linalg.slogdet(s_matrix)
+    if sign <= 0 or not np.isfinite(logdet):
+        return {
+            "b_hat": float("nan"),
+            "r_t": float("nan"),
+            "innovation_by_competitor": {},
+            "gain_by_competitor": {},
+            "gain_gamma_by_competitor": {},
+            "y_pred_loo_by_competitor": {},
+            "post_mean": prior_mean,
+            "post_covariance": prior_covariance,
+            "post_gamma_mean": prior_gamma_mean,
+            "post_gamma_covariance": prior_gamma_covariance,
+            "nll_sum": float("inf"),
+            "observed_count": len(observed_competitors),
+            "informed_sq_error_sum": 0.0,
+            "informed_error_count": 0,
+            "loo_sq_error_sum": 0.0,
+            "loo_error_count": 0,
+        }
+    inv_times_residual = s_inv @ innovations
+    quad = float(innovations @ inv_times_residual)
+    nll_sum = 0.5 * float(observed_indices.size * math.log(2.0 * math.pi) + logdet + quad)
+    post_mean = prior_mean + (k_matrix_x @ innovations)
+    post_covariance = prior_covariance - (k_matrix_x @ p_cross.T)
+    post_gamma_mean = prior_gamma_mean + (k_matrix_gamma @ innovations)
+    post_gamma_covariance = prior_gamma_covariance - (k_matrix_gamma @ (h * p_gamma_cross.T))
     post_covariance = _symmetrize_and_floor_covariance(post_covariance)
+    post_gamma_covariance = _symmetrize_and_floor_covariance(post_gamma_covariance)
 
     innovation_by_competitor = {competitor: float(innovations[idx]) for idx, competitor in enumerate(observed_competitors)}
     gain_by_competitor: dict[str, float] = {}
+    gain_gamma_by_competitor: dict[str, float] = {}
     for local_idx, competitor in enumerate(observed_competitors):
         global_idx = int(observed_indices[local_idx])
-        gain_by_competitor[competitor] = float(k_matrix[global_idx, local_idx])
+        gain_by_competitor[competitor] = float(k_matrix_x[global_idx, local_idx])
+        gain_gamma_by_competitor[competitor] = float(k_matrix_gamma[global_idx, local_idx])
 
     y_pred_loo_by_competitor: dict[str, float] = {}
-    if len(observed_competitors) == 1:
-        y_pred_loo_by_competitor[observed_competitors[0]] = float(b_hat + x_prior_obs[0])
-    else:
-        for local_idx, competitor in enumerate(observed_competitors):
-            mask = np.ones(len(observed_competitors), dtype=bool)
-            mask[local_idx] = False
-            centered_values_loo = centered_values[mask]
-            p_prior_loo = p_prior_obs[np.ix_(mask, mask)]
-            b_hat_loo, _, _ = fit_day_parameters_full(
-                centered_values_loo,
-                p_prior_loo,
-                warm_start_r_t=r_t,
-                warm_start_only=True,
-            )
-            y_pred_loo_by_competitor[competitor] = float(b_hat_loo + x_prior_obs[local_idx])
+    if compute_loo_predictions:
+        if len(observed_competitors) == 1:
+            # No valid leave-one-out estimate exists with zero boats left after holdout.
+            y_pred_loo_by_competitor[observed_competitors[0]] = float("nan")
+        else:
+            for local_idx, competitor in enumerate(observed_competitors):
+                mask = np.ones(len(observed_competitors), dtype=bool)
+                mask[local_idx] = False
+                x_prior_loo = x_prior_obs[mask]
+                gamma_prior_loo = gamma_prior_obs[mask]
+                p_prior_loo = p_prior_obs[np.ix_(mask, mask)]
+                centered_values_loo = y_values[mask] - x_prior_loo
+                b_hat_loo, r_t_loo, _ = fit_day_parameters_full(
+                    centered_values_loo,
+                    p_prior_loo,
+                    warm_start_r_t=r_t,
+                    warm_start_only=False,
+                )
+                if not np.isfinite(float(b_hat_loo)) or not np.isfinite(float(r_t_loo)):
+                    y_pred_loo_by_competitor[competitor] = float("nan")
+                    continue
+                h_loo = _gamma_loading_from_r_t(r_t_loo)
+                y_pred_loo_by_competitor[competitor] = float(
+                    b_hat_loo + x_prior_obs[local_idx] + h_loo * gamma_prior_obs[local_idx]
+                )
 
     loo_sq_error_sum = 0.0
     loo_error_count = 0
-    for competitor, observed_seconds in zip(observed_competitors, beregnet_seconds):
-        pred_seconds = float(np.exp(y_pred_loo_by_competitor[competitor]))
+    informed_sq_error_sum = 0.0
+    informed_error_count = 0
+    y_pred_full_obs = b_hat + x_prior_obs + h * gamma_prior_obs
+    for observed_seconds, y_pred_full in zip(beregnet_seconds, y_pred_full_obs):
+        pred_seconds = _safe_exp_scalar(float(y_pred_full))
         if np.isfinite(pred_seconds):
             error = float(observed_seconds - pred_seconds)
-            loo_sq_error_sum += error * error
-            loo_error_count += 1
+            informed_sq_error_sum += error * error
+            informed_error_count += 1
+    if compute_loo_predictions:
+        for competitor, observed_seconds in zip(observed_competitors, beregnet_seconds):
+            pred_seconds = _safe_exp_scalar(y_pred_loo_by_competitor[competitor])
+            if np.isfinite(pred_seconds):
+                error = float(observed_seconds - pred_seconds)
+                loo_sq_error_sum += error * error
+                loo_error_count += 1
 
     return {
         "b_hat": float(b_hat),
         "r_t": float(r_t),
         "innovation_by_competitor": innovation_by_competitor,
         "gain_by_competitor": gain_by_competitor,
+        "gain_gamma_by_competitor": gain_gamma_by_competitor,
         "y_pred_loo_by_competitor": y_pred_loo_by_competitor,
         "post_mean": post_mean,
         "post_covariance": post_covariance,
+        "post_gamma_mean": post_gamma_mean,
+        "post_gamma_covariance": post_gamma_covariance,
         "nll_sum": float(nll_sum),
         "observed_count": len(observed_competitors),
+        "informed_sq_error_sum": float(informed_sq_error_sum),
+        "informed_error_count": int(informed_error_count),
         "loo_sq_error_sum": float(loo_sq_error_sum),
         "loo_error_count": int(loo_error_count),
     }
@@ -717,34 +791,38 @@ def run_group_filter(
     group: dict[str, Any],
     global_q: float,
     *,
-    ar_a: float = 0.0,
+    q_gamma: float = 1e-6,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    compute_loo_predictions: bool = False,
     collect_history: bool = True,
 ) -> GroupFilterResult:
     runtime = prepare_group_runtime(group)
     selected_races: list[str] = list(group["selected_races"])
     race_dates: dict[str, datetime] = dict(group["race_dates"])
     group_label = str(group["group"])
-    ar_a = float(min(1.0, max(0.0, ar_a)))
+    q_gamma_value = float(max(EPS, q_gamma))
 
     competitors: list[str] = runtime["competitors"]
     race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
     race_lookup_by_label: dict[str, dict[str, dict[str, Any]]] = runtime["race_lookup_by_label"]
-    race_order_by_label: dict[str, int] = runtime.get("race_order_by_label", {})
-    debut_order_by_competitor: dict[str, int] = runtime.get("debut_order_by_competitor", {})
+    debut_date_by_competitor: dict[str, datetime] = runtime.get("debut_date_by_competitor", {})
     initial_p0 = float(max(EPS, initial_p0))
-    initial_x0 = float(initial_x0)
+    # Force debut state to start at zero for identifiability/consistency.
     competitor_index = {competitor: idx for idx, competitor in enumerate(competitors)}
     n_competitors = len(competitors)
     state_mean = np.zeros(n_competitors, dtype=float)
     state_cov = np.eye(n_competitors, dtype=float) * EPS
+    state_gamma_mean = np.zeros(n_competitors, dtype=float)
+    state_gamma_cov = np.eye(n_competitors, dtype=float) * EPS
     active_by_competitor = {competitor: False for competitor in competitors}
     last_state_date_by_competitor = {competitor: None for competitor in competitors}
 
     history_rows: list[dict[str, Any]] = []
     nll_sum = 0.0
     observed_count = 0
+    informed_sq_error_sum = 0.0
+    informed_error_count = 0
     loo_sq_error_sum = 0.0
     loo_error_count = 0
 
@@ -757,22 +835,29 @@ def run_group_filter(
         if race_rows is None:
             continue
         race_lookup = race_lookup_by_label.get(race_label, {})
-        race_order = race_order_by_label.get(str(race_label))
-        if race_order is not None:
-            for competitor in competitors:
-                if active_by_competitor[competitor]:
-                    continue
-                if debut_order_by_competitor.get(competitor) == race_order:
-                    idx = competitor_index[competitor]
-                    state_mean[idx] = float(initial_x0)
-                    state_cov[idx, :] = 0.0
-                    state_cov[:, idx] = 0.0
-                    state_cov[idx, idx] = float(initial_p0)
-                    last_state_date_by_competitor[competitor] = None
-                    active_by_competitor[competitor] = True
+        debut_indices_this_race: set[int] = set()
+        for competitor in competitors:
+            if debut_date_by_competitor.get(competitor) != race_date:
+                continue
+            if competitor not in race_lookup:
+                continue
+            idx = competitor_index[competitor]
+            debut_indices_this_race.add(int(idx))
+            if not active_by_competitor[competitor]:
+                state_mean[idx] = 0.0
+                state_cov[idx, :] = 0.0
+                state_cov[:, idx] = 0.0
+                state_cov[idx, idx] = float(initial_p0)
+                state_gamma_mean[idx] = 0.0
+                state_gamma_cov[idx, :] = 0.0
+                state_gamma_cov[:, idx] = 0.0
+                state_gamma_cov[idx, idx] = float(initial_p0)
+                last_state_date_by_competitor[competitor] = None
+                active_by_competitor[competitor] = True
 
         delta_days_by_competitor: dict[str, int] = {}
         process_diag = np.zeros(n_competitors, dtype=float)
+        process_diag_gamma = np.zeros(n_competitors, dtype=float)
         for competitor in competitors:
             if not active_by_competitor[competitor]:
                 delta_days_by_competitor[competitor] = 0
@@ -781,32 +866,58 @@ def run_group_filter(
             delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
             delta_days_by_competitor[competitor] = int(delta_days)
             process_diag[competitor_index[competitor]] = float(delta_days) * float(global_q)
+            process_diag_gamma[competitor_index[competitor]] = float(delta_days) * float(q_gamma_value)
         active_indices = _active_indices_from_flags(competitors, competitor_index, active_by_competitor)
         prior_mean, prior_cov = _apply_state_transition(
             state_mean,
             state_cov,
-            ar_a=ar_a,
             process_diag=process_diag,
+        )
+        prior_gamma_mean, prior_gamma_cov = _apply_state_transition(
+            state_gamma_mean,
+            state_gamma_cov,
+            process_diag=process_diag_gamma,
         )
         prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
         prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
+        prior_gamma_mean = np.asarray(prior_gamma_mean, dtype=float).copy()
+        prior_gamma_cov = _symmetrize_and_floor_covariance(prior_gamma_cov)
+        # Enforce x0 as an a-priori anchor on each boat's debut race day.
+        for idx in debut_indices_this_race:
+            prior_mean[int(idx)] = 0.0
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
-        observed_step = compute_observation_step(observed, competitors, competitor_index, prior_mean, prior_cov)
+        observed_step = compute_observation_step(
+            observed,
+            competitors,
+            competitor_index,
+            prior_mean,
+            prior_cov,
+            prior_gamma_mean,
+            prior_gamma_cov,
+            compute_loo_predictions=compute_loo_predictions,
+        )
         b_hat = float(observed_step["b_hat"])
         r_t = float(observed_step["r_t"])
         innovation_by_competitor = observed_step["innovation_by_competitor"]
         gain_by_competitor = observed_step["gain_by_competitor"]
+        gain_gamma_by_competitor = observed_step["gain_gamma_by_competitor"]
         y_pred_loo_by_competitor = observed_step["y_pred_loo_by_competitor"]
         nll_sum += float(observed_step["nll_sum"])
         observed_count += int(observed_step["observed_count"])
+        informed_sq_error_sum += float(observed_step["informed_sq_error_sum"])
+        informed_error_count += int(observed_step["informed_error_count"])
         loo_sq_error_sum += float(observed_step["loo_sq_error_sum"])
         loo_error_count += int(observed_step["loo_error_count"])
         observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
         state_mean = np.asarray(observed_step["post_mean"], dtype=float).copy()
         state_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_covariance"], dtype=float))
+        state_gamma_mean = np.asarray(observed_step["post_gamma_mean"], dtype=float).copy()
+        state_gamma_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_gamma_covariance"], dtype=float))
         state_mean = _project_active_vector_zero_sum(state_mean, active_indices)
         state_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(state_cov, active_indices))
+        state_gamma_mean = np.asarray(state_gamma_mean, dtype=float).copy()
+        state_gamma_cov = _symmetrize_and_floor_covariance(state_gamma_cov)
 
         row_payload_by_competitor: dict[str, dict[str, Any]] = {}
         for competitor in competitors:
@@ -818,8 +929,12 @@ def run_group_filter(
             is_active = bool(active_by_competitor[competitor])
             x_prior = float(prior_mean[idx]) if is_active else float("nan")
             p_prior = float(prior_cov[idx, idx]) if is_active else float("nan")
+            gamma_prior = float(prior_gamma_mean[idx]) if is_active else float("nan")
+            p_gamma_prior = float(prior_gamma_cov[idx, idx]) if is_active else float("nan")
             x_post = float(state_mean[idx]) if is_active else float("nan")
             p_post = float(state_cov[idx, idx]) if is_active else float("nan")
+            gamma_post = float(state_gamma_mean[idx]) if is_active else float("nan")
+            p_gamma_post = float(state_gamma_cov[idx, idx]) if is_active else float("nan")
             delta_t_days = int(delta_days_by_competitor[competitor])
             status = ""
             sailed_seconds: float | None = None
@@ -852,17 +967,21 @@ def run_group_filter(
             if is_active and competitor in observed_competitors and competitor in innovation_by_competitor and not np.isnan(r_t):
                 innovation = float(innovation_by_competitor[competitor])
                 gain = float(gain_by_competitor[competitor])
+                gain_gamma = float(gain_gamma_by_competitor[competitor])
                 observed_flag = True
                 y_pred_loo = float(y_pred_loo_by_competitor.get(competitor, float("nan")))
             else:
                 innovation = float("nan")
                 gain = float("nan")
+                gain_gamma = float("nan")
                 observed_flag = False
                 y_pred_loo = float("nan")
 
             row_payload_by_competitor[competitor] = {
                 "x_prior": float(x_prior),
                 "p_prior": float(p_prior),
+                "gamma_prior": float(gamma_prior),
+                "p_gamma_prior": float(p_gamma_prior),
                 "delta_t_days": int(delta_t_days),
                 "status": status,
                 "sailed_seconds": sailed_seconds,
@@ -873,10 +992,13 @@ def run_group_filter(
                 "series": series_value,
                 "innovation": float(innovation),
                 "gain": float(gain),
+                "gain_gamma": float(gain_gamma),
                 "observed_flag": bool(observed_flag),
                 "y_pred_loo": float(y_pred_loo),
                 "x_post": float(x_post),
                 "p_post": float(p_post),
+                "gamma_post": float(gamma_post),
+                "p_gamma_post": float(p_gamma_post),
             }
 
         if collect_history:
@@ -900,21 +1022,34 @@ def run_group_filter(
                         "b_t_hat": b_hat,
                         "delta_t_days": row_payload["delta_t_days"],
                         "global_q": global_q,
-                        "global_ar_a": ar_a,
-                        "x0_group": initial_x0,
+                        "global_q_gamma": q_gamma_value,
+                        "x0_group": 0.0,
                         "x_prior": row_payload["x_prior"],
                         "p_prior": row_payload["p_prior"],
+                        "gamma_prior": row_payload["gamma_prior"],
+                        "p_gamma_prior": row_payload["p_gamma_prior"],
                         "r_t": r_t,
                         "innovation": row_payload["innovation"],
                         "kalman_gain": row_payload["gain"],
+                        "kalman_gain_gamma": row_payload["gain_gamma"],
                         "y_pred_loo": row_payload["y_pred_loo"],
                         "x_post": row_payload["x_post"],
                         "p_post": row_payload["p_post"],
+                        "gamma_post": row_payload["gamma_post"],
+                        "p_gamma_post": row_payload["p_gamma_post"],
                     }
                 )
 
     history = pd.DataFrame(history_rows) if collect_history else pd.DataFrame()
-    return GroupFilterResult(history=history, nll_sum=nll_sum, observed_count=observed_count, loo_sq_error_sum=loo_sq_error_sum, loo_error_count=loo_error_count)
+    return GroupFilterResult(
+        history=history,
+        nll_sum=nll_sum,
+        observed_count=observed_count,
+        informed_sq_error_sum=informed_sq_error_sum,
+        informed_error_count=informed_error_count,
+        loo_sq_error_sum=loo_sq_error_sum,
+        loo_error_count=loo_error_count,
+    )
 
 
 def run_all_groups_with_transfer(
@@ -922,9 +1057,10 @@ def run_all_groups_with_transfer(
     q_by_group: dict[str, float],
     competitor_year_group: dict[tuple[str, int], str],
     *,
-    ar_a_by_group: dict[str, float] | None = None,
+    q_gamma_by_group: dict[str, float] | None = None,
     initial_x0_by_group: dict[str, float] | None = None,
     initial_p0_by_group: dict[str, float] | None = None,
+    compute_loo_predictions: bool = False,
     collect_history: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, float], dict[str, int]]:
     if not groups:
@@ -934,30 +1070,33 @@ def run_all_groups_with_transfer(
     initial_p0_by_group = initial_p0_by_group or {}
     state_mean_by_group: dict[str, np.ndarray] = {}
     state_cov_by_group: dict[str, np.ndarray] = {}
+    state_gamma_mean_by_group: dict[str, np.ndarray] = {}
+    state_gamma_cov_by_group: dict[str, np.ndarray] = {}
     last_state_date_by_group: dict[str, dict[str, datetime | None]] = {}
     active_by_group: dict[str, dict[str, bool]] = {}
     competitors_by_group: dict[str, list[str]] = {}
     competitor_index_by_group: dict[str, dict[str, int]] = {}
-    debut_order_by_group: dict[str, dict[str, int]] = {}
-    race_order_by_group_label: dict[str, dict[str, int]] = {}
+    debut_date_by_group: dict[str, dict[str, datetime]] = {}
     events: list[dict[str, Any]] = []
 
     initial_x0_by_group = initial_x0_by_group or {}
-    ar_a_by_group = ar_a_by_group or {}
+    q_gamma_by_group = q_gamma_by_group or {}
     for group_name, group in groups_by_name.items():
         runtime = prepare_group_runtime(group)
         competitors = runtime["competitors"]
         competitors_by_group[group_name] = competitors
         competitor_index_by_group[group_name] = {competitor: idx for idx, competitor in enumerate(competitors)}
-        debut_order_by_group[group_name] = dict(runtime.get("debut_order_by_competitor", {}))
-        race_order_by_group_label[group_name] = dict(runtime.get("race_order_by_label", {}))
-        initial_x0 = float(initial_x0_by_group.get(group_name, 0.0))
+        debut_date_by_group[group_name] = dict(runtime.get("debut_date_by_competitor", {}))
         initial_p0 = float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR)))
         n_competitors = len(competitors)
         initial_mean = np.zeros(n_competitors, dtype=float)
         initial_cov = np.eye(n_competitors, dtype=float) * EPS
+        initial_gamma_mean = np.zeros(n_competitors, dtype=float)
+        initial_gamma_cov = np.eye(n_competitors, dtype=float) * EPS
         state_mean_by_group[group_name] = initial_mean
         state_cov_by_group[group_name] = initial_cov
+        state_gamma_mean_by_group[group_name] = initial_gamma_mean
+        state_gamma_cov_by_group[group_name] = initial_gamma_cov
         last_state_date_by_group[group_name] = {competitor: None for competitor in competitors}
         active_by_group[group_name] = {competitor: False for competitor in competitors}
 
@@ -990,15 +1129,16 @@ def run_all_groups_with_transfer(
         race_date = event["race_date"]
         year = int(event["year"])
         global_q = float(q_by_group[group_name])
-        ar_a = float(min(1.0, max(0.0, ar_a_by_group.get(group_name, 0.0))))
+        q_gamma_value = float(max(EPS, q_gamma_by_group.get(group_name, 1e-6)))
         group_mean = state_mean_by_group[group_name]
         group_cov = state_cov_by_group[group_name]
+        group_gamma_mean = state_gamma_mean_by_group[group_name]
+        group_gamma_cov = state_gamma_cov_by_group[group_name]
         group_last_dates = last_state_date_by_group[group_name]
         group_active = active_by_group[group_name]
         competitors = competitors_by_group[group_name]
         competitor_index = competitor_index_by_group[group_name]
-        debut_order_by_competitor = debut_order_by_group[group_name]
-        race_order_by_label = race_order_by_group_label[group_name]
+        debut_date_by_competitor = debut_date_by_group[group_name]
         n_competitors = len(competitors)
         runtime = prepare_group_runtime(groups_by_name[group_name])
         race_rows = runtime["race_rows_by_label"].get(race_label)
@@ -1020,27 +1160,37 @@ def run_all_groups_with_transfer(
                 group_cov[idx, :] = 0.0
                 group_cov[:, idx] = 0.0
                 group_cov[idx, idx] = float(max(EPS, snapshot.p))
+                group_gamma_mean[idx] = float(snapshot.gamma)
+                group_gamma_cov[idx, :] = 0.0
+                group_gamma_cov[:, idx] = 0.0
+                group_gamma_cov[idx, idx] = float(max(EPS, snapshot.p_gamma))
                 group_last_dates[competitor] = snapshot.last_state_date
                 group_active[competitor] = True
 
-        race_order = race_order_by_label.get(str(race_label))
-        if race_order is not None:
-            initial_x0 = float(initial_x0_by_group.get(group_name, 0.0))
-            initial_p0 = float(max(EPS, float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR)))))
-            for competitor in competitors:
-                if group_active[competitor]:
-                    continue
-                if debut_order_by_competitor.get(competitor) == race_order:
-                    idx = competitor_index[competitor]
-                    group_mean[idx] = initial_x0
-                    group_cov[idx, :] = 0.0
-                    group_cov[:, idx] = 0.0
-                    group_cov[idx, idx] = initial_p0
-                    group_last_dates[competitor] = None
-                    group_active[competitor] = True
+        debut_indices_this_race: set[int] = set()
+        initial_p0 = float(max(EPS, float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR)))))
+        for competitor in competitors:
+            if debut_date_by_competitor.get(competitor) != race_date:
+                continue
+            if competitor not in race_lookup:
+                continue
+            idx = competitor_index[competitor]
+            debut_indices_this_race.add(int(idx))
+            if not group_active[competitor]:
+                group_mean[idx] = 0.0
+                group_cov[idx, :] = 0.0
+                group_cov[:, idx] = 0.0
+                group_cov[idx, idx] = initial_p0
+                group_gamma_mean[idx] = 0.0
+                group_gamma_cov[idx, :] = 0.0
+                group_gamma_cov[:, idx] = 0.0
+                group_gamma_cov[idx, idx] = initial_p0
+                group_last_dates[competitor] = None
+                group_active[competitor] = True
 
         delta_days_by_competitor: dict[str, int] = {}
         process_diag = np.zeros(n_competitors, dtype=float)
+        process_diag_gamma = np.zeros(n_competitors, dtype=float)
         for competitor in competitors:
             if not group_active[competitor]:
                 delta_days_by_competitor[competitor] = 0
@@ -1049,32 +1199,58 @@ def run_all_groups_with_transfer(
             delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
             delta_days_by_competitor[competitor] = int(delta_days)
             process_diag[competitor_index[competitor]] = float(delta_days) * float(global_q)
+            process_diag_gamma[competitor_index[competitor]] = float(delta_days) * float(q_gamma_value)
         active_indices = _active_indices_from_flags(competitors, competitor_index, group_active)
         prior_mean, prior_cov = _apply_state_transition(
             group_mean,
             group_cov,
-            ar_a=ar_a,
             process_diag=process_diag,
+        )
+        prior_gamma_mean, prior_gamma_cov = _apply_state_transition(
+            group_gamma_mean,
+            group_gamma_cov,
+            process_diag=process_diag_gamma,
         )
         prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
         prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
+        prior_gamma_mean = np.asarray(prior_gamma_mean, dtype=float).copy()
+        prior_gamma_cov = _symmetrize_and_floor_covariance(prior_gamma_cov)
+        # Enforce x0 as an a-priori anchor on each boat's debut race day.
+        for idx in debut_indices_this_race:
+            prior_mean[int(idx)] = 0.0
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
-        observed_step = compute_observation_step(observed, competitors, competitor_index, prior_mean, prior_cov)
+        observed_step = compute_observation_step(
+            observed,
+            competitors,
+            competitor_index,
+            prior_mean,
+            prior_cov,
+            prior_gamma_mean,
+            prior_gamma_cov,
+            compute_loo_predictions=compute_loo_predictions,
+        )
         b_hat = float(observed_step["b_hat"])
         r_t = float(observed_step["r_t"])
         innovation_by_competitor = observed_step["innovation_by_competitor"]
         gain_by_competitor = observed_step["gain_by_competitor"]
+        gain_gamma_by_competitor = observed_step["gain_gamma_by_competitor"]
         y_pred_loo_by_competitor = observed_step["y_pred_loo_by_competitor"]
         nll_by_group[group_name] += float(observed_step["nll_sum"])
         obs_by_group[group_name] += int(observed_step["observed_count"])
         observed_competitors = set(observed["competitor"].astype(str).tolist()) if not observed.empty else set()
         group_mean = np.asarray(observed_step["post_mean"], dtype=float).copy()
         group_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_covariance"], dtype=float))
+        group_gamma_mean = np.asarray(observed_step["post_gamma_mean"], dtype=float).copy()
+        group_gamma_cov = _symmetrize_and_floor_covariance(np.asarray(observed_step["post_gamma_covariance"], dtype=float))
         group_mean = _project_active_vector_zero_sum(group_mean, active_indices)
         group_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(group_cov, active_indices))
+        group_gamma_mean = np.asarray(group_gamma_mean, dtype=float).copy()
+        group_gamma_cov = _symmetrize_and_floor_covariance(group_gamma_cov)
         state_mean_by_group[group_name] = group_mean
         state_cov_by_group[group_name] = group_cov
+        state_gamma_mean_by_group[group_name] = group_gamma_mean
+        state_gamma_cov_by_group[group_name] = group_gamma_cov
 
         row_payload_by_competitor: dict[str, dict[str, Any]] = {}
         for competitor in competitors:
@@ -1086,8 +1262,12 @@ def run_all_groups_with_transfer(
             is_active = bool(group_active[competitor])
             x_prior = float(prior_mean[idx]) if is_active else float("nan")
             p_prior = float(prior_cov[idx, idx]) if is_active else float("nan")
+            gamma_prior = float(prior_gamma_mean[idx]) if is_active else float("nan")
+            p_gamma_prior = float(prior_gamma_cov[idx, idx]) if is_active else float("nan")
             x_post = float(group_mean[idx]) if is_active else float("nan")
             p_post = float(group_cov[idx, idx]) if is_active else float("nan")
+            gamma_post = float(group_gamma_mean[idx]) if is_active else float("nan")
+            p_gamma_post = float(group_gamma_cov[idx, idx]) if is_active else float("nan")
             delta_t_days = int(delta_days_by_competitor[competitor])
             status = ""
             sailed_seconds: float | None = None
@@ -1120,17 +1300,21 @@ def run_all_groups_with_transfer(
             if is_active and competitor in observed_competitors and competitor in innovation_by_competitor and not np.isnan(r_t):
                 innovation = float(innovation_by_competitor[competitor])
                 gain = float(gain_by_competitor[competitor])
+                gain_gamma = float(gain_gamma_by_competitor[competitor])
                 observed_flag = True
                 y_pred_loo = float(y_pred_loo_by_competitor.get(competitor, float("nan")))
             else:
                 innovation = float("nan")
                 gain = float("nan")
+                gain_gamma = float("nan")
                 observed_flag = False
                 y_pred_loo = float("nan")
 
             row_payload_by_competitor[competitor] = {
                 "x_prior": float(x_prior),
                 "p_prior": float(p_prior),
+                "gamma_prior": float(gamma_prior),
+                "p_gamma_prior": float(p_gamma_prior),
                 "delta_t_days": int(delta_t_days),
                 "status": status,
                 "sailed_seconds": sailed_seconds,
@@ -1141,10 +1325,13 @@ def run_all_groups_with_transfer(
                 "series": series_value,
                 "innovation": float(innovation),
                 "gain": float(gain),
+                "gain_gamma": float(gain_gamma),
                 "observed_flag": bool(observed_flag),
                 "y_pred_loo": float(y_pred_loo),
                 "x_post": float(x_post),
                 "p_post": float(p_post),
+                "gamma_post": float(gamma_post),
+                "p_gamma_post": float(p_gamma_post),
             }
 
         if collect_history:
@@ -1168,17 +1355,22 @@ def run_all_groups_with_transfer(
                         "b_t_hat": b_hat,
                         "delta_t_days": row_payload["delta_t_days"],
                         "global_q": global_q,
-                        "global_ar_a": ar_a,
-                        "x0_group": float(initial_x0_by_group.get(group_name, 0.0)),
+                        "global_q_gamma": q_gamma_value,
+                        "x0_group": 0.0,
                         "p0_group": float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR))),
                         "x_prior": row_payload["x_prior"],
                         "p_prior": row_payload["p_prior"],
+                        "gamma_prior": row_payload["gamma_prior"],
+                        "p_gamma_prior": row_payload["p_gamma_prior"],
                         "r_t": r_t,
                         "innovation": row_payload["innovation"],
                         "kalman_gain": row_payload["gain"],
+                        "kalman_gain_gamma": row_payload["gain_gamma"],
                         "y_pred_loo": row_payload["y_pred_loo"],
                         "x_post": row_payload["x_post"],
                         "p_post": row_payload["p_post"],
+                        "gamma_post": row_payload["gamma_post"],
+                        "p_gamma_post": row_payload["p_gamma_post"],
                     }
                 )
 
@@ -1190,6 +1382,8 @@ def run_all_groups_with_transfer(
                 end_of_year_state[(group_name, year, competitor)] = BoatState(
                     x=float(group_mean[idx]),
                     p=float(group_cov[idx, idx]),
+                    gamma=float(group_gamma_mean[idx]),
+                    p_gamma=float(group_gamma_cov[idx, idx]),
                     last_state_date=group_last_dates[competitor],
                 )
 
@@ -1197,220 +1391,11 @@ def run_all_groups_with_transfer(
     return history, nll_by_group, obs_by_group
 
 
-def _run_group_filter_mle_with_gradient(
-    group: dict[str, Any],
-    global_q: float,
-    *,
-    ar_a: float,
-    initial_x0: float,
-    initial_p0: float,
-) -> tuple[float, int, float, float]:
-    runtime = prepare_group_runtime(group)
-    selected_races: list[str] = list(group["selected_races"])
-    race_dates: dict[str, datetime] = dict(group["race_dates"])
-    ar_a = float(min(1.0, max(0.0, ar_a)))
-    q_value = float(max(EPS, global_q))
-    c = 1.0 - ar_a
-
-    competitors: list[str] = runtime["competitors"]
-    race_rows_by_label: dict[str, pd.DataFrame] = runtime["race_rows_by_label"]
-    race_order_by_label: dict[str, int] = runtime.get("race_order_by_label", {})
-    debut_order_by_competitor: dict[str, int] = runtime.get("debut_order_by_competitor", {})
-    initial_p0 = float(max(EPS, initial_p0))
-    initial_x0 = float(initial_x0)
-    competitor_index = {competitor: idx for idx, competitor in enumerate(competitors)}
-    n_competitors = len(competitors)
-
-    state_mean = np.zeros(n_competitors, dtype=float)
-    state_cov = np.eye(n_competitors, dtype=float) * EPS
-    dmean_dq = np.zeros(n_competitors, dtype=float)
-    dmean_da = np.zeros(n_competitors, dtype=float)
-    dcov_dq = np.zeros((n_competitors, n_competitors), dtype=float)
-    dcov_da = np.zeros((n_competitors, n_competitors), dtype=float)
-
-    active_by_competitor = {competitor: False for competitor in competitors}
-    last_state_date_by_competitor = {competitor: None for competitor in competitors}
-
-    nll_sum = 0.0
-    observed_count = 0
-    grad_q = 0.0
-    grad_a = 0.0
-
-    for race_label in selected_races:
-        race_date = race_dates.get(race_label)
-        if race_date is None:
-            continue
-
-        race_rows = race_rows_by_label.get(race_label)
-        if race_rows is None:
-            continue
-
-        race_order = race_order_by_label.get(str(race_label))
-        if race_order is not None:
-            for competitor in competitors:
-                if active_by_competitor[competitor]:
-                    continue
-                if debut_order_by_competitor.get(competitor) == race_order:
-                    idx = competitor_index[competitor]
-                    state_mean[idx] = float(initial_x0)
-                    state_cov[idx, :] = 0.0
-                    state_cov[:, idx] = 0.0
-                    state_cov[idx, idx] = float(initial_p0)
-                    dmean_dq[idx] = 0.0
-                    dmean_da[idx] = 0.0
-                    dcov_dq[idx, :] = 0.0
-                    dcov_dq[:, idx] = 0.0
-                    dcov_da[idx, :] = 0.0
-                    dcov_da[:, idx] = 0.0
-                    last_state_date_by_competitor[competitor] = None
-                    active_by_competitor[competitor] = True
-
-        delta_days_diag = np.zeros(n_competitors, dtype=float)
-        for competitor in competitors:
-            if not active_by_competitor[competitor]:
-                continue
-            last_state_date = last_state_date_by_competitor[competitor]
-            delta_days = 0 if last_state_date is None else min(MAX_DELTA_T_DAYS, max(0, (race_date - last_state_date).days))
-            delta_days_diag[competitor_index[competitor]] = float(delta_days)
-        active_indices = _active_indices_from_flags(competitors, competitor_index, active_by_competitor)
-
-        process_diag = delta_days_diag * q_value
-        prior_mean = c * state_mean
-        prior_cov = (c * c) * state_cov + np.diag(process_diag)
-        dprior_mean_dq = c * dmean_dq
-        dprior_mean_da = c * dmean_da - state_mean
-        dprior_cov_dq = (c * c) * dcov_dq + np.diag(delta_days_diag)
-        dprior_cov_da = (c * c) * dcov_da - (2.0 * c) * state_cov
-
-        prior_cov = _symmetrize_and_floor_covariance(prior_cov)
-        dprior_cov_dq = 0.5 * (dprior_cov_dq + dprior_cov_dq.T)
-        dprior_cov_da = 0.5 * (dprior_cov_da + dprior_cov_da.T)
-        prior_mean = _project_active_vector_zero_sum(prior_mean, active_indices)
-        prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
-        dprior_mean_dq = _project_active_vector_zero_sum(dprior_mean_dq, active_indices)
-        dprior_mean_da = _project_active_vector_zero_sum(dprior_mean_da, active_indices)
-        dprior_cov_dq = _project_active_covariance_zero_sum(dprior_cov_dq, active_indices)
-        dprior_cov_da = _project_active_covariance_zero_sum(dprior_cov_da, active_indices)
-        dprior_cov_dq = 0.5 * (dprior_cov_dq + dprior_cov_dq.T)
-        dprior_cov_da = 0.5 * (dprior_cov_da + dprior_cov_da.T)
-
-        obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
-        observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
-        if observed.empty:
-            state_mean = prior_mean
-            state_cov = prior_cov
-            dmean_dq = dprior_mean_dq
-            dmean_da = dprior_mean_da
-            dcov_dq = dprior_cov_dq
-            dcov_da = dprior_cov_da
-            for competitor in competitors:
-                if active_by_competitor[competitor]:
-                    last_state_date_by_competitor[competitor] = race_date
-            continue
-
-        observed_competitors = observed["competitor"].astype(str).tolist()
-        observed_indices = np.array([competitor_index[cx] for cx in observed_competitors], dtype=int)
-        y_values = np.log(np.clip(observed["beregnet_seconds"].to_numpy(dtype=float), EPS, None))
-        x_prior_obs = prior_mean[observed_indices]
-        p_prior_obs = prior_cov[np.ix_(observed_indices, observed_indices)]
-        centered_values = y_values - x_prior_obs
-        b_hat, r_t, race_nll = fit_day_parameters_full(centered_values, p_prior_obs)
-        nll_sum += float(race_nll)
-        observed_count += int(observed_indices.size)
-
-        s_matrix = _symmetrize_and_floor_covariance(p_prior_obs + float(r_t) * np.eye(observed_indices.size, dtype=float))
-        s_inv = np.linalg.inv(s_matrix)
-        residual = centered_values - float(b_hat)
-        s_inv_res = s_inv @ residual
-
-        dL_dx_obs = -s_inv_res
-        dL_dP_obs = 0.5 * (s_inv - np.outer(s_inv_res, s_inv_res))
-
-        dprior_obs_mean_dq = dprior_mean_dq[observed_indices]
-        dprior_obs_mean_da = dprior_mean_da[observed_indices]
-        dprior_obs_cov_dq = dprior_cov_dq[np.ix_(observed_indices, observed_indices)]
-        dprior_obs_cov_da = dprior_cov_da[np.ix_(observed_indices, observed_indices)]
-
-        grad_q += float(dL_dx_obs @ dprior_obs_mean_dq) + float(np.sum(dL_dP_obs * dprior_obs_cov_dq))
-        grad_a += float(dL_dx_obs @ dprior_obs_mean_da) + float(np.sum(dL_dP_obs * dprior_obs_cov_da))
-
-        p_cross = prior_cov[:, observed_indices]
-        dp_cross_dq = dprior_cov_dq[:, observed_indices]
-        dp_cross_da = dprior_cov_da[:, observed_indices]
-        k_matrix = p_cross @ s_inv
-
-        dS_dq = dprior_obs_cov_dq
-        dS_da = dprior_obs_cov_da
-        dS_inv_dq = -s_inv @ dS_dq @ s_inv
-        dS_inv_da = -s_inv @ dS_da @ s_inv
-        dres_dq = -dprior_obs_mean_dq
-        dres_da = -dprior_obs_mean_da
-
-        dk_dq = dp_cross_dq @ s_inv + p_cross @ dS_inv_dq
-        dk_da = dp_cross_da @ s_inv + p_cross @ dS_inv_da
-
-        post_mean = prior_mean + (k_matrix @ residual)
-        post_cov = prior_cov - (k_matrix @ p_cross.T)
-        dpost_mean_dq = dprior_mean_dq + (dk_dq @ residual) + (k_matrix @ dres_dq)
-        dpost_mean_da = dprior_mean_da + (dk_da @ residual) + (k_matrix @ dres_da)
-        dpost_cov_dq = dprior_cov_dq - (dk_dq @ p_cross.T) - (k_matrix @ dp_cross_dq.T)
-        dpost_cov_da = dprior_cov_da - (dk_da @ p_cross.T) - (k_matrix @ dp_cross_da.T)
-
-        state_mean = np.asarray(post_mean, dtype=float).copy()
-        state_cov = _symmetrize_and_floor_covariance(np.asarray(post_cov, dtype=float))
-        dmean_dq = np.asarray(dpost_mean_dq, dtype=float)
-        dmean_da = np.asarray(dpost_mean_da, dtype=float)
-        dcov_dq = 0.5 * (np.asarray(dpost_cov_dq, dtype=float) + np.asarray(dpost_cov_dq, dtype=float).T)
-        dcov_da = 0.5 * (np.asarray(dpost_cov_da, dtype=float) + np.asarray(dpost_cov_da, dtype=float).T)
-        state_mean = _project_active_vector_zero_sum(state_mean, active_indices)
-        state_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(state_cov, active_indices))
-        dmean_dq = _project_active_vector_zero_sum(dmean_dq, active_indices)
-        dmean_da = _project_active_vector_zero_sum(dmean_da, active_indices)
-        dcov_dq = _project_active_covariance_zero_sum(dcov_dq, active_indices)
-        dcov_da = _project_active_covariance_zero_sum(dcov_da, active_indices)
-        dcov_dq = 0.5 * (dcov_dq + dcov_dq.T)
-        dcov_da = 0.5 * (dcov_da + dcov_da.T)
-        for competitor in competitors:
-            if active_by_competitor[competitor]:
-                last_state_date_by_competitor[competitor] = race_date
-
-    return float(nll_sum), int(observed_count), float(grad_q), float(grad_a)
-
-
-def q_objective_mle_with_gradient(
+def q_objective_informed(
     groups: list[dict[str, Any]],
     q_value: float,
     *,
-    ar_a: float = 0.0,
-    initial_x0: float = 0.0,
-    initial_p0: float = P_COV_CAP_FLOOR,
-) -> tuple[float, int, float, float]:
-    nll_sum = 0.0
-    obs_count = 0
-    grad_q = 0.0
-    grad_a = 0.0
-    for group in groups:
-        gnll, gobs, gq, ga = _run_group_filter_mle_with_gradient(
-            group,
-            float(q_value),
-            ar_a=float(ar_a),
-            initial_x0=float(initial_x0),
-            initial_p0=float(initial_p0),
-        )
-        nll_sum += float(gnll)
-        obs_count += int(gobs)
-        grad_q += float(gq)
-        grad_a += float(ga)
-    if obs_count == 0:
-        return float("inf"), 0, 0.0, 0.0
-    return float(nll_sum), int(obs_count), float(grad_q), float(grad_a)
-
-
-def q_objective(
-    groups: list[dict[str, Any]],
-    q_value: float,
-    *,
-    ar_a: float = 0.0,
+    q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
 ) -> tuple[float, int]:
@@ -1420,9 +1405,37 @@ def q_objective(
         result = run_group_filter(
             group,
             q_value,
-            ar_a=ar_a,
+            q_gamma=q_gamma,
             initial_x0=initial_x0,
             initial_p0=initial_p0,
+            compute_loo_predictions=False,
+            collect_history=False,
+        )
+        sq_error_sum += float(result.informed_sq_error_sum)
+        obs_count += int(result.informed_error_count)
+    if obs_count == 0:
+        return float("inf"), 0
+    return float(np.sqrt(sq_error_sum / obs_count)), obs_count
+
+
+def q_objective_loo(
+    groups: list[dict[str, Any]],
+    q_value: float,
+    *,
+    q_gamma: float = 0.0,
+    initial_x0: float = 0.0,
+    initial_p0: float = P_COV_CAP_FLOOR,
+) -> tuple[float, int]:
+    sq_error_sum = 0.0
+    obs_count = 0
+    for group in groups:
+        result = run_group_filter(
+            group,
+            q_value,
+            q_gamma=q_gamma,
+            initial_x0=initial_x0,
+            initial_p0=initial_p0,
+            compute_loo_predictions=True,
             collect_history=False,
         )
         sq_error_sum += float(result.loo_sq_error_sum)
@@ -1436,7 +1449,7 @@ def q_objective_mle(
     groups: list[dict[str, Any]],
     q_value: float,
     *,
-    ar_a: float = 0.0,
+    q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
 ) -> tuple[float, int]:
@@ -1446,9 +1459,10 @@ def q_objective_mle(
         result = run_group_filter(
             group,
             q_value,
-            ar_a=ar_a,
+            q_gamma=q_gamma,
             initial_x0=initial_x0,
             initial_p0=initial_p0,
+            compute_loo_predictions=False,
             collect_history=False,
         )
         nll_sum += float(result.nll_sum)
@@ -1461,7 +1475,10 @@ def q_objective_mle(
 def resolve_q_objective(value: str) -> str:
     objective = str(value or "").strip().lower()
     aliases = {
-        "rmse": "rmse_loo",
+        "rmse": "rmse_informed",
+        "rmse-informed": "rmse_informed",
+        "one_step_rmse": "rmse_informed",
+        "one-step-rmse": "rmse_informed",
         "rmse-loo": "rmse_loo",
         "one_step_rmse_loo": "rmse_loo",
         "one-step-rmse-loo": "rmse_loo",
@@ -1478,22 +1495,26 @@ def evaluate_q_score(
     q_value: float,
     objective: str,
     *,
-    ar_a: float = 0.0,
+    q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     score_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
 ) -> tuple[float, int]:
     objective = resolve_q_objective(objective)
     q_key = float(q_value)
-    a_key = float(min(1.0, max(0.0, ar_a)))
-    key = (q_key, a_key)
+    q_gamma_key = float(q_gamma)
+    key = (q_key, q_gamma_key)
     if score_cache is not None and key in score_cache:
         return score_cache[key]
 
     result = (
-        q_objective(groups, q_key, ar_a=a_key, initial_x0=initial_x0, initial_p0=initial_p0)
+        q_objective_loo(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
         if objective == "rmse_loo"
-        else q_objective_mle(groups, q_key, ar_a=a_key, initial_x0=initial_x0, initial_p0=initial_p0)
+        else (
+            q_objective_informed(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
+            if objective == "rmse_informed"
+            else q_objective_mle(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
+        )
     )
     if score_cache is not None:
         score_cache[key] = result
@@ -1504,7 +1525,7 @@ def q_diagnostics(
     groups: list[dict[str, Any]],
     q_values: np.ndarray,
     *,
-    ar_a: float = 0.0,
+    q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     p0_from_q_scale: float | None = None,
@@ -1521,10 +1542,10 @@ def q_diagnostics(
         q_float = float(q_value)
         p0_for_q = float(max(EPS, p0_scale * q_float)) if p0_scale is not None else p0_fixed
         rmse_score, rmse_obs = evaluate_q_score(
-            groups, q_float, "rmse", ar_a=ar_a, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
+            groups, q_float, "rmse", q_gamma=q_gamma, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
         )
         mle_score, mle_obs = evaluate_q_score(
-            groups, q_float, "mle", ar_a=ar_a, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
+            groups, q_float, "mle", q_gamma=q_gamma, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
         )
         rows.append(
             {
@@ -1551,7 +1572,8 @@ def fit_global_q(
     initial_q: float,
     objective: str,
     *,
-    initial_ar_a: float = 0.0,
+    initial_q_gamma: float = 1e-6,
+    initial_k: float = 30.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
     p0_from_q_scale: float | None = None,
@@ -1559,7 +1581,7 @@ def fit_global_q(
     n_workers: int | None = None,
     progress_label: str | None = None,
     progress_every: int = 5,
-) -> tuple[float, float, float, int]:
+) -> tuple[float, float, float, float, int]:
     objective = resolve_q_objective(objective)
     log_label = progress_label if progress_label else "GLOBAL"
     de_popsize = max(15, int(os.cpu_count() or 1))
@@ -1568,67 +1590,103 @@ def fit_global_q(
     de_workers_map = None
     de_pool: Pool | None = None
     if de_workers > 1:
+        k_init = float(max(P0_SCALE_SEARCH_MIN, min(P0_SCALE_SEARCH_MAX, float(initial_k))))
         de_context = _DEObjectiveContext(
             groups=groups,
             objective=objective,
             log_q_min=float(math.log(float(Q_SEARCH_MIN))),
             log_q_max=float(math.log(float(Q_SEARCH_MAX))),
+            q_gamma_min=float(math.log(float(max(EPS, Q_GAMMA_SEARCH_MIN)))),
+            q_gamma_max=float(math.log(float(max(EPS, Q_GAMMA_SEARCH_MAX)))),
+            log_k_min=float(math.log(float(max(EPS, P0_SCALE_SEARCH_MIN)))),
+            log_k_max=float(math.log(float(max(EPS, P0_SCALE_SEARCH_MAX)))),
             x0_fixed=float(initial_x0),
-            p0_fixed=float(max(EPS, initial_p0)),
-            p0_scale=float(p0_from_q_scale) if p0_from_q_scale is not None else None,
         )
         de_pool = Pool(processes=de_workers, initializer=_de_worker_init, initargs=(de_context,))
         de_workers_map = _DEProcessMap(de_pool)
     x0_fixed = float(initial_x0)
-    p0_fixed = float(max(EPS, initial_p0))
-    p0_scale = float(p0_from_q_scale) if p0_from_q_scale is not None else None
     progress_every = max(1, int(progress_every))
     q_min = float(Q_SEARCH_MIN)
     q_max = float(Q_SEARCH_MAX)
+    q_gamma_min = float(Q_GAMMA_SEARCH_MIN)
+    q_gamma_max = float(Q_GAMMA_SEARCH_MAX)
+    k_min = float(P0_SCALE_SEARCH_MIN)
+    k_max = float(P0_SCALE_SEARCH_MAX)
     log_q_min = float(math.log(q_min))
     log_q_max = float(math.log(q_max))
+    log_q_gamma_min = float(math.log(max(EPS, q_gamma_min)))
+    log_q_gamma_max = float(math.log(max(EPS, q_gamma_max)))
+    log_k_min = float(math.log(max(EPS, k_min)))
+    log_k_max = float(math.log(max(EPS, k_max)))
     initial_q_clamped = float(max(q_min, min(q_max, float(initial_q))))
-    initial_a_clamped = float(min(1.0, max(0.0, float(initial_ar_a))))
+    initial_q_gamma_clamped = float(max(q_gamma_min, min(q_gamma_max, float(initial_q_gamma))))
+    if p0_from_q_scale is not None:
+        initial_k = float(p0_from_q_scale)
+    initial_k_clamped = float(max(k_min, min(k_max, float(initial_k))))
+    de_maxiter = 200
+    de_tol = 1e-5
+    de_atol = 0.0
 
     evaluations = 0
     best_q = initial_q_clamped
-    best_a = initial_a_clamped
+    best_q_gamma = initial_q_gamma_clamped
+    best_k = initial_k_clamped
     best_score = float("inf")
     best_obs = 0
 
+    def _boundary_flags(q_value: float, q_gamma_value: float, k_value: float) -> tuple[bool, bool, bool]:
+        q_on_boundary = (
+            abs(q_value - q_min) <= max(1e-20, abs(q_min) * 1e-9)
+            or abs(q_value - q_max) <= max(1e-20, abs(q_max) * 1e-9)
+        )
+        q_gamma_on_boundary = (
+            abs(q_gamma_value - q_gamma_min) <= max(1e-20, abs(q_gamma_min) * 1e-9)
+            or abs(q_gamma_value - q_gamma_max) <= max(1e-20, abs(q_gamma_max) * 1e-9)
+        )
+        k_on_boundary = (
+            abs(k_value - k_min) <= max(1e-20, abs(k_min) * 1e-9)
+            or abs(k_value - k_max) <= max(1e-20, abs(k_max) * 1e-9)
+        )
+        return bool(q_on_boundary), bool(q_gamma_on_boundary), bool(k_on_boundary)
+
     if progress_label:
-        p0_text = f"{p0_scale:.1f}*q" if p0_scale is not None else f"{p0_fixed:.3e}"
-        worker_text = f"{de_workers} workers (DE phases)" if de_workers > 1 else "1 worker (DE phases)"
+        worker_text = f"{de_workers} workers" if de_workers > 1 else "1 worker"
         requested_workers = f", requested n_workers={int(n_workers)} (ignored; using workers=popsize={de_popsize})" if n_workers is not None else ""
         print(
-            f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0={p0_text} "
-            f"a0={initial_a_clamped:.3e} "
-            f"(optimizer=DE(1)+GD+DE(19)+GD, parallel={worker_text}{requested_workers})",
+            f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0=k*q k0={initial_k_clamped:.3e} "
+            f"q_gamma0={initial_q_gamma_clamped:.3e} "
+            f"(optimizer=DE(maxiter={de_maxiter}), parallel={worker_text}{requested_workers})",
+            flush=True,
+        )
+        print(
+            f"[QFIT {progress_label}] crit: stdE<=atol+tol*|meanE| "
+            f"(tol={de_tol:.3g}, atol={de_atol:.3g}, stop:c>1, maxit={de_maxiter})",
             flush=True,
         )
 
-    def _register(score: float, obs: int, q_value: float, ar_a_value: float) -> None:
-        nonlocal evaluations, best_q, best_a, best_score, best_obs
+    def _register(score: float, obs: int, q_value: float, q_gamma_value: float, k_value: float) -> None:
+        nonlocal evaluations, best_q, best_q_gamma, best_k, best_score, best_obs
         evaluations += 1
         if score < best_score:
             best_q = float(q_value)
-            best_a = float(ar_a_value)
+            best_q_gamma = float(q_gamma_value)
+            best_k = float(k_value)
             best_score = float(score)
             best_obs = int(obs)
         if progress_label and (evaluations % progress_every == 0 or evaluations == 1):
             print(
-                f"[QFIT {progress_label}] eval {evaluations} q={q_value:.3e} a={ar_a_value:.3e} obj={score:.6f} "
-                f"best objective={best_score:.6f} q={best_q:.3e} a={best_a:.3e} obs={best_obs}",
+                f"[QFIT {progress_label}] ev={evaluations} q={q_value:.2e} qg={q_gamma_value:.2e} k={k_value:.2e} "
+                f"obj={score:.5g} best={best_score:.5g} bq={best_q:.2e} bqg={best_q_gamma:.2e} bk={best_k:.2e} obs={best_obs}",
                 flush=True,
             )
 
-    def _score_for(q_value: float, ar_a_value: float) -> tuple[float, int]:
-        p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
+    def _score_for(q_value: float, q_gamma_value: float, k_value: float) -> tuple[float, int]:
+        p0_for_q = float(max(EPS, k_value * q_value))
         score, obs = evaluate_q_score(
             groups,
             float(q_value),
             objective,
-            ar_a=float(min(1.0, max(0.0, ar_a_value))),
+            q_gamma=float(q_gamma_value),
             initial_x0=x0_fixed,
             initial_p0=p0_for_q,
             score_cache=score_cache,
@@ -1637,273 +1695,115 @@ def fit_global_q(
 
     def _objective(theta: np.ndarray) -> float:
         log_q = float(theta[0])
-        ar_a = float(min(1.0, max(0.0, theta[1])))
+        log_q_gamma = float(theta[1])
+        log_k = float(theta[2])
         log_q = float(max(log_q_min, min(log_q_max, log_q)))
+        log_q_gamma = float(max(log_q_gamma_min, min(log_q_gamma_max, log_q_gamma)))
+        log_k = float(max(log_k_min, min(log_k_max, log_k)))
         q_value = float(math.exp(log_q))
-        score, obs = _score_for(q_value, ar_a)
-        _register(float(score), int(obs), q_value, ar_a)
+        q_gamma_value = float(math.exp(log_q_gamma))
+        k_value = float(math.exp(log_k))
+        score, obs = _score_for(q_value, q_gamma_value, k_value)
+        _register(float(score), int(obs), q_value, q_gamma_value, k_value)
         if not np.isfinite(float(score)):
             return 1e300
         return float(score)
 
-    def _mle_objective_and_gradient(theta: np.ndarray) -> tuple[float, np.ndarray, int, float, float]:
-        log_q = float(max(log_q_min, min(log_q_max, float(theta[0]))))
-        ar_a = float(min(1.0, max(0.0, float(theta[1]))))
-        q_value = float(math.exp(log_q))
-        p0_for_q = float(max(EPS, p0_scale * q_value)) if p0_scale is not None else p0_fixed
-        score, obs, grad_q, grad_a = q_objective_mle_with_gradient(
-            groups,
-            q_value,
-            ar_a=ar_a,
-            initial_x0=x0_fixed,
-            initial_p0=p0_for_q,
-        )
-        if not np.isfinite(score):
-            return 1e300, np.array([0.0, 0.0], dtype=float), int(obs), q_value, ar_a
-        grad_log_q = float(grad_q * q_value)
-        # If p0 tracks q, chain rule adds dp0/dlogq = p0_scale*q
-        if p0_scale is not None:
-            # p0 enters as initializer/cap; this term is intentionally omitted for stability.
-            pass
-        grad = np.array([grad_log_q, float(grad_a)], dtype=float)
-        return float(score), grad, int(obs), q_value, ar_a
-
     # Seed from initial guess.
-    _objective(np.array([math.log(initial_q_clamped), initial_a_clamped], dtype=float))
+    _objective(
+        np.array(
+            [math.log(initial_q_clamped), math.log(max(EPS, initial_q_gamma_clamped)), math.log(max(EPS, initial_k_clamped))],
+            dtype=float,
+        )
+    )
 
-    de_gen1 = 0
+    de_gen = 0
 
-    def _de_callback_phase1(_xk: np.ndarray, _convergence: float) -> bool:
-        nonlocal de_gen1
-        de_gen1 += 1
-        print(f"[QFIT {log_label}] DE phase 1 generation {de_gen1}/20", flush=True)
+    def _de_callback(_xk: np.ndarray, convergence: float) -> bool:
+        nonlocal de_gen, best_q, best_q_gamma, best_k, best_score, best_obs
+        de_gen += 1
+        if progress_label:
+            try:
+                theta = np.asarray(_xk, dtype=float)
+                log_q_cb = float(max(log_q_min, min(log_q_max, float(theta[0]))))
+                log_qg_cb = float(max(log_q_gamma_min, min(log_q_gamma_max, float(theta[1]))))
+                log_k_cb = float(max(log_k_min, min(log_k_max, float(theta[2]))))
+                q_cb = float(math.exp(log_q_cb))
+                qg_cb = float(math.exp(log_qg_cb))
+                k_cb = float(math.exp(log_k_cb))
+                score_cb, obs_cb = _score_for(q_cb, qg_cb, k_cb)
+                if np.isfinite(float(score_cb)) and (float(score_cb) < best_score or de_gen == 1):
+                    best_q = float(q_cb)
+                    best_q_gamma = float(qg_cb)
+                    best_k = float(k_cb)
+                    best_score = float(score_cb)
+                    best_obs = int(obs_cb)
+            except Exception:
+                pass
+            q_boundary, q_gamma_boundary, k_boundary = _boundary_flags(best_q, best_q_gamma, best_k)
+            if objective == "mle":
+                best_nll = float(best_score)
+            else:
+                best_nll, _ = evaluate_q_score(
+                    groups,
+                    best_q,
+                    "mle",
+                    q_gamma=best_q_gamma,
+                    initial_x0=x0_fixed,
+                    initial_p0=float(max(EPS, best_k * best_q)),
+                    score_cache=None,
+                )
+            nll_text = f"{float(best_nll):.6f}" if np.isfinite(float(best_nll)) else "nan"
+            stop_ready = bool(float(convergence) > 1.0)
+            print(
+                f"[QFIT {log_label}] g={de_gen}/{de_maxiter} c={float(convergence):.5g} stop={stop_ready} "
+                f"q={best_q:.2e} qg={best_q_gamma:.2e} k={best_k:.2e} obj={best_score:.5g} nll={nll_text} "
+                f"b=(q:{int(q_boundary)},qg:{int(q_gamma_boundary)},k:{int(k_boundary)})",
+                flush=True,
+            )
         return False
 
     try:
-        de_result_early = differential_evolution(
+        de_result = differential_evolution(
             _objective,
-            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
-            maxiter=1,
+            bounds=[(log_q_min, log_q_max), (log_q_gamma_min, log_q_gamma_max), (log_k_min, log_k_max)],
+            maxiter=de_maxiter,
             popsize=de_popsize,
             polish=False,
             updating=de_updating,
             workers=de_workers_map if de_workers_map is not None else de_workers,
             seed=42,
-            callback=_de_callback_phase1,
-        )
-        _objective(np.asarray(de_result_early.x, dtype=float))
-        print(f"[QFIT {log_label}] PHASE1_EARLY_DONE generations={de_gen1}", flush=True)
-
-        refine_progress_every = max(1, progress_every)
-
-        def _refine_half_population(
-            population: np.ndarray,
-            energies: np.ndarray,
-            *,
-            phase_name: str,
-        ) -> np.ndarray:
-            pop = np.asarray(population, dtype=float)
-            eng = np.asarray(energies, dtype=float)
-            if eng.size != pop.shape[0]:
-                eng = np.array([_objective(theta) for theta in pop], dtype=float)
-            order_local = np.argsort(eng)
-            refine_count_local = max(1, int(math.ceil(0.5 * float(len(order_local)))))
-            refine_indices_local = order_local[:refine_count_local]
-
-            print(
-                f"[QFIT {log_label}] DE {phase_name} finished: pop={len(order_local)} refining top {refine_count_local} "
-                f"with SciPy L-BFGS-B (gradient-based)",
-                flush=True,
-            )
-            print(f"[QFIT {log_label}] REFINEMENT_START phase={phase_name} count={refine_count_local}", flush=True)
-
-            refined_population_local = np.asarray(pop, dtype=float).copy()
-            tasks: list[_RefineTask] = []
-            for refine_rank, idx in enumerate(refine_indices_local, start=1):
-                theta0 = np.asarray(pop[int(idx)], dtype=float).copy()
-                theta0[0] = float(max(log_q_min, min(log_q_max, theta0[0])))
-                theta0[1] = float(min(1.0, max(0.0, theta0[1])))
-                start_q = float(math.exp(float(theta0[0])))
-                start_a = float(theta0[1])
-                start_score, start_obs = _score_for(start_q, start_a)
-                _register(float(start_score), int(start_obs), start_q, start_a)
-                print(
-                    f"[QFIT {log_label}] refine {phase_name} {refine_rank}/{refine_count_local} start "
-                    f"q={start_q:.3e} a={start_a:.3e} obj={start_score:.6f}",
-                    flush=True,
-                )
-                tasks.append(
-                    _RefineTask(
-                        idx=int(idx),
-                        rank=int(refine_rank),
-                        theta0=(float(theta0[0]), float(theta0[1])),
-                        objective=str(objective),
-                        log_q_min=float(log_q_min),
-                        log_q_max=float(log_q_max),
-                    )
-                )
-
-            if de_pool is not None and len(tasks) > 1:
-                print(
-                    f"[QFIT {log_label}] REFINEMENT_PARALLEL phase={phase_name} workers={de_workers}",
-                    flush=True,
-                )
-                for result in de_pool.imap_unordered(_refine_candidate_worker, tasks, chunksize=1):
-                    refined_theta = np.array([math.log(result.q_value), result.ar_a], dtype=float)
-                    refined_theta[0] = float(max(log_q_min, min(log_q_max, refined_theta[0])))
-                    refined_theta[1] = float(min(1.0, max(0.0, refined_theta[1])))
-                    refined_population_local[int(result.idx), :] = refined_theta
-                    _register(float(result.score), int(result.obs), float(result.q_value), float(result.ar_a))
-                    status = "success" if bool(result.success) else f"not-converged ({result.message})"
-                    print(
-                        f"[QFIT {log_label}] refine {phase_name} {result.rank}/{refine_count_local} done "
-                        f"q={result.q_value:.3e} a={result.ar_a:.3e} obj={result.score:.6f} optimizer={status}",
-                        flush=True,
-                    )
-                return refined_population_local
-
-            for task in tasks:
-                theta0 = np.array(task.theta0, dtype=float)
-                if objective == "mle":
-                    last_theta: np.ndarray | None = None
-                    last_score = float("inf")
-                    last_grad = np.array([0.0, 0.0], dtype=float)
-                    refine_iter = 0
-
-                    def _eval_mle_cached(theta: np.ndarray) -> tuple[float, np.ndarray]:
-                        nonlocal last_theta, last_score, last_grad
-                        theta_vec = np.asarray(theta, dtype=float)
-                        if last_theta is not None and np.array_equal(theta_vec, last_theta):
-                            return float(last_score), np.asarray(last_grad, dtype=float)
-                        score, grad, obs, q_value, ar_a = _mle_objective_and_gradient(theta_vec)
-                        _register(float(score), int(obs), float(q_value), float(ar_a))
-                        last_theta = theta_vec.copy()
-                        last_score = float(score)
-                        last_grad = np.asarray(grad, dtype=float).copy()
-                        return float(last_score), np.asarray(last_grad, dtype=float)
-
-                    def _refine_callback_mle(xk: np.ndarray) -> None:
-                        nonlocal refine_iter
-                        refine_iter += 1
-                        if refine_iter % refine_progress_every != 0:
-                            return
-                        score, grad = _eval_mle_cached(np.asarray(xk, dtype=float))
-                        qk = float(math.exp(float(max(log_q_min, min(log_q_max, float(xk[0]))))))
-                        ak = float(min(1.0, max(0.0, float(xk[1]))))
-                        gnorm = float(np.linalg.norm(np.asarray(grad, dtype=float)))
-                        print(
-                            f"[QFIT {log_label}] refine {phase_name} {task.rank}/{refine_count_local} iter {refine_iter} "
-                            f"q={qk:.3e} a={ak:.3e} obj={score:.6f} |grad|={gnorm:.3e}",
-                            flush=True,
-                        )
-
-                    local_result = minimize(
-                        lambda t: _eval_mle_cached(t)[0],
-                        x0=theta0,
-                        method="L-BFGS-B",
-                        jac=lambda t: _eval_mle_cached(t)[1],
-                        callback=_refine_callback_mle,
-                        bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
-                        options={"maxiter": 120, "ftol": 1e-12},
-                    )
-                else:
-                    local_result = minimize(
-                        _objective,
-                        x0=theta0,
-                        method="L-BFGS-B",
-                        bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
-                        options={"maxiter": 120, "ftol": 1e-12},
-                    )
-
-                refined_theta = np.asarray(local_result.x, dtype=float)
-                refined_theta[0] = float(max(log_q_min, min(log_q_max, refined_theta[0])))
-                refined_theta[1] = float(min(1.0, max(0.0, refined_theta[1])))
-                refined_population_local[int(task.idx), :] = refined_theta
-
-                local_log_q = float(refined_theta[0])
-                local_ar_a = float(refined_theta[1])
-                local_q = float(math.exp(local_log_q))
-                local_score, local_obs = _score_for(local_q, local_ar_a)
-                _register(float(local_score), int(local_obs), local_q, local_ar_a)
-                status = "success" if bool(local_result.success) else f"not-converged ({local_result.message})"
-                print(
-                    f"[QFIT {log_label}] refine {phase_name} {task.rank}/{refine_count_local} done "
-                    f"q={local_q:.3e} a={local_ar_a:.3e} obj={local_score:.6f} optimizer={status}",
-                    flush=True,
-                )
-            return refined_population_local
-
-        de_early_population = np.asarray(getattr(de_result_early, "population", np.atleast_2d(de_result_early.x)), dtype=float)
-        de_early_energies = np.asarray(getattr(de_result_early, "population_energies", np.array([])), dtype=float)
-        refined_population_early = _refine_half_population(de_early_population, de_early_energies, phase_name="phase1-early")
-
-        print(
-            f"[QFIT {log_label}] continuing DE phase 1 for remaining generations after early refine",
-            flush=True,
-        )
-        de_result = differential_evolution(
-            _objective,
-            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
-            maxiter=19,
-            popsize=de_popsize,
-            polish=False,
-            updating=de_updating,
-            workers=de_workers_map if de_workers_map is not None else de_workers,
-            seed=142,
-            init=refined_population_early,
-            callback=_de_callback_phase1,
+            tol=de_tol,
+            atol=de_atol,
+            callback=_de_callback,
         )
         _objective(np.asarray(de_result.x, dtype=float))
-        print(f"[QFIT {log_label}] PHASE1_DONE generations={de_gen1}", flush=True)
-
-        de_population = np.asarray(getattr(de_result, "population", np.atleast_2d(de_result.x)), dtype=float)
-        de_energies = np.asarray(getattr(de_result, "population_energies", np.array([])), dtype=float)
-        refined_population = _refine_half_population(de_population, de_energies, phase_name="phase1")
-
-        print(
-            f"[QFIT {log_label}] restarting DE for 20 iterations with partially refined population",
-            flush=True,
-        )
-        print(f"[QFIT {log_label}] PHASE2_START", flush=True)
-
-        de_gen2 = 0
-
-        def _de_callback_phase2(_xk: np.ndarray, _convergence: float) -> bool:
-            nonlocal de_gen2
-            de_gen2 += 1
-            print(f"[QFIT {log_label}] DE phase 2 generation {de_gen2}/20", flush=True)
-            return False
-
-        de_result2 = differential_evolution(
-            _objective,
-            bounds=[(log_q_min, log_q_max), (0.0, 1.0)],
-            maxiter=20,
-            popsize=de_popsize,
-            polish=False,
-            updating=de_updating,
-            workers=de_workers_map if de_workers_map is not None else de_workers,
-            seed=43,
-            init=refined_population,
-            callback=_de_callback_phase2,
-        )
-        _objective(np.asarray(de_result2.x, dtype=float))
-        print(f"[QFIT {log_label}] PHASE2_DONE generations={de_gen2}", flush=True)
-        de2_population = np.asarray(getattr(de_result2, "population", np.atleast_2d(de_result2.x)), dtype=float)
-        de2_energies = np.asarray(getattr(de_result2, "population_energies", np.array([])), dtype=float)
-        _ = _refine_half_population(de2_population, de2_energies, phase_name="phase2")
     finally:
         if de_pool is not None:
             de_pool.close()
             de_pool.join()
 
     if progress_label:
-        at_lower = abs(best_q - q_min) <= max(1e-20, abs(q_min) * 1e-9)
-        at_upper = abs(best_q - q_max) <= max(1e-20, abs(q_max) * 1e-9)
-        boundary_note = " [BOUNDARY]" if (at_lower or at_upper) else ""
+        q_boundary, q_gamma_boundary, k_boundary = _boundary_flags(best_q, best_q_gamma, best_k)
+        boundary_note = " [BOUNDARY]" if (q_boundary or q_gamma_boundary or k_boundary) else ""
+        if objective == "mle":
+            best_nll = float(best_score)
+        else:
+            best_nll, _ = evaluate_q_score(
+                groups,
+                best_q,
+                "mle",
+                q_gamma=best_q_gamma,
+                initial_x0=x0_fixed,
+                initial_p0=float(max(EPS, best_k * best_q)),
+                score_cache=None,
+            )
         print(
-            f"[QFIT {progress_label}] done best objective={best_score:.6f} q={best_q:.3e} a={best_a:.3e} obs={best_obs} "
-            f"evals={evaluations} optimizer=DE(1)+SciPy-LBFGSB+DE(19)+SciPy-LBFGSB+DE(20){boundary_note}",
+            f"[QFIT {progress_label}] done obj={best_score:.5g} nll={float(best_nll):.6f} "
+            f"q={best_q:.2e} qg={best_q_gamma:.2e} k={best_k:.2e} obs={best_obs} ev={evaluations} "
+            f"nit={int(de_result.nit)} ok={bool(de_result.success)} b=(q:{int(q_boundary)},qg:{int(q_gamma_boundary)},k:{int(k_boundary)}) "
+            f"msg={str(de_result.message)!r}{boundary_note}",
             flush=True,
         )
 
-    return float(best_q), float(best_a), float(best_score), int(best_obs)
+    return float(best_q), float(best_q_gamma), float(best_k), float(best_score), int(best_obs)
