@@ -65,7 +65,6 @@ blue!80!black%
 }
 
 \newcommand{\BoatPlotFromCsv}[5]{%
-\subsubsection*{#1}
 \pgfplotstableread[col sep=comma]{#2}\boatplotdata
 \SetExternalFilenameFromPath{\BoatPlotExternalName}{#2}
 \SetExternalFilenameIfProvided{boatplot-\BoatPlotExternalName}

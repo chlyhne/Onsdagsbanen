@@ -508,13 +508,13 @@ def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Pa
     for table_title, table in rendered_tables:
         tex_lines.extend([
             r"\clearpage",
-            rf"\subsubsection*{{{latex_escape_text(table_title)}}}",
             r"{\scriptsize",
             r"\setlength{\tabcolsep}{3pt}",
             r"\setlength{\arrayrulewidth}{0.8pt}",
             r"\renewcommand{\arraystretch}{0.95}",
             r"\rowcolors{2}{white}{gray!12}",
             r"\begin{center}",
+            rf"\textbf{{{latex_escape_text(table_title)}}}\\[0.6ex]",
             r"\begin{tabular}{|>{\raggedright\arraybackslash}m{3.0cm}|>{\centering\arraybackslash}m{1.35cm}|>{\centering\arraybackslash}m{1.9cm}|>{\centering\arraybackslash}m{1.55cm}|>{\centering\arraybackslash}m{2.05cm}|>{\centering\arraybackslash}m{1.4cm}|>{\centering\arraybackslash}m{1.9cm}|}",
             r"\hline",
             r"\rule[-0.35ex]{0pt}{4.8ex}\shortstack[l]{Navn} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Est. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Hdcp. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Est. Hdcp. Tid} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Fejl} & \rule[-0.35ex]{0pt}{4.8ex}\shortstack[c]{Point Fejl}\\[0.75ex]",
