@@ -67,6 +67,7 @@ class GroupFilterResult:
     informed_error_count: int
     loo_sq_error_sum: float
     loo_error_count: int
+    terminal_state_by_competitor: dict[str, BoatState]
 
 
 @dataclass
@@ -80,6 +81,7 @@ class _DEObjectiveContext:
     log_k_min: float
     log_k_max: float
     x0_fixed: float
+    initial_state_by_group: dict[str, dict[str, BoatState]]
 
 
 _DE_CONTEXT: _DEObjectiveContext | None = None
@@ -110,6 +112,7 @@ def _de_worker_objective(theta: np.ndarray) -> float:
             q_gamma=q_gamma,
             initial_x0=context.x0_fixed,
             initial_p0=p0_for_q,
+            initial_state_by_group=context.initial_state_by_group,
             score_cache=None,
         )
     except Exception:
@@ -126,6 +129,54 @@ class _DEProcessMap:
     def __call__(self, _func: Any, iterable: Any) -> list[float]:
         theta_list = [np.asarray(theta, dtype=float) for theta in iterable]
         return self.pool.map(_de_worker_objective, theta_list)
+
+
+def _state_cache_key(initial_state_by_group: dict[str, dict[str, BoatState]] | None) -> tuple[Any, ...]:
+    if not initial_state_by_group:
+        return ()
+    return tuple(
+        (
+            str(group_name),
+            tuple(
+                (
+                    str(competitor),
+                    float(state.x),
+                    float(state.p),
+                    float(state.gamma),
+                    float(state.p_gamma),
+                )
+                for competitor, state in sorted(group_states.items())
+            ),
+        )
+        for group_name, group_states in sorted(initial_state_by_group.items())
+    )
+
+
+def _compute_terminal_states_by_group(
+    groups: list[dict[str, Any]],
+    q_value: float,
+    *,
+    q_gamma: float,
+    initial_x0: float,
+    initial_p0: float,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
+) -> dict[str, dict[str, BoatState]]:
+    terminal_states_by_group: dict[str, dict[str, BoatState]] = {}
+    initial_state_by_group = initial_state_by_group or {}
+    for group in groups:
+        group_name = str(group["group"])
+        result = run_group_filter(
+            group,
+            q_value,
+            q_gamma=q_gamma,
+            initial_x0=initial_x0,
+            initial_p0=initial_p0,
+            initial_state_by_competitor=initial_state_by_group.get(group_name),
+            compute_loo_predictions=False,
+            collect_history=False,
+        )
+        terminal_states_by_group[group_name] = dict(result.terminal_state_by_competitor)
+    return terminal_states_by_group
 
 
 def estimate_global_q(all_data: pd.DataFrame) -> float:
@@ -222,9 +273,9 @@ def estimate_initial_p0_from_first_observations(group: dict[str, Any]) -> float:
     return float(max(EPS, p0_value))
 
 
-def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float], dict[str, float], dict[str, dict[str, BoatState]]]:
     if not path.exists():
-        return {}, {}, {}
+        return {}, {}, {}, {}
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -236,10 +287,11 @@ def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float],
     if not isinstance(payload, dict):
         raise ValueError(f"Invalid Q cache payload in {path}")
     if not isinstance(payload.get("group_q"), dict) or not isinstance(payload.get("group_q_gamma"), dict) or not isinstance(payload.get("group_k"), dict):
-        return {}, {}, {}
+        return {}, {}, {}, {}
     q_source = payload["group_q"]
     q_gamma_source = payload["group_q_gamma"]
     k_source = payload["group_k"]
+    state_source = payload.get("group_initial_state") if isinstance(payload.get("group_initial_state"), dict) else {}
 
     q_map: dict[str, float] = {}
     for key, value in q_source.items():
@@ -256,11 +308,32 @@ def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float],
         k_val = float(value)
         if np.isfinite(k_val) and k_val > 0.0:
             k_map[str(key)] = float(k_val)
-    return q_map, q_gamma_map, k_map
+    initial_state_by_group: dict[str, dict[str, BoatState]] = {}
+    for group_name, group_payload in state_source.items():
+        if not isinstance(group_payload, dict):
+            continue
+        group_states: dict[str, BoatState] = {}
+        for competitor, state_payload in group_payload.items():
+            if not isinstance(state_payload, dict):
+                continue
+            try:
+                state = BoatState(
+                    x=float(state_payload.get("x", 0.0)),
+                    p=float(max(EPS, float(state_payload.get("p", P_COV_CAP_FLOOR)))),
+                    gamma=float(state_payload.get("gamma", 0.0)),
+                    p_gamma=float(max(EPS, float(state_payload.get("p_gamma", P_COV_CAP_FLOOR)))),
+                    last_state_date=None,
+                )
+            except (TypeError, ValueError):
+                continue
+            group_states[str(competitor)] = state
+        if group_states:
+            initial_state_by_group[str(group_name)] = group_states
+    return q_map, q_gamma_map, k_map, initial_state_by_group
 
 
 def load_group_q_cache(path: Path) -> dict[str, float]:
-    q_map, _, _ = load_group_qa_cache(path)
+    q_map, _, _, _ = load_group_qa_cache(path)
     return q_map
 
 
@@ -269,14 +342,28 @@ def save_group_qa_cache(
     q_by_group: dict[str, float],
     q_gamma_by_group: dict[str, float] | None = None,
     k_by_group: dict[str, float] | None = None,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
 ) -> None:
     q_gamma_by_group = q_gamma_by_group or {}
     k_by_group = k_by_group or {}
+    initial_state_by_group = initial_state_by_group or {}
     payload = {
         "saved_at": datetime.now().isoformat(timespec="seconds"),
         "group_q": {str(k): float(v) for k, v in sorted(q_by_group.items())},
         "group_q_gamma": {str(k): float(v) for k, v in sorted(q_gamma_by_group.items()) if np.isfinite(float(v))},
         "group_k": {str(k): float(v) for k, v in sorted(k_by_group.items()) if np.isfinite(float(v)) and float(v) > 0.0},
+        "group_initial_state": {
+            str(group_name): {
+                str(competitor): {
+                    "x": float(state.x),
+                    "p": float(max(EPS, state.p)),
+                    "gamma": float(state.gamma),
+                    "p_gamma": float(max(EPS, state.p_gamma)),
+                }
+                for competitor, state in sorted(group_states.items())
+            }
+            for group_name, group_states in sorted(initial_state_by_group.items())
+        },
     }
     serialized = json.dumps(payload, ensure_ascii=False, indent=2)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
@@ -285,7 +372,7 @@ def save_group_qa_cache(
 
 
 def save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
-    save_group_qa_cache(path, q_by_group, {}, {})
+    save_group_qa_cache(path, q_by_group, {}, {}, {})
 
 
 def q_cache_path_for_objective(output_dir: Path, objective: str) -> Path:
@@ -794,6 +881,7 @@ def run_group_filter(
     q_gamma: float = 1e-6,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_competitor: dict[str, BoatState] | None = None,
     compute_loo_predictions: bool = False,
     collect_history: bool = True,
 ) -> GroupFilterResult:
@@ -808,7 +896,7 @@ def run_group_filter(
     race_lookup_by_label: dict[str, dict[str, dict[str, Any]]] = runtime["race_lookup_by_label"]
     debut_date_by_competitor: dict[str, datetime] = runtime.get("debut_date_by_competitor", {})
     initial_p0 = float(max(EPS, initial_p0))
-    # Force debut state to start at zero for identifiability/consistency.
+    initial_state_by_competitor = initial_state_by_competitor or {}
     competitor_index = {competitor: idx for idx, competitor in enumerate(competitors)}
     n_competitors = len(competitors)
     state_mean = np.zeros(n_competitors, dtype=float)
@@ -844,14 +932,15 @@ def run_group_filter(
             idx = competitor_index[competitor]
             debut_indices_this_race.add(int(idx))
             if not active_by_competitor[competitor]:
-                state_mean[idx] = 0.0
+                initial_state = initial_state_by_competitor.get(competitor)
+                state_mean[idx] = float(initial_x0 if initial_state is None else initial_state.x)
                 state_cov[idx, :] = 0.0
                 state_cov[:, idx] = 0.0
-                state_cov[idx, idx] = float(initial_p0)
-                state_gamma_mean[idx] = 0.0
+                state_cov[idx, idx] = float(initial_p0 if initial_state is None else max(EPS, initial_state.p))
+                state_gamma_mean[idx] = 0.0 if initial_state is None else float(initial_state.gamma)
                 state_gamma_cov[idx, :] = 0.0
                 state_gamma_cov[:, idx] = 0.0
-                state_gamma_cov[idx, idx] = float(initial_p0)
+                state_gamma_cov[idx, idx] = float(initial_p0 if initial_state is None else max(EPS, initial_state.p_gamma))
                 last_state_date_by_competitor[competitor] = None
                 active_by_competitor[competitor] = True
 
@@ -882,9 +971,12 @@ def run_group_filter(
         prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
         prior_gamma_mean = np.asarray(prior_gamma_mean, dtype=float).copy()
         prior_gamma_cov = _symmetrize_and_floor_covariance(prior_gamma_cov)
-        # Enforce x0 as an a-priori anchor on each boat's debut race day.
         for idx in debut_indices_this_race:
-            prior_mean[int(idx)] = 0.0
+            competitor = competitors[int(idx)]
+            initial_state = initial_state_by_competitor.get(competitor)
+            prior_mean[int(idx)] = float(initial_x0 if initial_state is None else initial_state.x)
+            if initial_state is not None:
+                prior_gamma_mean[int(idx)] = float(initial_state.gamma)
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
         observed_step = compute_observation_step(
@@ -1041,6 +1133,18 @@ def run_group_filter(
                 )
 
     history = pd.DataFrame(history_rows) if collect_history else pd.DataFrame()
+    terminal_state_by_competitor: dict[str, BoatState] = {}
+    for competitor in competitors:
+        if not active_by_competitor[competitor]:
+            continue
+        idx = competitor_index[competitor]
+        terminal_state_by_competitor[competitor] = BoatState(
+            x=float(state_mean[idx]),
+            p=float(max(EPS, state_cov[idx, idx])),
+            gamma=float(state_gamma_mean[idx]),
+            p_gamma=float(max(EPS, state_gamma_cov[idx, idx])),
+            last_state_date=last_state_date_by_competitor[competitor],
+        )
     return GroupFilterResult(
         history=history,
         nll_sum=nll_sum,
@@ -1049,6 +1153,7 @@ def run_group_filter(
         informed_error_count=informed_error_count,
         loo_sq_error_sum=loo_sq_error_sum,
         loo_error_count=loo_error_count,
+        terminal_state_by_competitor=terminal_state_by_competitor,
     )
 
 
@@ -1060,6 +1165,7 @@ def run_all_groups_with_transfer(
     q_gamma_by_group: dict[str, float] | None = None,
     initial_x0_by_group: dict[str, float] | None = None,
     initial_p0_by_group: dict[str, float] | None = None,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
     compute_loo_predictions: bool = False,
     collect_history: bool = True,
 ) -> tuple[pd.DataFrame, dict[str, float], dict[str, int]]:
@@ -1068,6 +1174,7 @@ def run_all_groups_with_transfer(
 
     groups_by_name = {str(group["group"]): group for group in groups}
     initial_p0_by_group = initial_p0_by_group or {}
+    initial_state_by_group = initial_state_by_group or {}
     state_mean_by_group: dict[str, np.ndarray] = {}
     state_cov_by_group: dict[str, np.ndarray] = {}
     state_gamma_mean_by_group: dict[str, np.ndarray] = {}
@@ -1177,14 +1284,15 @@ def run_all_groups_with_transfer(
             idx = competitor_index[competitor]
             debut_indices_this_race.add(int(idx))
             if not group_active[competitor]:
-                group_mean[idx] = 0.0
+                initial_state = initial_state_by_group.get(group_name, {}).get(competitor)
+                group_mean[idx] = float(initial_x0_by_group.get(group_name, 0.0) if initial_state is None else initial_state.x)
                 group_cov[idx, :] = 0.0
                 group_cov[:, idx] = 0.0
-                group_cov[idx, idx] = initial_p0
-                group_gamma_mean[idx] = 0.0
+                group_cov[idx, idx] = float(initial_p0 if initial_state is None else max(EPS, initial_state.p))
+                group_gamma_mean[idx] = 0.0 if initial_state is None else float(initial_state.gamma)
                 group_gamma_cov[idx, :] = 0.0
                 group_gamma_cov[:, idx] = 0.0
-                group_gamma_cov[idx, idx] = initial_p0
+                group_gamma_cov[idx, idx] = float(initial_p0 if initial_state is None else max(EPS, initial_state.p_gamma))
                 group_last_dates[competitor] = None
                 group_active[competitor] = True
 
@@ -1215,9 +1323,12 @@ def run_all_groups_with_transfer(
         prior_cov = _symmetrize_and_floor_covariance(_project_active_covariance_zero_sum(prior_cov, active_indices))
         prior_gamma_mean = np.asarray(prior_gamma_mean, dtype=float).copy()
         prior_gamma_cov = _symmetrize_and_floor_covariance(prior_gamma_cov)
-        # Enforce x0 as an a-priori anchor on each boat's debut race day.
         for idx in debut_indices_this_race:
-            prior_mean[int(idx)] = 0.0
+            competitor = competitors[int(idx)]
+            initial_state = initial_state_by_group.get(group_name, {}).get(competitor)
+            prior_mean[int(idx)] = float(initial_x0_by_group.get(group_name, 0.0) if initial_state is None else initial_state.x)
+            if initial_state is not None:
+                prior_gamma_mean[int(idx)] = float(initial_state.gamma)
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
         observed_step = compute_observation_step(
@@ -1356,7 +1467,11 @@ def run_all_groups_with_transfer(
                         "delta_t_days": row_payload["delta_t_days"],
                         "global_q": global_q,
                         "global_q_gamma": q_gamma_value,
-                        "x0_group": 0.0,
+                        "x0_group": float(
+                            initial_x0_by_group.get(group_name, 0.0)
+                            if initial_state_by_group.get(group_name, {}).get(competitor) is None
+                            else initial_state_by_group[group_name][competitor].x
+                        ),
                         "p0_group": float(max(EPS, initial_p0_by_group.get(group_name, P_COV_CAP_FLOOR))),
                         "x_prior": row_payload["x_prior"],
                         "p_prior": row_payload["p_prior"],
@@ -1398,6 +1513,7 @@ def q_objective_informed(
     q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
 ) -> tuple[float, int]:
     sq_error_sum = 0.0
     obs_count = 0
@@ -1408,6 +1524,7 @@ def q_objective_informed(
             q_gamma=q_gamma,
             initial_x0=initial_x0,
             initial_p0=initial_p0,
+            initial_state_by_competitor=(initial_state_by_group or {}).get(str(group["group"])),
             compute_loo_predictions=False,
             collect_history=False,
         )
@@ -1425,6 +1542,7 @@ def q_objective_loo(
     q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
 ) -> tuple[float, int]:
     sq_error_sum = 0.0
     obs_count = 0
@@ -1435,6 +1553,7 @@ def q_objective_loo(
             q_gamma=q_gamma,
             initial_x0=initial_x0,
             initial_p0=initial_p0,
+            initial_state_by_competitor=(initial_state_by_group or {}).get(str(group["group"])),
             compute_loo_predictions=True,
             collect_history=False,
         )
@@ -1452,6 +1571,7 @@ def q_objective_mle(
     q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
 ) -> tuple[float, int]:
     nll_sum = 0.0
     obs_count = 0
@@ -1462,6 +1582,7 @@ def q_objective_mle(
             q_gamma=q_gamma,
             initial_x0=initial_x0,
             initial_p0=initial_p0,
+            initial_state_by_competitor=(initial_state_by_group or {}).get(str(group["group"])),
             compute_loo_predictions=False,
             collect_history=False,
         )
@@ -1499,22 +1620,44 @@ def evaluate_q_score(
     q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
-    score_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
+    score_cache: dict[tuple[Any, ...], tuple[float, int]] | None = None,
 ) -> tuple[float, int]:
     objective = resolve_q_objective(objective)
     q_key = float(q_value)
     q_gamma_key = float(q_gamma)
-    key = (q_key, q_gamma_key)
+    key = (q_key, q_gamma_key, float(initial_x0), float(initial_p0), _state_cache_key(initial_state_by_group))
     if score_cache is not None and key in score_cache:
         return score_cache[key]
 
     result = (
-        q_objective_loo(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
+        q_objective_loo(
+            groups,
+            q_key,
+            q_gamma=q_gamma_key,
+            initial_x0=initial_x0,
+            initial_p0=initial_p0,
+            initial_state_by_group=initial_state_by_group,
+        )
         if objective == "rmse_loo"
         else (
-            q_objective_informed(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
+            q_objective_informed(
+                groups,
+                q_key,
+                q_gamma=q_gamma_key,
+                initial_x0=initial_x0,
+                initial_p0=initial_p0,
+                initial_state_by_group=initial_state_by_group,
+            )
             if objective == "rmse_informed"
-            else q_objective_mle(groups, q_key, q_gamma=q_gamma_key, initial_x0=initial_x0, initial_p0=initial_p0)
+            else q_objective_mle(
+                groups,
+                q_key,
+                q_gamma=q_gamma_key,
+                initial_x0=initial_x0,
+                initial_p0=initial_p0,
+                initial_state_by_group=initial_state_by_group,
+            )
         )
     )
     if score_cache is not None:
@@ -1529,9 +1672,10 @@ def q_diagnostics(
     q_gamma: float = 0.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
     p0_from_q_scale: float | None = None,
-    rmse_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
-    mle_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
+    rmse_cache: dict[tuple[Any, ...], tuple[float, int]] | None = None,
+    mle_cache: dict[tuple[Any, ...], tuple[float, int]] | None = None,
     progress_label: str | None = None,
     progress_every: int = 10,
 ) -> pd.DataFrame:
@@ -1543,10 +1687,24 @@ def q_diagnostics(
         q_float = float(q_value)
         p0_for_q = float(max(EPS, p0_scale * q_float)) if p0_scale is not None else p0_fixed
         rmse_score, rmse_obs = evaluate_q_score(
-            groups, q_float, "rmse", q_gamma=q_gamma, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=rmse_cache
+            groups,
+            q_float,
+            "rmse",
+            q_gamma=q_gamma,
+            initial_x0=initial_x0,
+            initial_p0=p0_for_q,
+            initial_state_by_group=initial_state_by_group,
+            score_cache=rmse_cache,
         )
         mle_score, mle_obs = evaluate_q_score(
-            groups, q_float, "mle", q_gamma=q_gamma, initial_x0=initial_x0, initial_p0=p0_for_q, score_cache=mle_cache
+            groups,
+            q_float,
+            "mle",
+            q_gamma=q_gamma,
+            initial_x0=initial_x0,
+            initial_p0=p0_for_q,
+            initial_state_by_group=initial_state_by_group,
+            score_cache=mle_cache,
         )
         rows.append(
             {
@@ -1568,7 +1726,7 @@ def q_diagnostics(
     return pd.DataFrame(rows).sort_values("q_value").reset_index(drop=True)
 
 
-def fit_global_q(
+def _fit_global_q_single(
     groups: list[dict[str, Any]],
     initial_q: float,
     objective: str,
@@ -1577,8 +1735,9 @@ def fit_global_q(
     initial_k: float = 30.0,
     initial_x0: float = 0.0,
     initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
     p0_from_q_scale: float | None = None,
-    score_cache: dict[tuple[float, float], tuple[float, int]] | None = None,
+    score_cache: dict[tuple[Any, ...], tuple[float, int]] | None = None,
     n_workers: int | None = None,
     progress_label: str | None = None,
     progress_every: int = 5,
@@ -1586,12 +1745,12 @@ def fit_global_q(
     objective = resolve_q_objective(objective)
     log_label = progress_label if progress_label else "GLOBAL"
     de_popsize = max(15, int(os.cpu_count() or 1))
-    de_workers = de_popsize
+    requested_workers = 1 if n_workers is not None and int(n_workers) <= 1 else (int(n_workers) if n_workers is not None else de_popsize)
+    de_workers = max(1, min(de_popsize, requested_workers))
     de_updating = "deferred" if de_workers > 1 else "immediate"
     de_workers_map = None
     de_pool: Pool | None = None
     if de_workers > 1:
-        k_init = float(max(P0_SCALE_SEARCH_MIN, min(P0_SCALE_SEARCH_MAX, float(initial_k))))
         de_context = _DEObjectiveContext(
             groups=groups,
             objective=objective,
@@ -1602,6 +1761,7 @@ def fit_global_q(
             log_k_min=float(math.log(float(max(EPS, P0_SCALE_SEARCH_MIN)))),
             log_k_max=float(math.log(float(max(EPS, P0_SCALE_SEARCH_MAX)))),
             x0_fixed=float(initial_x0),
+            initial_state_by_group=initial_state_by_group or {},
         )
         de_pool = Pool(processes=de_workers, initializer=_de_worker_init, initargs=(de_context,))
         de_workers_map = _DEProcessMap(de_pool)
@@ -1652,11 +1812,11 @@ def fit_global_q(
 
     if progress_label:
         worker_text = f"{de_workers} workers" if de_workers > 1 else "1 worker"
-        requested_workers = f", requested n_workers={int(n_workers)} (ignored; using workers=popsize={de_popsize})" if n_workers is not None else ""
+        requested_workers_text = f", requested n_workers={int(n_workers)}" if n_workers is not None else ""
         print(
             f"[QFIT {progress_label}] start objective={objective} x0={x0_fixed:+.5f} p0=k*q k0={initial_k_clamped:.3e} "
             f"q_gamma0={initial_q_gamma_clamped:.3e} "
-            f"(optimizer=DE(maxiter={de_maxiter}), parallel={worker_text}{requested_workers})",
+            f"(optimizer=DE(maxiter={de_maxiter}, popsize={de_popsize}), parallel={worker_text}{requested_workers_text})",
             flush=True,
         )
         print(
@@ -1690,6 +1850,7 @@ def fit_global_q(
             q_gamma=float(q_gamma_value),
             initial_x0=x0_fixed,
             initial_p0=p0_for_q,
+            initial_state_by_group=initial_state_by_group,
             score_cache=score_cache,
         )
         return float(score), int(obs)
@@ -1752,6 +1913,7 @@ def fit_global_q(
                     q_gamma=best_q_gamma,
                     initial_x0=x0_fixed,
                     initial_p0=float(max(EPS, best_k * best_q)),
+                    initial_state_by_group=initial_state_by_group,
                     score_cache=None,
                 )
             nll_text = f"{float(best_nll):.6f}" if np.isfinite(float(best_nll)) else "nan"
@@ -1797,6 +1959,7 @@ def fit_global_q(
                 q_gamma=best_q_gamma,
                 initial_x0=x0_fixed,
                 initial_p0=float(max(EPS, best_k * best_q)),
+                initial_state_by_group=initial_state_by_group,
                 score_cache=None,
             )
         print(
@@ -1808,3 +1971,63 @@ def fit_global_q(
         )
 
     return float(best_q), float(best_q_gamma), float(best_k), float(best_score), int(best_obs)
+
+
+def fit_global_q(
+    groups: list[dict[str, Any]],
+    initial_q: float,
+    objective: str,
+    *,
+    initial_q_gamma: float = 1e-6,
+    initial_k: float = 30.0,
+    initial_x0: float = 0.0,
+    initial_p0: float = P_COV_CAP_FLOOR,
+    initial_state_by_group: dict[str, dict[str, BoatState]] | None = None,
+    p0_from_q_scale: float | None = None,
+    score_cache: dict[tuple[Any, ...], tuple[float, int]] | None = None,
+    n_workers: int | None = None,
+    progress_label: str | None = None,
+    progress_every: int = 5,
+) -> tuple[float, float, float, dict[str, dict[str, BoatState]], float, int]:
+    first_label = f"{progress_label}:pass1" if progress_label else None
+    first_q, first_q_gamma, first_k, first_score, first_obs = _fit_global_q_single(
+        groups,
+        initial_q,
+        objective,
+        initial_q_gamma=initial_q_gamma,
+        initial_k=initial_k,
+        initial_x0=initial_x0,
+        initial_p0=initial_p0,
+        initial_state_by_group=initial_state_by_group,
+        p0_from_q_scale=p0_from_q_scale,
+        score_cache=score_cache,
+        n_workers=n_workers,
+        progress_label=first_label,
+        progress_every=progress_every,
+    )
+    first_p0 = float(max(EPS, first_k * first_q))
+    warm_start_state_by_group = _compute_terminal_states_by_group(
+        groups,
+        first_q,
+        q_gamma=first_q_gamma,
+        initial_x0=initial_x0,
+        initial_p0=first_p0,
+        initial_state_by_group=initial_state_by_group,
+    )
+    second_label = f"{progress_label}:pass2" if progress_label else None
+    final_q, final_q_gamma, final_k, final_score, final_obs = _fit_global_q_single(
+        groups,
+        first_q,
+        objective,
+        initial_q_gamma=first_q_gamma,
+        initial_k=first_k,
+        initial_x0=initial_x0,
+        initial_p0=first_p0,
+        initial_state_by_group=warm_start_state_by_group,
+        p0_from_q_scale=p0_from_q_scale,
+        score_cache=None,
+        n_workers=n_workers,
+        progress_label=second_label,
+        progress_every=progress_every,
+    )
+    return float(final_q), float(final_q_gamma), float(final_k), warm_start_state_by_group, float(final_score), int(final_obs)

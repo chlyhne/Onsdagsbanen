@@ -302,7 +302,7 @@ def export_stor_bane_x_gamma_trajectories(
     years: tuple[int, ...] = (2025, 2026),
     min_observed_races: int = 6,
     group_name: str = "Stor Bane",
-) -> tuple[Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path]:
     required_columns = ["group", "competitor", "race", "race_date", "year", "observed", "x_post", "gamma_post"]
     missing = [column for column in required_columns if column not in frame.columns]
     if missing:
@@ -349,19 +349,7 @@ def export_stor_bane_x_gamma_trajectories(
     manifest_rows: list[dict[str, str]] = []
     used_slugs: set[str] = set()
     for competitor, sub in work.groupby("competitor", sort=True):
-        per_rows: list[dict[str, float | int | str]] = [{"x": 0.0, "gamma": 0.0, "step": 0}]
-        detailed_rows.append(
-            {
-                "competitor": competitor,
-                "step": 0,
-                "race_date": "",
-                "race": "",
-                "x": 0.0,
-                "gamma": 0.0,
-                "is_origin": True,
-            }
-        )
-        line_rows.append({"x": 0.0, "gamma": 0.0, "competitor": competitor})
+        per_rows: list[dict[str, float | int | str]] = []
         for step_idx, (_, row) in enumerate(sub.iterrows(), start=1):
             x_value = float(row["x_post"])
             gamma_value = float(row["gamma_post"])
@@ -412,15 +400,40 @@ def export_stor_bane_x_gamma_trajectories(
     endpoints = pd.DataFrame(endpoint_rows).sort_values(["competitor"]).reset_index(drop=True)
     manifest = pd.DataFrame(manifest_rows).sort_values(["competitor_display"]).reset_index(drop=True)
 
+    valid_line_data = line_data.dropna(subset=["x", "gamma"])
+    if valid_line_data.empty:
+        raise ValueError("Cannot derive x-gamma trajectory bounds from empty line data.")
+
+    x_min = float(valid_line_data["x"].min())
+    x_max = float(valid_line_data["x"].max())
+    y_min = float(valid_line_data["gamma"].min())
+    y_max = float(valid_line_data["gamma"].max())
+    x_extent = max(abs(x_min), abs(x_max), 1e-6)
+    y_extent = max(abs(y_min), abs(y_max), 1e-6)
+    x_limit = max(1.18 * x_extent, 0.03)
+    y_limit = max(1.18 * y_extent, 0.08)
+    bounds = pd.DataFrame(
+        [
+            {
+                "xmin": -x_limit,
+                "xmax": x_limit,
+                "ymin": -y_limit,
+                "ymax": y_limit,
+            }
+        ]
+    )
+
     detailed_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026.csv"
     line_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_plot.csv"
     endpoints_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_endpoints.csv"
     manifest_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_manifest.csv"
+    bounds_path = output_dir / "stor_bane_x_gamma_trajectories_2025_2026_bounds.csv"
     detailed.to_csv(detailed_path, index=False)
     line_data.to_csv(line_path, index=False)
     endpoints.to_csv(endpoints_path, index=False)
     manifest.to_csv(manifest_path, index=False)
-    return detailed_path, line_path, endpoints_path, manifest_path
+    bounds.to_csv(bounds_path, index=False)
+    return detailed_path, line_path, endpoints_path, manifest_path, bounds_path
 
 
 def export_missing_race_prediction_tables(frame: pd.DataFrame, *, output_dir: Path, years: tuple[int, ...]) -> Path:

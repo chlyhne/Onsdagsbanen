@@ -2,6 +2,7 @@
 \newcommand{\MissingRacePredictionTablesTex}{../analysis/missing_race_prediction_tables.tex}
 \newcommand{\StorBaneSplitRecommendationTex}{../analysis/stor_bane_split_recommendation.tex}
 \newcommand{\StorBaneXGammaTrajectoryManifestCsv}{../analysis/stor_bane_x_gamma_trajectories_2025_2026_manifest.csv}
+\newcommand{\StorBaneXGammaTrajectoryBoundsCsv}{../analysis/stor_bane_x_gamma_trajectories_2025_2026_bounds.csv}
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
 
@@ -54,13 +55,13 @@ blue!80!black%
 \addlegendimage{legend image code/.code={\node[circle,inner sep=0pt,minimum size=4.2pt,fill=red,draw=red] at (0.3cm,0cm) {};}}
 \addlegendentry{Data}
 \addlegendimage{legend image code/.code={\draw[black,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{Forudsigelse}
+\addlegendentry{Prior}
 \addlegendimage{legend image code/.code={\draw[black,densely dashed,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{Posteriori}
+\addlegendentry{Posterior}
 \addlegendimage{legend image code/.code={\fill[gray!50,fill opacity=\ProcessUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{Proces-usikkerhed}
+\addlegendentry{Proces}
 \addlegendimage{legend image code/.code={\fill[gray!35,fill opacity=\TotalUncertaintyFillOpacity,draw=none] (0cm,-1.4pt) rectangle (0.6cm,1.4pt);}}
-\addlegendentry{Samlet usikkerhed}
+\addlegendentry{Samlet}
 }
 
 \newcommand{\BoatPlotFromCsv}[5]{%
@@ -95,7 +96,7 @@ xtick=data,
 xticklabels from table={\boatplotdata}{race_display},
 x tick label style={rotate=90, anchor=east, font=\scriptsize},
 legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
-legend columns=4,
+legend columns=5,
 unbounded coords=discard,
 filter discard warning=false,
 ]
@@ -152,6 +153,7 @@ legend columns=2,
   /x gamma trajectories,
   title/.store in=\XGammaTrajTitle,
   manifest-csv/.store in=\XGammaTrajManifestCsv,
+  bounds-csv/.store in=\XGammaTrajBoundsCsv,
   caption/.store in=\XGammaTrajCaption,
   width/.store in=\XGammaTrajWidth,
   height/.store in=\XGammaTrajHeight,
@@ -161,7 +163,8 @@ legend columns=2,
   ymax/.store in=\XGammaTrajYMax,
   title={Stor Bane: Trajektorier i $(x,\gamma)$ (2025--2026)},
   manifest-csv={\StorBaneXGammaTrajectoryManifestCsv},
-  caption={Trajektorier i $(x,\gamma)$ for Stor Bane (2025--2026), kun både med mere end 5 observerede sejladser. Alle trajektorier starter i $(0,0)$.},
+  bounds-csv={\StorBaneXGammaTrajectoryBoundsCsv},
+  caption={Trajektorier i $(x,\gamma)$ for Stor Bane (2025--2026), kun både med mere end 5 observerede sejladser.},
   width={0.88\textwidth},
   height={0.72\textwidth},
   xmin={auto},
@@ -173,8 +176,17 @@ legend columns=2,
 \newcommand{\XGammaTrajectoryPlotFromCsv}[1]{%
 \pgfkeys{/x gamma trajectories/.cd,#1}%
 \pgfplotstableread[col sep=comma]{\XGammaTrajManifestCsv}\xgtrajmanifest
+\pgfplotstableread[col sep=comma]{\XGammaTrajBoundsCsv}\xgtrajbounds
 \pgfplotstablegetrowsof{\xgtrajmanifest}
 \pgfmathtruncatemacro{\xgtrajrows}{\pgfplotsretval-1}
+\pgfplotstablegetelem{0}{xmin}\of\xgtrajbounds
+\edef\xgtrajxmin{\pgfplotsretval}
+\pgfplotstablegetelem{0}{xmax}\of\xgtrajbounds
+\edef\xgtrajxmax{\pgfplotsretval}
+\pgfplotstablegetelem{0}{ymin}\of\xgtrajbounds
+\edef\xgtrajymin{\pgfplotsretval}
+\pgfplotstablegetelem{0}{ymax}\of\xgtrajbounds
+\edef\xgtrajymax{\pgfplotsretval}
 \SetExternalFilenameFromPath{\XGammaTrajExternalName}{\XGammaTrajManifestCsv}
 \SetExternalFilenameIfProvided{xgamma-\XGammaTrajExternalName}
 \subsubsection*{\XGammaTrajTitle}
@@ -186,6 +198,10 @@ width=\XGammaTrajWidth,
 height=\XGammaTrajHeight,
 xlabel={$x$},
 ylabel={$\gamma$},
+xmin=\xgtrajxmin,
+xmax=\xgtrajxmax,
+ymin=\xgtrajymin,
+ymax=\xgtrajymax,
 grid=major,
 major grid style={draw=black!25},
 axis lines=left,
@@ -203,8 +219,23 @@ filter discard warning=false,
   \pgfplotstableread[col sep=comma]{\xgtrajfile}\xgtrajboat
   \pgfplotstablegetrowsof{\xgtrajboat}
   \pgfmathtruncatemacro{\xgtrajlastrow}{\pgfplotsretval-1}
-  \ifnum\xgtrajlastrow>0
-    \pgfmathtruncatemacro{\xgtrajdenom}{\xgtrajlastrow-1}
+  \ifnum\xgtrajlastrow>-1
+    \pgfplotstablegetelem{0}{x}\of\xgtrajboat
+    \edef\xgtrajxstart{\pgfplotsretval}
+    \pgfplotstablegetelem{0}{gamma}\of\xgtrajboat
+    \edef\xgtrajystart{\pgfplotsretval}
+    \ifnum\xgtrajlastrow>0
+      \pgfmathsetmacro{\xgtrajstartalpha}{0.2}
+    \else
+      \pgfmathsetmacro{\xgtrajstartalpha}{1.0}
+    \fi
+    \edef\xgtrajstartmarkcmd{%
+      \noexpand\addplot+[only marks, mark=*, mark size=1.15pt, color=\xgtrajcolor, mark options={fill=\xgtrajcolor,draw=\xgtrajcolor}, opacity=\xgtrajstartalpha, forget plot]
+        coordinates {(\xgtrajxstart,\xgtrajystart)};%
+    }
+    \xgtrajstartmarkcmd
+    \ifnum\xgtrajlastrow>0
+      \pgfmathtruncatemacro{\xgtrajdenom}{\xgtrajlastrow-1}
     \foreach \xgtrajseg in {1,...,\xgtrajlastrow}{%
       \pgfmathtruncatemacro{\xgtrajprevrow}{\xgtrajseg-1}
       \pgfplotstablegetelem{\xgtrajprevrow}{x}\of\xgtrajboat
@@ -231,6 +262,7 @@ filter discard warning=false,
       }
       \xgtrajmarkcmd
     }%
+    \fi
     \pgfplotstablegetelem{\xgtrajlastrow}{x}\of\xgtrajboat
     \edef\xgtrajxend{\pgfplotsretval}
     \pgfplotstablegetelem{\xgtrajlastrow}{gamma}\of\xgtrajboat
@@ -242,7 +274,14 @@ filter discard warning=false,
     \xgtrajlabelcmd
   \fi
 }
-\addplot[only marks, mark=x, mark size=2.2pt, black, forget plot] coordinates {(0,0)};
+\node[anchor=south west, font=\bfseries\large, text=black!65, inner sep=3pt, fill=white, fill opacity=0.7, text opacity=1]
+  at (axis description cs:0.03,0.03) {Hurtig og snu};
+\node[anchor=north west, font=\bfseries\large, text=black!65, inner sep=3pt, fill=white, fill opacity=0.7, text opacity=1]
+  at (axis description cs:0.03,0.97) {Hurtig og doven};
+\node[anchor=north east, font=\bfseries\large, text=black!65, inner sep=3pt, fill=white, fill opacity=0.7, text opacity=1]
+  at (axis description cs:0.97,0.97) {Langsom og doven};
+\node[anchor=south east, font=\bfseries\large, text=black!65, inner sep=3pt, fill=white, fill opacity=0.7, text opacity=1]
+  at (axis description cs:0.97,0.03) {Langsom og snu};
 \end{axis}
 \end{tikzpicture}
 \caption{\XGammaTrajCaption}

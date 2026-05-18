@@ -1,0 +1,13 @@
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_axel-thomsen.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_blue-x.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_bo-boddum.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_casper-lyhne.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_christian-grejs.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_christian-lindholst.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_henrik-zuricho.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_jan-ils-s-rensen.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_morten-juul-christensen.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_pia-olesen.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_rikke-m-schnuchel.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_thomas-pedersen.csv
+tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: ../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_thomas-yde.csv
