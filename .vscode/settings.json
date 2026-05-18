@@ -4,12 +4,14 @@
   "latex-workshop.latex.tools": [
     {
       "name": "pdflatex-external-list",
-      "command": "pdflatex",
+      "command": "latexmk",
       "args": [
+        "-pdf",
         "-synctex=1",
         "-interaction=nonstopmode",
         "-file-line-error",
         "-shell-escape",
+        "-cd",
         "%DOC%"
       ]
     },
@@ -34,6 +36,7 @@
         "-file-line-error",
         "-shell-escape",
         "-pdf",
+        "-cd",
         "%DOC%"
       ]
     }

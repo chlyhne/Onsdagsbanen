@@ -12,10 +12,8 @@ from .common import display_name
 from .common import format_rank_error
 from .common import format_seconds_hms
 from .common import format_seconds_signed_compact
-from .common import format_seconds_signed
 from .common import latex_escape_text
 from .common import latex_table_cell
-from .common import predict_sailed_seconds_from_corrected
 from .common import race_num
 from .common import slugify_filename
 from .constants import EPS
@@ -205,94 +203,6 @@ def export_boat_plot_data(frame: pd.DataFrame, *, allowed_competitors: set[str] 
     manifest_path = output_dir / "boat_plot_manifest.csv"
     pd.DataFrame(manifest_rows).to_csv(manifest_path, index=False)
     return manifest_path
-
-
-def export_final_state_x_gamma_phase_plane(frame: pd.DataFrame, *, output_dir: Path) -> tuple[Path, Path]:
-    required_columns = ["competitor", "group", "race", "race_date", "x_post", "gamma_post"]
-    missing = [column for column in required_columns if column not in frame.columns]
-    if missing:
-        raise ValueError(f"Missing required columns for final-state phase-plane export: {', '.join(missing)}")
-    if frame.empty:
-        raise ValueError("Cannot export final-state phase-plane from empty frame.")
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    work = frame.copy()
-    work["race_date_dt"] = pd.to_datetime(work["race_date"], errors="coerce")
-    work["race_num"] = work["race"].map(race_num)
-    work = work.dropna(subset=["race_date_dt", "race_num"])
-    if work.empty:
-        raise ValueError("No valid race_date/race values available for final-state phase-plane export.")
-
-    latest = (
-        work.sort_values(["competitor", "race_date_dt", "race_num", "race", "group"])
-        .groupby("competitor", as_index=False, sort=False)
-        .tail(1)
-        .reset_index(drop=True)
-    )
-    latest["x_final"] = pd.to_numeric(latest["x_post"], errors="coerce")
-    latest["gamma_final"] = pd.to_numeric(latest["gamma_post"], errors="coerce")
-    latest = latest.dropna(subset=["x_final", "gamma_final"]).copy()
-    if latest.empty:
-        raise ValueError("No finite x/gamma final states available for final-state phase-plane export.")
-
-    x_values = latest["x_final"].to_numpy(dtype=float)
-    gamma_values = latest["gamma_final"].to_numpy(dtype=float)
-    x_scale = float(max(EPS, np.mean(np.abs(x_values))))
-    gamma_scale = float(max(EPS, np.mean(np.abs(gamma_values))))
-    x_mean = float(np.mean(x_values))
-    gamma_mean = float(np.mean(gamma_values))
-
-    latest["x_scaled"] = latest["x_final"] / x_scale
-    latest["gamma_scaled"] = latest["gamma_final"] / gamma_scale
-
-    corr = float("nan")
-    if len(latest) >= 2:
-        x_std = float(np.std(latest["x_scaled"].to_numpy(dtype=float), ddof=0))
-        gamma_std = float(np.std(latest["gamma_scaled"].to_numpy(dtype=float), ddof=0))
-        if x_std > EPS and gamma_std > EPS:
-            corr = float(np.corrcoef(latest["x_scaled"].to_numpy(dtype=float), latest["gamma_scaled"].to_numpy(dtype=float))[0, 1])
-
-    slope = float("nan")
-    intercept = float("nan")
-    if len(latest) >= 2 and np.isfinite(corr):
-        x_vec = latest["x_scaled"].to_numpy(dtype=float)
-        y_vec = latest["gamma_scaled"].to_numpy(dtype=float)
-        x_var = float(np.var(x_vec, ddof=0))
-        if x_var > EPS:
-            slope = float(np.cov(x_vec, y_vec, ddof=0)[0, 1] / x_var)
-            intercept = float(np.mean(y_vec) - slope * float(np.mean(x_vec)))
-            latest["gamma_scaled_fit"] = intercept + slope * latest["x_scaled"]
-        else:
-            latest["gamma_scaled_fit"] = np.nan
-    else:
-        latest["gamma_scaled_fit"] = np.nan
-
-    export_columns = [
-        "competitor",
-        "group",
-        "race",
-        "race_date",
-        "x_final",
-        "gamma_final",
-        "x_scaled",
-        "gamma_scaled",
-        "gamma_scaled_fit",
-    ]
-    phase_plane_path = output_dir / "final_state_x_gamma_phase_plane.csv"
-    latest.loc[:, export_columns].sort_values(["group", "competitor"]).to_csv(phase_plane_path, index=False)
-
-    corr_text = "nan" if not np.isfinite(corr) else f"{corr:.4f}"
-    summary_lines = [
-        f"\\newcommand{{\\FinalStateBoatCount}}{{{int(len(latest))}}}",
-        f"\\newcommand{{\\FinalStateXMean}}{{{x_mean:.6g}}}",
-        f"\\newcommand{{\\FinalStateGammaMean}}{{{gamma_mean:.6g}}}",
-        f"\\newcommand{{\\FinalStateXScale}}{{{x_scale:.6g}}}",
-        f"\\newcommand{{\\FinalStateGammaScale}}{{{gamma_scale:.6g}}}",
-        f"\\newcommand{{\\FinalStateCorr}}{{{corr_text}}}",
-    ]
-    summary_path = output_dir / "final_state_x_gamma_phase_plane_summary.tex"
-    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-    return phase_plane_path, summary_path
 
 
 def export_stor_bane_x_gamma_trajectories(

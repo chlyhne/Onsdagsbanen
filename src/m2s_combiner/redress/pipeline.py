@@ -297,6 +297,20 @@ def _write_core_outputs(history: pd.DataFrame, q_diag: pd.DataFrame, *, output_d
     return paths
 
 
+def _remove_legacy_q_likelihood_outputs(*, output_dir: Path) -> list[Path]:
+    legacy_paths = [
+        output_dir / "q_local_likelihood_around_fit.tex",
+        output_dir / "q_local_likelihood_around_fit_0.csv",
+        output_dir / "q_local_likelihood_around_fit_1.csv",
+    ]
+    removed: list[Path] = []
+    for path in legacy_paths:
+        if path.exists():
+            path.unlink()
+            removed.append(path)
+    return removed
+
+
 def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | None = None, output_dir: Path | None = None) -> pd.DataFrame:
     q_objective = resolve_q_objective(q_objective)
     cache_dir = output_dir if output_dir is not None else Path("analysis")
@@ -399,6 +413,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
         min_observed_races=6,
         group_name="Stor Bane",
     )
+    removed_legacy_q_plot_files = _remove_legacy_q_likelihood_outputs(output_dir=output_dir)
 
     if using_cached_q:
         print(f"Loaded group Q/q_gamma cache: {q_cache_path} (fit objective={q_objective})")
@@ -444,5 +459,7 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
         print(f"Wrote: {core_paths['q_diag']}")
     else:
         print(f"Skipped Q diagnostics (enable with --with-qdiag). Placeholder file refreshed: {core_paths['q_diag']}")
+    for legacy_path in removed_legacy_q_plot_files:
+        print(f"Removed legacy q-likelihood appendix artifact: {legacy_path}")
     print("Note: This pipeline exports analysis artifacts and TeX fragments, but does not build the PDF report.")
     return 0

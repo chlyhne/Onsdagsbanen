@@ -243,36 +243,6 @@ def estimate_initial_x0_from_first_observations(group: dict[str, Any]) -> float:
     return x0_value
 
 
-def estimate_initial_p0_from_first_observations(group: dict[str, Any]) -> float:
-    runtime = prepare_group_runtime(group)
-    combined: pd.DataFrame = runtime["combined"]
-    if combined.empty:
-        return float(max(EPS, P_COV_CAP_FLOOR))
-
-    observed = combined.loc[
-        combined["beregnet_seconds"].notna() & (~combined["status_upper"].isin(NON_OBS_STATUSES)),
-        ["competitor", "race", "race_date", "beregnet_seconds"],
-    ].copy()
-    if observed.empty:
-        return float(max(EPS, P_COV_CAP_FLOOR))
-
-    observed["competitor"] = observed["competitor"].astype(str)
-    observed["y"] = np.log(observed["beregnet_seconds"].astype(float).clip(lower=EPS))
-    observed["race_mean_y"] = observed.groupby("race")["y"].transform("mean")
-    observed["x_centered"] = observed["y"] - observed["race_mean_y"]
-    observed["race_num"] = observed["race"].map(race_num)
-
-    observed = observed.sort_values(["competitor", "race_date", "race_num", "race"]).reset_index(drop=True)
-    first_rows = observed.groupby("competitor", sort=False, as_index=False).head(1)
-    if first_rows.empty:
-        return float(max(EPS, P_COV_CAP_FLOOR))
-
-    p0_value = float(first_rows["x_centered"].var(ddof=0))
-    if not np.isfinite(p0_value) or p0_value <= 0.0:
-        return float(max(EPS, P_COV_CAP_FLOOR))
-    return float(max(EPS, p0_value))
-
-
 def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float], dict[str, float], dict[str, dict[str, BoatState]]]:
     if not path.exists():
         return {}, {}, {}, {}
@@ -332,11 +302,6 @@ def load_group_qa_cache(path: Path) -> tuple[dict[str, float], dict[str, float],
     return q_map, q_gamma_map, k_map, initial_state_by_group
 
 
-def load_group_q_cache(path: Path) -> dict[str, float]:
-    q_map, _, _, _ = load_group_qa_cache(path)
-    return q_map
-
-
 def save_group_qa_cache(
     path: Path,
     q_by_group: dict[str, float],
@@ -369,10 +334,6 @@ def save_group_qa_cache(
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(serialized, encoding="utf-8")
     tmp_path.replace(path)
-
-
-def save_group_q_cache(path: Path, q_by_group: dict[str, float]) -> None:
-    save_group_qa_cache(path, q_by_group, {}, {}, {})
 
 
 def q_cache_path_for_objective(output_dir: Path, objective: str) -> Path:
@@ -818,7 +779,6 @@ def compute_observation_step(
                 mask = np.ones(len(observed_competitors), dtype=bool)
                 mask[local_idx] = False
                 x_prior_loo = x_prior_obs[mask]
-                gamma_prior_loo = gamma_prior_obs[mask]
                 p_prior_loo = p_prior_obs[np.ix_(mask, mask)]
                 centered_values_loo = y_values[mask] - x_prior_loo
                 b_hat_loo, r_t_loo, _ = fit_day_parameters_full(
@@ -1990,7 +1950,7 @@ def fit_global_q(
     progress_every: int = 5,
 ) -> tuple[float, float, float, dict[str, dict[str, BoatState]], float, int]:
     first_label = f"{progress_label}:pass1" if progress_label else None
-    first_q, first_q_gamma, first_k, first_score, first_obs = _fit_global_q_single(
+    first_q, first_q_gamma, first_k, _, _ = _fit_global_q_single(
         groups,
         initial_q,
         objective,

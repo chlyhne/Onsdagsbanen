@@ -1,29 +1,9 @@
 \appendix
 \clearpage
+\newpage
 \section{CSV-baserede bådplots}
 Dette appendiks samler de individuelle bådplots, som læses direkte fra CSV-filer.
-Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX-fil alene står for visningen.
+Data genereres af den underliggende redress-metode, mens denne LaTeX-fil alene står for visningen.
 
-Rediger listen i \texttt{sections/D-2025-boatplot-selection.tex}: kun de linjer, der ikke er udkommenteret, bliver vist her.
 
 \input{sections/D-2025-boatplot-selection}
-
-\IfFileExists{../analysis/q_local_likelihood_around_fit.tex}{%
-  \IfFileExists{../analysis/q_local_likelihood_around_fit_0.csv}{%
-    \IfFileExists{../analysis/q_local_likelihood_around_fit_1.csv}{%
-      \input{../analysis/q_local_likelihood_around_fit.tex}%
-    }{%
-      \clearpage
-      \section{Lokal likelihood omkring fitted q}
-      Likelihood-CSV-filen for Stor Bane blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
-    }%
-  }{%
-    \clearpage
-    \section{Lokal likelihood omkring fitted q}
-    Likelihood-CSV-filen for Lille Bane blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
-  }%
-}{%
-  \clearpage
-  \section{Lokal likelihood omkring fitted q}
-  Likelihood-appendiksfilen blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
-}

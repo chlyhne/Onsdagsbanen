@@ -78,21 +78,6 @@ def format_seconds_hms(value: float | int | None) -> str:
     return f"{sign}{hours}:{minutes:02d}:{seconds:02d}"
 
 
-def format_seconds_signed(value: float | int | None) -> str:
-    if value is None:
-        return ""
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return ""
-    if not np.isfinite(numeric):
-        return ""
-    if abs(numeric) < 0.5:
-        return "0:00:00"
-    sign = "+" if numeric > 0 else ""
-    return sign + format_seconds_hms(numeric)
-
-
 def format_seconds_signed_compact(value: float | int | None) -> str:
     if value is None:
         return ""
@@ -129,22 +114,6 @@ def format_rank_error(value: float | int | None) -> str:
     if rounded > 0:
         return f"+{rounded}"
     return str(rounded)
-
-
-def format_percent_signed(value: float | int | None) -> str:
-    if value is None:
-        return ""
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return ""
-    if not np.isfinite(numeric):
-        return ""
-    if abs(numeric) < 0.05:
-        return "0.0\\%"
-    sign = "+" if numeric > 0 else ""
-    formatted = f"{numeric:.1f}"
-    return f"{sign}{formatted}\\%"
 
 
 def latex_escape_text(value: str) -> str:

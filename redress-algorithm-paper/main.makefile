@@ -24,6 +24,10 @@ tikzcache/dualpercent-boat_plot_casper-lyhne_percent-vs-boat_plot_axel-thomsen_p
 	pdflatex -shell-escape -halt-on-error -interaction=batchmode -jobname "tikzcache/dualpercent-boat_plot_casper-lyhne_percent-vs-boat_plot_axel-thomsen_percent" "\def\tikzexternalrealjob{main}\input{main}"
 
 tikzcache/dualpercent-boat_plot_casper-lyhne_percent-vs-boat_plot_axel-thomsen_percent.pdf: tikzcache/dualpercent-boat_plot_casper-lyhne_percent-vs-boat_plot_axel-thomsen_percent.md5
+tikzcache/dualpercent-boat_plot_christian-grejs_percent-vs-boat_plot_axel-thomsen_percent.pdf: 
+	pdflatex -shell-escape -halt-on-error -interaction=batchmode -jobname "tikzcache/dualpercent-boat_plot_christian-grejs_percent-vs-boat_plot_axel-thomsen_percent" "\def\tikzexternalrealjob{main}\input{main}"
+
+tikzcache/dualpercent-boat_plot_christian-grejs_percent-vs-boat_plot_axel-thomsen_percent.pdf: tikzcache/dualpercent-boat_plot_christian-grejs_percent-vs-boat_plot_axel-thomsen_percent.md5
 tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest.pdf: 
 	pdflatex -shell-escape -halt-on-error -interaction=batchmode -jobname "tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_manifest" "\def\tikzexternalrealjob{main}\input{main}"
 

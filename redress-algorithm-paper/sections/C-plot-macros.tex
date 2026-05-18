@@ -33,17 +33,45 @@
 
 \newcommand{\XGammaColorByIndex}[1]{%
 \ifcase\numexpr#1\relax
-blue!80!black%
-\or red!75!black%
-\or teal!70!black%
+teal!70!black%
 \or orange!85!black%
 \or violet!75!black%
 \or cyan!70!black%
 \or olive!80!black%
 \or brown!75!black%
-\or magenta!80!black%
 \or gray!20!black%
+\or black%
+\or yellow!70!black%
+\or cyan!45!black%
 \else black%
+\fi
+}
+
+\newcommand{\ResolveXGammaColor}[3]{%
+\def\xgtrajcolor{\XGammaColorByIndex{#3}}%
+\ifnum\pdfstrcmp{#1}{Axel Thomsen}=0\relax
+  \def\xgtrajcolor{blue!70!black}%
+\fi
+\ifnum\pdfstrcmp{#1}{Casper Lyhne}=0\relax
+  \def\xgtrajcolor{green!70!black}%
+\fi
+\ifnum\pdfstrcmp{#1}{Rikke M. Schnuchel}=0\relax
+  \def\xgtrajcolor{magenta}%
+\fi
+\ifnum\pdfstrcmp{#1}{Christian Grejs}=0\relax
+  \def\xgtrajcolor{red}%
+\fi
+\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_axel-thomsen.csv}=0\relax
+  \def\xgtrajcolor{blue!70!black}%
+\fi
+\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_casper-lyhne.csv}=0\relax
+  \def\xgtrajcolor{green!70!black}%
+\fi
+\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_rikke-m-schnuchel.csv}=0\relax
+  \def\xgtrajcolor{magenta}%
+\fi
+\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_christian-grejs.csv}=0\relax
+  \def\xgtrajcolor{red}%
 \fi
 }
 
@@ -167,10 +195,10 @@ legend columns=2,
   xmax/.store in=\XGammaTrajXMax,
   ymin/.store in=\XGammaTrajYMin,
   ymax/.store in=\XGammaTrajYMax,
-  title={Stor Bane: Trajektorier i $(x,\gamma)$ (2025--2026)},
+  title={Stor Bane: Trajektorier i $(s,k)$ (2025--2026)},
   manifest-csv={\StorBaneXGammaTrajectoryManifestCsv},
   bounds-csv={\StorBaneXGammaTrajectoryBoundsCsv},
-  caption={Trajektorier i $(x,\gamma)$ for Stor Bane (2025--2026), kun både med mere end 5 observerede sejladser.},
+  caption={Trajektorier i $(s,k)$ for Stor Bane (2025--2026), kun både med mere end 5 observerede sejladser.},
   width={0.88\textwidth},
   height={0.72\textwidth},
   xmin={auto},
@@ -202,8 +230,8 @@ legend columns=2,
 \begin{axis}[
 width=\XGammaTrajWidth,
 height=\XGammaTrajHeight,
-xlabel={$x$},
-ylabel={$\gamma$},
+xlabel={$s$},
+ylabel={$k$},
 xmin=\xgtrajxmin,
 xmax=\xgtrajxmax,
 ymin=\xgtrajymin,
@@ -221,7 +249,7 @@ filter discard warning=false,
   \pgfplotstablegetelem{\xgrow}{competitor_label}\of\xgtrajmanifest
   \edef\xgtrajlabel{\pgfplotsretval}
   \pgfmathtruncatemacro{\xgtrajcoloridx}{mod(\xgrow,10)}
-  \edef\xgtrajcolor{\XGammaColorByIndex{\xgtrajcoloridx}}
+  \ResolveXGammaColor{\xgtrajlabel}{\xgtrajfile}{\xgtrajcoloridx}
   \pgfplotstableread[col sep=comma]{\xgtrajfile}\xgtrajboat
   \pgfplotstablegetrowsof{\xgtrajboat}
   \pgfmathtruncatemacro{\xgtrajlastrow}{\pgfplotsretval-1}
@@ -295,76 +323,6 @@ filter discard warning=false,
 }
 
 \pgfkeys{
-  /q likelihood plot/.is family,
-  /q likelihood plot,
-  title/.store in=\QLikelihoodTitle,
-  first-label/.store in=\QLikelihoodFirstLabel,
-  first-csv/.store in=\QLikelihoodFirstCsv,
-  first-color/.store in=\QLikelihoodFirstColor,
-  first-q-fit/.store in=\QLikelihoodFirstQFit,
-  first-nll-fit/.store in=\QLikelihoodFirstNllFit,
-  second-label/.store in=\QLikelihoodSecondLabel,
-  second-csv/.store in=\QLikelihoodSecondCsv,
-  second-color/.store in=\QLikelihoodSecondColor,
-  second-q-fit/.store in=\QLikelihoodSecondQFit,
-  second-nll-fit/.store in=\QLikelihoodSecondNllFit,
-  y-min/.store in=\QLikelihoodYMin,
-  y-max/.store in=\QLikelihoodYMax,
-  caption/.store in=\QLikelihoodCaption,
-  title={Lokal likelihood omkring fitted q},
-  first-label={Lille Bane},
-  first-csv={},
-  first-color={blue!70!black},
-  first-q-fit={1e-5},
-  first-nll-fit={0},
-  second-label={Stor Bane},
-  second-csv={},
-  second-color={red!75!black},
-  second-q-fit={1e-5},
-  second-nll-fit={0},
-  y-min={-1},
-  y-max={1},
-  caption={Negativ log-likelihood som funktion af q i intervallet q/10 til 10q med 1000 punkter per bane. Punkt markerer fitted q.},
-}
-
-\newcommand{\QLocalLikelihoodPlotFromCsv}[1]{%
-\pgfkeys{/q likelihood plot/.cd,#1}%
-\SetExternalFilenameFromPath{\QLikelihoodFirstExternalName}{\QLikelihoodFirstCsv}
-\SetExternalFilenameFromPath{\QLikelihoodSecondExternalName}{\QLikelihoodSecondCsv}
-\SetExternalFilenameIfProvided{qlikelihood-\QLikelihoodFirstExternalName-vs-\QLikelihoodSecondExternalName}
-\RenderPlotHeadingInMainDoc{\section*{\QLikelihoodTitle}}
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-width=0.92\textwidth,
-height=7.0cm,
-xlabel={q (log-skala)},
-ylabel={Negativ log-likelihood},
-xmode=log,
-ymin=\QLikelihoodYMin,
-ymax=\QLikelihoodYMax,
-grid=major,
-legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
-legend columns=2,
-]
-\addplot[\QLikelihoodFirstColor, line width=1.0pt, forget plot] table[x=q_value,y=negative_log_likelihood,col sep=comma] {\QLikelihoodFirstCsv};
-\addplot[\QLikelihoodSecondColor, line width=1.0pt, forget plot] table[x=q_value,y=negative_log_likelihood,col sep=comma] {\QLikelihoodSecondCsv};
-\addplot[only marks, mark=*, mark size=2.0pt, color=\QLikelihoodFirstColor, mark options={fill=\QLikelihoodFirstColor,draw=\QLikelihoodFirstColor}, forget plot] coordinates {(\QLikelihoodFirstQFit,\QLikelihoodFirstNllFit)};
-\addplot[only marks, mark=*, mark size=2.0pt, color=\QLikelihoodSecondColor, mark options={fill=\QLikelihoodSecondColor,draw=\QLikelihoodSecondColor}, forget plot] coordinates {(\QLikelihoodSecondQFit,\QLikelihoodSecondNllFit)};
-\addlegendimage{legend image code/.code={\draw[\QLikelihoodFirstColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{\QLikelihoodFirstLabel}
-\addlegendimage{legend image code/.code={\draw[\QLikelihoodSecondColor,line width=1.0pt] (0cm,0cm) -- (0.6cm,0cm);}}
-\addlegendentry{\QLikelihoodSecondLabel}
-\addlegendimage{legend image code/.code={\draw[black,mark=*,mark size=2.0pt] plot coordinates {(0.3cm,0cm)};}}
-\addlegendentry{Fitted q}
-\end{axis}
-\end{tikzpicture}
-\caption{\QLikelihoodCaption}
-\end{figure}
-}
-
-\pgfkeys{
   /dual boat state/.is family,
   /dual boat state,
   first-name/.store in=\DualBoatStateFirstName,
@@ -409,7 +367,7 @@ legend columns=2,
 width=0.92\textwidth,
 height=\DualBoatStateHeight,
 xlabel=Race,
-ylabel={$x$ i log-space},
+ylabel={$s$ i log-space},
 ymajorgrids=true,
 xmajorgrids=false,
 xminorgrids=true,

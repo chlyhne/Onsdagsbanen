@@ -1,120 +1,124 @@
-\section{Modellering af færdighedsniveau}
-Den centrale idé i resten af dokumentet er, at hver båd tænkes at have et underliggende niveau, som ikke kan observeres direkte, men som viser sig gennem de beregnede tider over tid. I den endelige model er dette niveau ikke kun ét tal. Det består af en mere stabil hovedkomponent og en ekstra komponent, som især får betydning på aftener, hvor resultaterne er mere urolige end normalt. Hvis disse størrelser kan estimeres rimeligt, kan de også bruges til at danne et kvalificeret bud på den tid, båden ville have sejlet i et løb, hvor den havde dommertjans.
+\subsection{Modellering af færdighedsniveau}
+Den centrale idé i resten af dokumentet er, at hver båd tænkes at have et underliggende niveau, som ikke kan observeres direkte, men som viser sig gennem de beregnede tider over tid. I den endelige model er dette niveau ikke kun ét tal. Det består af en mere stabil hovedkomponent og en ekstra komponent, som især får betydning på aftener, hvor feltet er mere kaotisk end normalt. Hvis disse størrelser kan estimeres rimeligt, kan de også bruges til at danne et kvalificeret bud på den tid, båden ville have sejlet i et løb, hvor den havde dommertjans.
 
 Intuitionen er enkel: en båds tid i et givent løb afhænger både af bådens eget niveau og af dagens fælles forhold. Selv en hurtig båd kan få en langsom tid på en vanskelig aften, og en langsommere båd kan få en relativt god tid på en aften med gunstige forhold. Modellen forsøger derfor at skille disse effekter fra hinanden, så bådens eget niveau ikke forveksles med dagens bane-, vind- eller feltforhold.
 
-Den stabile del af niveauet skal fange, om båden overordnet er hurtig eller langsom over en længere periode. Den ekstra komponent, som senere kaldes $\gamma$, skal fange, at nogle både ser ud til at reagere mere end andre på "støjende" aftener, hvor de observerede tider spreder sig usædvanligt meget. På rolige aftener betyder denne del kun lidt. På mere urolige aftener kan den fylde mere. Det er en mere præcis beskrivelse af modellen end at sige, at hver båd blot har ét fast skjult niveau.
+Den stabile del af niveauet skal fange, om båden overordnet er hurtig eller langsom over en længere periode. Den ekstra komponent, som senere kaldes $k$, skal fange, at nogle både ser ud til at reagere mere end andre på kaotiske aftener, hvor de observerede tider spreder sig usædvanligt meget. På aftener med lavt kaosniveau betyder denne del kun lidt. På aftener med højt kaosniveau kan den fylde mere. Det er en mere præcis beskrivelse af modellen end at sige, at hver båd blot har ét fast skjult niveau.
 
 Først opstilles en helt enkel tankemodel for sejltid (beregnet efter handicap):
 \begin{flalign}
-\hspace{2cm} \text{beregnet tid} &\approx \text{dagens fælles niveau} \times \text{bådens eget niveau} \times \text{dagens tilfældighed} &&
+\hspace{2cm} \text{beregnet tid} &= \text{gns. sejltid} \times \text{bådens grundniveau} \times \text{bådens kaosbidrag} \times \text{støj} &&
 \end{flalign}
-Pointen med denne ligning er ikke at introducere den endelige notation, men at vise måden at tænke på. Den beregnede tid i et ræs afhænger dels af noget, der er fælles for alle både den dag, dels af bådens eget niveau, og dels af de små tilfældigheder, der altid vil være fra aften til aften. Hvis vinden er let, banen er vanskelig, eller feltet generelt sejler langsomt den dag, trækker det alle både i samme retning. Samtidig har hver båd et eget niveau, som gør den hurtigere eller langsommere end de andre. Oven i dette kommer en rest af tilfældighed: små fejl, heldige beslutninger, bølger, vindskift og andre forhold, som gør, at en båd ikke sejler præcis som forventet hver onsdag.
+Pointen med denne ligning er ikke at introducere den endelige notation, men at vise måden at tænke på. Den beregnede tid i et ræs afhænger dels af noget, der er fælles for alle både den dag (gns. sejltid), dels af bådens grundniveau, og dels af både kaos og støj. Kaosbidraget beskriver, hvordan båden typisk reagerer på kaotiske dage: en båd, der sejler godt i kaos, får et bidrag under 1, mens en båd, der sejler dårligt i kaos, får et bidrag over 1. Jo mere kaos der er i feltet den dag, jo større bliver effekten af dette bidrag. Støjleddet dækker den resterende tilfældighed fra aften til aften.
 
-Denne ligning er den brede intuition. I den konkrete implementering nedenfor splittes bådens skjulte bidrag op i en stabil del og en ekstra $\gamma$-del, som får større vægt på mere urolige aftener. Det er altså ikke kun ét samlet bådniveau, der estimeres, men en mere nuanceret beskrivelse af bådens niveau. Når det er gjort, kan modellen bruges til at forudsige, hvilken tid en båd sandsynligvis ville have sejlet i et konkret ræs.
+Denne ligning er den brede intuition. I den konkrete model nedenfor splittes bådens skjulte bidrag op i en stabil del og en ekstra $k$-del, som får større vægt på mere kaotiske aftener. Det er altså ikke kun ét samlet bådniveau, der estimeres, men en mere nuanceret beskrivelse af bådens niveau. Når det er gjort, kan modellen bruges til at forudsige, hvilken tid en båd sandsynligvis ville have sejlet i et konkret ræs.
 
 Det er dermed også grænsen for den brede forklaring. Fra dette punkt er opgaven at estimere modellen konkret og gøre den operationel. Det kræver nogle tekniske valg om transformation, filtrering og likelihood-baseret estimering. Resten af kapitlet går derfor mere detaljeret og mere matematisk til værks.
 
+\newpage
 \section{Teknisk model og estimering}
 
-I koden er modellen udvidet i forhold til den helt simple multiplicative skitse ovenfor. Den operationelle version arbejder stadig i log-space, men hver båd har nu to latente tilstande: et vedvarende niveau $x_{i,t}$ og en ekstra tilstand $\gamma_{i,t}$, som kun får vægt på dage, hvor dagens residualvariation er høj. Derudover estimeres ikke kun én procesvarians, men tre globale parametre pr. banegruppe: $q_x$, $q_\gamma$ og en skaleringsparameter $k$ for initialkovariansen.
+Formålet med dette afsnit er at gøre den tidligere intuition operationel, så metoden kan estimeres og bruges i praksis. Rækkefølgen er: først introduceres notation og observationsmodel, derefter tilstandsdynamik og Kalman-opdatering, så estimeringen af dagens gns. sejltid og kaosniveau, og til sidst estimeringen af de globale modelparametre samt dannelsen af kontrafaktiske tider. Læseren kan derfor bruge afsnittet som en trinvis opskrift fra modelidé til konkret beregning.
 
 \subsection{Log-model med to latente tilstande}
-Kalman-filtrering arbejder naturligt med additive modeller. Derfor transformeres tiderne til log-space:
+Vi bruger følgende notation i log-space:
 \begin{flalign}
-\hspace{2cm} y_{i,t} &= \log(T_{i,t}), \qquad b_t = \log(\alpha_t), \qquad x_{i,t} = \log(z_{i,t}) &&
+\hspace{2cm} \tau_{i,t} &= \log(\text{beregnet tid}) &&\\
+\hspace{2cm} \mu_{\tau,t} &= \log(\text{gns. sejltid}) &&\\
+\hspace{2cm} s_{i,t} &= \log(\text{bådens grundniveau}) &&\\
+\hspace{2cm} \sigma_{\tau,t}k_{i,t} &= \log(\text{bådens kaosbidrag}) &&\\
+\hspace{2cm} \varepsilon_{i,t} &= \log(\text{støjfaktor}) &&
 \end{flalign}
-Den operationelle observationsmodel i koden er derefter
+Den operationelle observationsmodel er derefter
 \begin{flalign}
-\hspace{2cm} y_{i,t} &= b_t + x_{i,t} + \sigma_{y,t}\gamma_{i,t} + \varepsilon_{i,t} &&\\
-\hspace{2cm} \varepsilon_{i,t} &\sim \mathcal{N}(0,\sigma_{y,t}^2) &&
+\hspace{2cm} \tau_{i,t} &= \mu_{\tau,t} + s_{i,t} + \sigma_{\tau,t}k_{i,t} + \varepsilon_{i,t} &&\\
+\hspace{2cm} \varepsilon_{i,t} &\sim \mathcal{N}(0,\sigma_{\tau,t}^2) &&
 \end{flalign}
-Her er $b_t$ dagens fælles log-niveau, mens $\sigma_{y,t}^2$ er dagens residualvarians. Tilstanden $x_{i,t}$ er bådens mere vedvarende niveau, mens $\gamma_{i,t}$ er en ekstra bådspecifik komponent, som slår stærkere igennem på urolige dage, fordi loadingen vokser med $\sigma_{y,t}$. Når et ræs er meget stabilt, bliver $\sigma_{y,t}$ lille, og så ligner modellen i praksis igen en mere klassisk en-tilstands model.
+Her er $\mu_{\tau,t}$ dagens log-gns. sejltid, mens $\sigma_{\tau,t}^2$ er dagens kaosniveau. Tilstanden $s_{i,t}$ er bådens mere vedvarende niveau, mens $k_{i,t}$ er en ekstra bådspecifik komponent, som slår stærkere igennem på kaotiske dage, fordi loadingen vokser med $\sigma_{\tau,t}$. Når et ræs er meget stabilt, bliver $\sigma_{\tau,t}^2$ lille, og så ligner modellen i praksis igen en mere klassisk en-tilstands model.
 
-Det er samtidig afgørende for identifikationen, at $\sigma_{y,t}$ varierer mellem ræs. Hvis dagens støjniveau var konstant, kunne man skrive
-\begin{flalign}
-\hspace{2cm} \sigma_{y,t} &= \sigma_y &&\\
-\hspace{2cm} \tilde x_{i,t} &= x_{i,t} + \sigma_y\gamma_{i,t} &&
-\end{flalign}
-og så ville observationsleddet kun afhænge af $\tilde x_{i,t}$. I den situation kan data derfor ikke identificere $x_{i,t}$ og $\gamma_{i,t}$ hver for sig, men kun deres samlede kombination. Variationen i $\sigma_{y,t}$ er netop det, der gør det muligt at skille de to komponenter ad.
-Det betyder også, at $x_{i,t}$ og $\gamma_{i,t}$ ikke bør fortolkes som to helt rene, uafhængige egenskaber. Selv når $\sigma_{y,t}$ varierer, vil der typisk være en vis sammenblanding mellem dem, og fortolkningen er derfor stærkest for kombinationen af et mere stabilt niveau og en ekstra følsomhed over for urolige ræs.
+Det er samtidig afgørende for identifikationen, at $\sigma_{\tau,t}^2$ varierer mellem ræs. Hvis dagens støjniveau ikke varierede, ville modellen i praksis kun kunne se den samlede effekt af $s_{i,t}$ og $k_{i,t}$, og data kunne derfor ikke skille de to komponenter tydeligt ad. Variationen i $\sigma_{\tau,t}^2$ er netop det, der gør det muligt at separere deres bidrag.
+Det betyder også, at $s_{i,t}$ og $k_{i,t}$ ikke bør fortolkes som to helt rene, uafhængige egenskaber. Selv når $\sigma_{\tau,t}^2$ varierer, vil der typisk være en vis sammenblanding mellem dem, og fortolkningen er derfor stærkest for kombinationen af et mere stabilt niveau og en ekstra følsomhed over for kaotiske ræs.
 
-En additiv ændring $\delta$ i log-space svarer stadig til en multiplikativ faktor $\exp(\delta)$ i tidsskalaen. Lavere $x_{i,t}$ betyder derfor en hurtigere båd, og det samme gælder lavere $x_{i,t}+\sigma_{y,t}\gamma_{i,t}$ på en konkret dag.
+En additiv ændring $\delta$ i log-space svarer stadig til en multiplikativ faktor $\exp(\delta)$ i tidsskalaen. Lavere $s_{i,t}$ betyder derfor en hurtigere båd, og det samme gælder lavere $s_{i,t}+\sigma_{\tau,t}k_{i,t}$ på en konkret dag.
 
 \subsection{Tilstandsdynamik og Kalman-opdatering}
 For en aktiv båd samles de to latente tilstande i vektoren
 \begin{flalign}
-\hspace{2cm} s_{i,t} &= [x_{i,t}\ \gamma_{i,t}]^T &&
+\hspace{2cm} x_{i,t} &= [s_{i,t}\ k_{i,t}]^T &&
 \end{flalign}
 og udviklingen skrives som et random walk
 \begin{flalign}
-\hspace{2cm} Q &= \begin{bmatrix} q_x & 0 \\ 0 & q_\gamma \end{bmatrix} &&\\
-\hspace{2cm} s_{i,t+1} &= s_{i,t} + \eta_{i,t+1}, \qquad \eta_{i,t+1} \sim \mathcal{N}\left(0,\Delta T_{i,t+1}Q\right) &&
+\hspace{2cm} Q &= \begin{bmatrix} q_s & 0 \\ 0 & q_k \end{bmatrix} &&\\
+\hspace{2cm} x_{i,t+1} &= x_{i,t} + \eta_{i,t+1}, \qquad \eta_{i,t+1} \sim \mathcal{N}(0,\Delta T_{i,t+1}Q) &&
 \end{flalign}
 Her er $\Delta T_{i,t+1}$ antal dage siden bådens sidst kendte tilstand. Hvis en båd ikke har sejlet i lang tid, bliver usikkerheden derfor større i begge komponenter.
 
-Samles de aktive både i én tilstandsvektor, fås prediktionssteppet
+For hver aktiv båd fås prediktionssteppet direkte som
 \begin{flalign}
-\hspace{2cm} s_t^- &= s_{t-1}^+, \qquad M_t^- = M_{t-1}^+ + W_t &&
+\hspace{2cm} x_{i,t}^- &= x_{i,t-1}^+, \qquad P_{i,t}^- = P_{i,t-1}^+ + \Delta T_{i,t}Q &&
 \end{flalign}
-Her bruges definitionerne
+Samles de aktive både (antal $n_t$) derefter i én tilstandsvektor, bruges definitionerne
 \begin{flalign}
-\hspace{2cm} s_t &= [x_t\ \gamma_t]^T, \qquad M_t = \mathrm{diag}(P_{x,t},P_{\gamma,t}) &&
+\hspace{2cm} x_t &= [s_t\ k_t]^T, \qquad P_t = \mathrm{diag}(P_{s,t},P_{k,t}) &&
 \end{flalign}
-og $W_t$ er den blokdiagonale matrix med blokke $\Delta T_{i,t}Q$ for de aktive både.
+så den samlede kovarians stadig består af de bådspecifikke bidrag $\Delta T_{i,t}Q$ på diagonalblokke.
 
 Når de observerede både i ræs $t$ udvælges med selektionsmatricen $Z_t$, skrives observationsmodellen som
 \begin{flalign}
-\hspace{2cm} y_t &= G_t s_t^- + b_t\mathbf{1} + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal{N}(0,\sigma_{y,t}^2 I) &&
+\hspace{2cm} \tau_t &= H_t x_t^- + \mu_{\tau,t} + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal{N}(0,\sigma_{\tau,t}^2 I) &&
 \end{flalign}
 med designmatricen
 \begin{flalign}
-\hspace{2cm} G_t &= \begin{bmatrix} Z_t & \sigma_{y,t} Z_t \end{bmatrix} &&
+\hspace{2cm} H_t &= \begin{bmatrix} Z_t & \sigma_{\tau,t} Z_t \end{bmatrix} &&
 \end{flalign}
 
-Efter at dagens parametre er fundet, definerer koden innovationsvektoren og den samlede residualkovarians som
+Efter at dagens parametre er fundet, defineres innovationsvektoren og den samlede residualkovarians som
 \begin{flalign}
-\hspace{2cm} e_t &= y_t - G_t s_t^- - \hat b_t\mathbf{1} &&\\
-\hspace{2cm} \Sigma_t &= G_t M_t^- G_t^\top + \hat \sigma_{y,t}^2 I &&
+\hspace{2cm} e_t &= \tau_t - H_t x_t^- - \hat\mu_{\tau,t} &&\\
+\hspace{2cm} \Sigma_t &= H_t P_t^- H_t^\top + \hat \sigma_{\tau,t}^2 I &&
 \end{flalign}
-hvor residualkovariansen altså automatisk samler både $x$- og $\gamma$-delen. Opdateringen skrives så som
+hvor residualkovariansen altså automatisk samler både $s$- og $k$-delen. Opdateringen skrives så som
 \begin{flalign}
-\hspace{2cm} K_t &= M_t^- G_t^\top \Sigma_t^{-1} &&\\
-\hspace{2cm} s_t^+ &= s_t^- + K_t e_t &&\\
-\hspace{2cm} M_t^+ &= M_t^- - K_t G_t M_t^- &&
+\hspace{2cm} K_t &= P_t^- H_t^\top \Sigma_t^{-1} &&\\
+\hspace{2cm} x_t^+ &= x_t^- + K_t e_t &&\\
+\hspace{2cm} P_t^+ &= P_t^- - K_t H_t P_t^- &&
 \end{flalign}
-De to komponenter $x_t$ og $\gamma_t$ er altså stadig til stede, men i Kalman-regningen optræder de samlet som én tilstand og én kovarians. Det er denne fulde kovariansopdatering, som implementeres i filteret.
+De to komponenter $s_t$ og $k_t$ er altså stadig til stede, men i Kalman-regningen optræder de samlet som én tilstand og én kovarians. Det er denne fulde kovariansopdatering, der bruges i metoden.
 
-\subsection{Estimering af dagens niveau og dagsvarians}
-Koden estimerer dagens fælles niveau $b_t$ og dagsvariansen $\sigma_{y,t}^2$ ved profil-likelihood for hvert ræs. Det sker i to trin. Først dannes de centrerede observationer
+\subsection{Estimering af gns. sejltid og kaosniveau}
+Metoden estimerer dagens log-gns. sejltid $\mu_{\tau,t}$ og dagens kaosniveau $\sigma_{\tau,t}^2$ ved profil-likelihood for hvert ræs. Det sker i to trin. Først dannes de centrerede observationer
 \begin{flalign}
-\hspace{2cm} c_t &= y_t - Z_t x_t^-, \qquad P_{x,oo,t}^- = Z_tP_{x,t}^-Z_t^\top &&
+\hspace{2cm} d_t &= \tau_t - Z_t s_t^-, \qquad P_{s,oo,t}^- = Z_tP_{s,t}^-Z_t^\top &&
 \end{flalign}
-Bemærk, at dagsfittet i implementeringen profileres mod $x_t^-$ alene. Tilstanden $\gamma_t^-$ indgår altså ikke i selve ML-fittet for $(b_t,\sigma_{y,t}^2)$, men kommer først ind i Kalman-opdateringen bagefter gennem loadingen $\hat\sigma_{y,t}$. Det er en konkret modelleringsbeslutning i koden, ikke en algebraisk nødvendighed.
+Bemærk, at fit af gns. sejltid og kaosniveau profileres mod $s_t^-$ alene. Tilstanden $k_t^-$ indgår altså ikke i selve ML-fittet for $(\mu_{\tau,t},\sigma_{\tau,t}^2)$, men kommer først ind i Kalman-opdateringen bagefter gennem loadingen $\hat\sigma_{\tau,t}$. Det er et metodisk valg, ikke en algebraisk nødvendighed.
 
-For en kandidatværdi $\sigma_y^2>0$ sættes
+For en kandidatværdi $\sigma_\tau^2>0$ sættes
 \begin{flalign}
-\hspace{2cm} S_t(\sigma_y^2) &= P_{x,oo,t}^- + \sigma_y^2 I &&
+\hspace{2cm} \Sigma_{\tau,t}(\sigma_\tau^2) &= P_{s,oo,t}^- + \sigma_\tau^2 I &&
 \end{flalign}
-Det profilerede ML-estimat af dagsniveauet fås i lukket form som
+Det profilerede ML-estimat af log-gns. sejltiden fås i lukket form som
 \begin{flalign}
-\hspace{2cm} \hat b_t(\sigma_y^2) &= \frac{\mathbf{1}^\top S_t(\sigma_y^2)^{-1}c_t}{\mathbf{1}^\top S_t(\sigma_y^2)^{-1}\mathbf{1}} &&
+\hspace{2cm} \hat\mu_{\tau,t}(\sigma_\tau^2) &= \frac{\mathbf{1}^\top \Sigma_{\tau,t}(\sigma_\tau^2)^{-1}d_t}{\mathbf{1}^\top \Sigma_{\tau,t}(\sigma_\tau^2)^{-1}\mathbf{1}} &&
 \end{flalign}
-Den tilhørende dags-likelihood er
+Definér desuden residualen
 \begin{flalign}
-\hspace{2cm} \ell_t(\sigma_y^2) &= \frac{1}{2}\left[m_t\log(2\pi)+\log\det(S_t(\sigma_y^2)) + \left(c_t-\hat b_t(\sigma_y^2)\mathbf{1}\right)^\top S_t(\sigma_y^2)^{-1}\left(c_t-\hat b_t(\sigma_y^2)\mathbf{1}\right)\right] &&
+\hspace{2cm} e_{\tau,t}(\sigma_\tau^2) &= d_t-\hat\mu_{\tau,t}(\sigma_\tau^2) &&
 \end{flalign}
-hvor $m_t$ er antal observerede både i ræs $t$. Implementeringen finder derefter
+Den tilhørende likelihood er
 \begin{flalign}
-\hspace{2cm} \hat \sigma_{y,t}^2 &= \arg\min_{\sigma_y^2\geq \varepsilon}\,\ell_t(\sigma_y^2), \qquad \hat b_t = \hat b_t(\hat \sigma_{y,t}^2) &&
+\hspace{2cm} \ell_t(\sigma_\tau^2) &= \frac{1}{2}[n_t\log(2\pi)+\log(\det(\Sigma_{\tau,t}(\sigma_\tau^2)))+e_{\tau,t}(\sigma_\tau^2)^\top\Sigma_{\tau,t}(\sigma_\tau^2)^{-1}e_{\tau,t}(\sigma_\tau^2)] &&
 \end{flalign}
-I praksis løses denne ene dimensions optimering numerisk med en begrænset log-space søgning og efterfølgende L-BFGS-B-forfining.
+hvor $n_t$ er antal observerede både i ræs $t$. Metoden finder derefter
+\begin{flalign}
+\hspace{2cm} \hat \sigma_{\tau,t}^2 &= \arg\min_{\sigma_\tau^2\geq \varepsilon}\,\ell_t(\sigma_\tau^2), \qquad \hat\mu_{\tau,t} = \hat\mu_{\tau,t}(\hat \sigma_{\tau,t}^2) &&
+\end{flalign}
+I praksis løses denne ene dimensions optimering numerisk med en begrænset log-space søgning efterfulgt af lokal forfining.
 
-For at se dagsmodellen i tidsskalaen kan man i et konkret ræs korrigere de observerede tider for bådens forventede hovedniveau:
+For at se modellen for gns. sejltid og kaos i tidsskalaen kan man i et konkret ræs korrigere de observerede tider for bådens forventede hovedniveau:
 \begin{flalign}
-\hspace{2cm} \tilde T_{i,t} &= \frac{T_{i,t}}{\exp(x_{i,t}^-)} &&
+\hspace{2cm} \tilde T_{i,t} &= \frac{T_{i,t}}{\exp(s_{i,t}^-)} &&
 \end{flalign}
-Det er også den transformation, der bruges i eksportkoden til CDF-figuren nedenfor. Figuren er derfor en illustration af selve dagsfittet $(\hat b_t,\hat \sigma_{y,t}^2)$ oven på $x$-prioren, ikke en fuld visualisering af både $x$- og $\gamma$-delen samtidig.
+Det er også den transformation, der bruges i CDF-figuren nedenfor. Figuren er derfor en illustration af selve fitten af gns. sejltid og kaosniveau $(\hat\mu_{\tau,t},\hat \sigma_{\tau,t}^2)$ oven på $s$-prioren, ikke en fuld visualisering af både $s$- og $k$-delen samtidig.
 
 \begin{figure}[H]
 \centering
@@ -137,43 +141,55 @@ legend columns=2,
 \addlegendentry{Fittet log-normal}
 \end{axis}
 \end{tikzpicture}
-\caption{Empirisk fordelingsfunktion for tider korrigeret med $x$-prioren i et konkret ræs og den log-normalfordeling, der følger af den estimerede dagsmodel $(\hat b_t,\hat \sigma_{y,t}^2)$.}
+\caption{Empirisk fordelingsfunktion for tider korrigeret med $s$-prioren i et konkret ræs og den log-normalfordeling, der følger af den estimerede model for gns. sejltid og kaosniveau $(\hat\mu_{\tau,t},\hat \sigma_{\tau,t}^2)$.}
 \end{figure}
 
-Hvis et ræs ser usædvanligt uroligt ud, bliver $\hat \sigma_{y,t}^2$ høj. Så vokser både observationens støjled og loadingen på $\gamma$, og modellen bliver tilsvarende mere forsigtig i opdateringen.
+Hvis et ræs ser usædvanligt kaotisk ud, bliver $\hat \sigma_{\tau,t}^2$ høj. Så vokser både observationens støjled og loadingen på $k$, og modellen bliver tilsvarende mere forsigtig i opdateringen.
 
-\subsection{Estimering af $q_x$, $q_\gamma$ og initialisering}
-Den nuværende kode fitter ikke kun én procesparameter. For hver banegruppe estimeres i stedet tre globale størrelser,
+\subsection{Estimering af $q_s$, $q_k$ og initialisering}
+Metoden estimerer tre globale størrelser pr. banegruppe,
 \begin{flalign}
-\hspace{2cm} \theta = (q_x,q_\gamma,k), \qquad p_0 = kq_x &&
+\hspace{2cm} \theta = (q_s,q_k,c), \qquad p_0 = cq_s &&
 \end{flalign}
-hvor $q_x$ styrer random-walk-variansen for $x$, $q_\gamma$ styrer random-walk-variansen for $\gamma$, og $k$ skalerer initialvariansen. For nye både bruges
-\begin{flalign}
-\hspace{2cm} x_{i,0} &= x_0, \qquad p_{i,0}=p_0, \qquad \gamma_{i,0}=0, \qquad p_{\gamma,i,0}=p_0 &&
-\end{flalign}
-Her estimeres $x_0$ som gennemsnittet af hver båds første observerede, race-centrerede log-performance i den pågældende gruppe. Initialvariansen sættes ikke længere til en fast størrelse som $365\cdot q_x$, men til det fittede produkt $kq_x$.
+hvor $q_s$ styrer random-walk-variansen for $s$, $q_k$ styrer random-walk-variansen for $k$, og $c$ skalerer initialvariansen.
 
-Standardkørslen bruger maximum likelihood som objective. Den samlede score er summen af de dagsvise one-step negative log-likelihoods,
+For nye både bruges startniveau og startkovarians
 \begin{flalign}
-\hspace{2cm} \mathcal{L}(q_x,q_\gamma,k) &= \sum_t \frac{1}{2}\left[m_t\log(2\pi)+\log\det(\Sigma_t)+e_t^\top \Sigma_t^{-1}e_t\right] &&
+\hspace{2cm} s_{i,0} &= s_0, \qquad p_{i,0}=p_0, \qquad k_{i,0}=0, \qquad p_{k,i,0}=p_0 &&
 \end{flalign}
-hvor både filterrecursionen, dagsfittene $(\hat b_t,\hat \sigma_{y,t}^2)$ og dermed også $e_t$ og $\Sigma_t$ afhænger af $(q_x,q_\gamma,k)$. Implementeringen understøtter også RMSE-baserede alternativer, men standardindstillingen i pipeline og CLI er MLE.
+Her estimeres $s_0$ som gennemsnittet af hver båds første observerede, race-centrerede log-performance i den pågældende gruppe, mens $p_0$ bestemmes af $cq_s$.
 
-Selve fitten køres i to passager med differential evolution. Første passage finder et groft optimum for $(q_x,q_\gamma,k)$. Derefter beregnes terminale bådtilstande, og anden passage genstarter optimeringen med disse terminale tilstande som warm start. Det er denne to-pass procedure, der gemmes i cachen og bruges i standardkørslen.
+For en given kandidat $\theta$ gennemløbes alle ræs kronologisk med filteret. Her propagerer Kalman-filteret både tilstandsestimater og kovarianser fra ræs til ræs via prediktions- og opdateringsstegene, så hver dags prior $x_t^-$ og $P_t^-$ er et direkte resultat af hele den foregående historik. I hvert ræs estimeres først dagens gns. sejltid og kaosniveau $(\hat\mu_{\tau,t},\hat \sigma_{\tau,t}^2)$ som i forrige afsnit, hvorefter innovation og residualkovarians fås som $e_t(\theta)$ og $\Sigma_t(\theta)$.
+Den samlede objectivefunktion er summen af dagsvise one-step negative log-likelihoods,
+\begin{flalign}
+\hspace{2cm} \mathcal{L}(\theta) &= \sum_t \frac{1}{2}[n_t\log(2\pi)+\log(\det(\Sigma_t(\theta)))+e_t(\theta)^\top \Sigma_t(\theta)^{-1}e_t(\theta)] &&
+\end{flalign}
+hvor $n_t$ er antal observerede både i ræs $t$. Parameterestimatet findes som
+\begin{flalign}
+\hspace{2cm} \hat\theta &= \arg\min_{q_s\geq 0,\;q_k\geq 0,\;c\geq 0}\,\mathcal{L}(\theta), \qquad \hat p_0 = \hat c\,\hat q_s &&
+\end{flalign}
+
+Selve fitten køres i to passager:
+\begin{flalign}
+\hspace{2cm} \text{Passage 1:} &\quad \theta^{(1)} = \arg\min \mathcal{L}(\theta)\ \text{fra standard-initialisering} &&\\
+\hspace{2cm} \text{Passage 2:} &\quad \hat\theta = \arg\min \mathcal{L}(\theta)\ \text{med terminale tilstande fra passage 1 som warm start} &&
+\end{flalign}
+To-pass opsætningen gør estimatet mere stabilt, fordi anden passage starter fra et tilstandsniveau, der allerede er konsistent med data.
 
 \subsection{Kontrafaktiske tider og identifikation}
-For en båd, der ikke sejlede i ræs $t$, anvendes kun prediktionssteppet. Den kontrafaktiske beregnede tid sættes derfor i koden til
+For en båd, der ikke sejlede i ræs $t$, anvendes kun prediktionssteppet. Den kontrafaktiske beregnede tid sættes derfor til
 \begin{flalign}
-\hspace{2cm} \hat{T}_{m,t} &= \exp\!\left(\hat b_t + x_{m,t}^- + \hat \sigma_{y,t}\,\gamma_{m,t}^-\right) &&
+\hspace{2cm} \hat{T}_{m,t} &= \exp\!(\hat\mu_{\tau,t} + s_{m,t}^- + \hat \sigma_{\tau,t}\,k_{m,t}^-) &&
 \end{flalign}
-Det er altså prioren for både $x$ og $\gamma$, sammen med dagens fittede $(\hat b_t,\hat \sigma_{y,t}^2)$, der bestemmer godtgørelsestiden.
+Det er altså prioren for både $s$ og $k$, sammen med dagens fittede $(\hat\mu_{\tau,t},\hat \sigma_{\tau,t}^2)$, der bestemmer godtgørelsestiden.
 
-For identifikation centreres kun $x$-tilstanden, ikke $\gamma$-tilstanden. Efter hvert prediktions- og opdateringsstep trækkes gennemsnittet af de aktive både fra:
+For identifikation centreres kun $s$-tilstanden, ikke $k$-tilstanden. Efter hvert prediktions- og opdateringsstep trækkes gennemsnittet af de aktive både fra:
 \begin{flalign}
-\hspace{2cm} \bar x_t &= \frac{1}{n_{a,t}}\mathbf{1}^\top x_{a,t}, \qquad x_{a,t} \leftarrow x_{a,t} - \bar x_t\mathbf{1} &&
+\hspace{2cm} s_t^{act} &\leftarrow s_t^{act} - \operatorname{mean}(s_t^{act}) &&
 \end{flalign}
-hvor $x_{a,t}$ er delvektoren for aktive både. Kovariansen centreres tilsvarende med den sædvanlige double-centering på aktivblokken,
+Her er $s_t^{act}$ delvektoren for de $n_t$ aktive både i ræs $t$. Inaktive både ændres ikke i dette step. For den aktive kovariansblok sættes
 \begin{flalign}
-\hspace{2cm} P_{x,aa,t} &\leftarrow M_t P_{x,aa,t} M_t^\top, \qquad M_t = I - \frac{1}{n_{a,t}}\mathbf{1}\mathbf{1}^\top &&
+\hspace{2cm} C_t &= I - \frac{1}{n_t} &&\\
+\hspace{2cm} P_{s,t}^{act} &\leftarrow C_t\,P_{s,t}^{act}\,C_t^\top &&
 \end{flalign}
-og krydsblokke mod inaktive både centreres række- eller kolonnevist på samme måde. Her er $n_{a,t}$ antal aktive både på tidspunkt $t$. Det svarer til den konkrete projektion, der anvendes i implementeringen.
+hvor $P_{s,t}^{act}$ er kovariansens aktive blok. Krydsblokke mod inaktive både centreres analogt med én aktiv middelkorrektion. Da aktivmængden kan skifte fra ræs til ræs, er dette ikke én fast lineær operator gennem hele forløbet.
