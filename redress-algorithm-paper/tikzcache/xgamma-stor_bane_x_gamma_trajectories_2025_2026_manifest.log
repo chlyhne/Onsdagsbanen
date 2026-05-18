@@ -1,6 +1,6 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (MiKTeX 25.3) (preloaded format=pdflatex 2025.4.4)  18 MAY 2026 12:54
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (MiKTeX 25.3) (preloaded format=pdflatex 2025.4.4)  18 MAY 2026 17:36
 entering extended mode
- restricted \write18 enabled.
+ \write18 enabled.
  %&-line parsing enabled.
 **\def\tikzexternalrealjob{main}\input{main}
 (main.tex (C:\Users\E1536993\AppData\Local\Programs\MiKTeX\tex/latex/base\artic
@@ -1181,26 +1181,47 @@ Overfull \hbox (15.46715pt too wide) in paragraph at lines 42--43
 
 
 
-Overfull \hbox (13.98665pt too wide) detected at line 104
-[]
- []
-
-
-Overfull \hbox (11.60452pt too wide) in paragraph at lines 119--121
-\T1/lmr/m/n/10.95 I prak-sis fin-des den-ne vær-di med en en-di-men-sio-nal (1D
-) sø-ge-me-to-de over in-ter-val-let $\OT1/lmr/m/n/10.95 [\OML/lmm/m/it/10.95 ^
-^[[]; ^^[[]\OT1/lmr/m/n/10.95 ]$\T1/lmr/m/n/10.95 .
- []
-
-
-
-
-Overfull \hbox (34.58284pt too wide) detected at line 166
+Overfull \hbox (11.81685pt too wide) detected at line 106
 []
  []
 
 A tikzpicture has been optimized away. Use '/tikz/external/optimize=false' to d
 isable this.
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `subscript' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `subscript' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\gamma' on input line 145.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 145.
+
+
+Overfull \hbox (17.78937pt too wide) in paragraph at lines 153--155
+\T1/lmr/m/n/10.95 Her esti-me-res $\OML/lmm/m/it/10.95 x[]$ \T1/lmr/m/n/10.95 s
+om gen-nem-snit-tet af hver bå-ds før-ste ob-ser-ve-re-de, race-centrerede log-
+performance
+ []
+
 
 
 ) (sections/C-plot-macros.tex) (sections/C-resultater.tex
@@ -1264,7 +1285,7 @@ PGFPlots: reading {../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_thom
 as-pedersen.csv}
 PGFPlots: reading {../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_thom
 as-yde.csv}
-[14
+[13
 
 {C:/Users/E1536993/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/E
 1536993/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathsy.enc}{C:/User
@@ -1305,8 +1326,6 @@ PGFPlots: reading {../analysis/boat_plot_data/boat_plot_thomas-pedersen_percent
 .csv}
 A tikzpicture has been optimized away. Use '/tikz/external/optimize=false' to d
 isable this.
-
-
 PGFPlots: reading {../analysis/boat_plot_data/boat_plot_thomas-yde-2_percent.cs
 v}
 A tikzpicture has been optimized away. Use '/tikz/external/optimize=false' to d
@@ -1325,13 +1344,13 @@ L3 programming layer <2025-01-18>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 38129 strings out of 473523
- 909363 string characters out of 5713179
- 2634113 words of memory out of 5000000
- 60633 multiletter control sequences out of 15000+600000
- 639308 words of font info for 93 fonts, out of 8000000 for 9000
+ 38136 strings out of 473523
+ 909445 string characters out of 5713179
+ 2633186 words of memory out of 5000000
+ 60639 multiletter control sequences out of 15000+600000
+ 642303 words of font info for 94 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 103i,13n,108p,1084b,2095s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 103i,15n,108p,809b,2095s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
 pdfTeX warning (dest): name{appendix.B} has been referenced but does not exist,
  replaced by a fixed one
@@ -1384,7 +1403,7 @@ lmr8.pfb><C:/Users/E1536993/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm
 /lmsy10.pfb><C:/Users/E1536993/AppData/Local/Programs/MiKTeX/fonts/type1/public
 /lm/lmsy8.pfb>
 Output written on tikzcache/xgamma-stor_bane_x_gamma_trajectories_2025_2026_man
-ifest.pdf (1 page, 132975 bytes).
+ifest.pdf (1 page, 132925 bytes).
 PDF statistics:
  97 PDF objects out of 1000 (max. 8388607)
  12 named destinations out of 1000 (max. 500000)

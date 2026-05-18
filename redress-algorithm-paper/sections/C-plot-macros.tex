@@ -24,6 +24,13 @@
 \fi
 }
 
+\newcommand{\RenderPlotHeadingInMainDoc}[1]{%
+\ifdefined\tikzexternalrealjob
+\else
+  #1%
+\fi
+}
+
 \newcommand{\XGammaColorByIndex}[1]{%
 \ifcase\numexpr#1\relax
 blue!80!black%
@@ -120,7 +127,7 @@ filter discard warning=false,
 }
 
 \newcommand{\RaceCdfPlotFromCsv}[4]{%
-\subsubsection*{#1}
+\RenderPlotHeadingInMainDoc{\subsubsection*{#1}}
 \SetExternalFilenameFromPath{\RaceCdfExternalName}{#2}
 \SetExternalFilenameIfProvided{racecdf-\RaceCdfExternalName}
 \begin{figure}[H]
@@ -188,7 +195,7 @@ legend columns=2,
 \edef\xgtrajymax{\pgfplotsretval}
 \SetExternalFilenameFromPath{\XGammaTrajExternalName}{\XGammaTrajManifestCsv}
 \SetExternalFilenameIfProvided{xgamma-\XGammaTrajExternalName}
-\subsubsection*{\XGammaTrajTitle}
+\RenderPlotHeadingInMainDoc{\subsubsection*{\XGammaTrajTitle}}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
@@ -325,7 +332,7 @@ filter discard warning=false,
 \SetExternalFilenameFromPath{\QLikelihoodFirstExternalName}{\QLikelihoodFirstCsv}
 \SetExternalFilenameFromPath{\QLikelihoodSecondExternalName}{\QLikelihoodSecondCsv}
 \SetExternalFilenameIfProvided{qlikelihood-\QLikelihoodFirstExternalName-vs-\QLikelihoodSecondExternalName}
-\section*{\QLikelihoodTitle}
+\RenderPlotHeadingInMainDoc{\section*{\QLikelihoodTitle}}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
