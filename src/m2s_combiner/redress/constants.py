@@ -18,6 +18,8 @@ Z50 = 0.6744897501960817
 NON_OBS_STATUSES = {"DNS", "DNC", "DSQ", "DNF"}
 Q_SEARCH_MIN = 1e-12
 Q_SEARCH_MAX = 1e-2
+Q_GAMMA_SEARCH_MIN = Q_SEARCH_MIN
+Q_GAMMA_SEARCH_MAX = Q_SEARCH_MAX
 # Day-factor mean bounds (mu_y in log-seconds): 15 minutes to 4 hours.
 MU_Y_LOG_MIN = math.log(15.0 * 60.0)
 MU_Y_LOG_MAX = math.log(4.0 * 3600.0)
@@ -26,6 +28,8 @@ R_T_SEARCH_MIN = 1e-8
 R_T_SEARCH_MAX = 1e3
 # Soft cap floor used for numerical stability of covariance growth.
 P_COV_CAP_FLOOR = 365.0
+P0_SCALE_SEARCH_MIN = 1e-3
+P0_SCALE_SEARCH_MAX = 1e6
 MAX_DELTA_T_DAYS = 90
 DH_REFERENCE_HDCP = 1000.0
 GROUP_Q_CACHE_FILENAME = "redress_group_q_cache.json"

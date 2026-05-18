@@ -1475,16 +1475,17 @@ def q_objective_mle(
 def resolve_q_objective(value: str) -> str:
     objective = str(value or "").strip().lower()
     aliases = {
-        "rmse": "rmse_informed",
-        "rmse-informed": "rmse_informed",
-        "one_step_rmse": "rmse_informed",
-        "one-step-rmse": "rmse_informed",
+        "rmse": "rmse_loo",
         "rmse-loo": "rmse_loo",
         "one_step_rmse_loo": "rmse_loo",
         "one-step-rmse-loo": "rmse_loo",
+        "rmse-informed": "rmse_informed",
+        "one_step_rmse": "rmse_informed",
+        "one-step-rmse": "rmse_informed",
     }
     objective = aliases.get(objective, objective)
-    if objective not in Q_OBJECTIVE_CHOICES:
+    allowed_choices = (*Q_OBJECTIVE_CHOICES, "rmse_informed")
+    if objective not in allowed_choices:
         choices = ", ".join(Q_OBJECTIVE_CHOICES)
         raise ValueError(f"Unsupported q objective '{value}'. Choose one of: {choices}")
     return objective

@@ -9,8 +9,12 @@ from pathlib import Path
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     src = root / "src"
-    venv_python = root / ".venv" / "bin" / "python"
-    python_exec = str(venv_python) if venv_python.is_file() else sys.executable
+    venv_candidates = [
+        root / ".venv" / "Scripts" / "python.exe",
+        root / ".venv" / "bin" / "python",
+    ]
+    venv_python = next((candidate for candidate in venv_candidates if candidate.is_file()), None)
+    python_exec = str(venv_python) if venv_python is not None else sys.executable
 
     cmd = [python_exec, "-m", "m2s_combiner.redress"]
     cmd.extend(sys.argv[1:])

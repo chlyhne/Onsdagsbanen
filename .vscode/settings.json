@@ -1,0 +1,58 @@
+{
+  "latex-workshop.latex.autoBuild.run": "never",
+  "latex-workshop.latex.outDir": "%DIR%",
+  "latex-workshop.latex.tools": [
+    {
+      "name": "pdflatex-external-list",
+      "command": "pdflatex",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-shell-escape",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "parallel-tikz-externalize",
+      "command": "python3",
+      "args": [
+        "%DIR%/build_external_plots.py",
+        "--tex-file",
+        "%DOC%",
+        "--jobs",
+        "0"
+      ]
+    },
+    {
+      "name": "latexmk-final",
+      "command": "latexmk",
+      "args": [
+        "-g",
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-shell-escape",
+        "-pdf",
+        "%DOC%"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "Parallel externalized PGF build",
+      "tools": [
+        "pdflatex-external-list",
+        "parallel-tikz-externalize",
+        "latexmk-final"
+      ]
+    },
+    {
+      "name": "latexmk-final",
+      "tools": [
+        "latexmk-final"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipe.default": "first"
+}

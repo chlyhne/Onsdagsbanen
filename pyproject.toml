@@ -9,7 +9,9 @@ description = "Scrape two Manage2Sail result series and build a combined PDF ran
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "numpy>=2.0.0",
   "pandas>=2.2.0",
+  "scipy>=1.14.0",
   "reportlab>=4.2.0"
 ]
 

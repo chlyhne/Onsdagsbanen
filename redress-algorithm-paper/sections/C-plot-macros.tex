@@ -5,6 +5,24 @@
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
 
+\makeatletter
+\newcommand{\SetExternalFilenameFromPath}[2]{%
+\begingroup
+\edef\ExternalPathExpanded{#2}%
+\expandafter\filename@parse\expandafter{\ExternalPathExpanded}%
+\xdef#1{\filename@base}%
+\endgroup
+}
+\makeatother
+
+\newcommand{\SetExternalFilenameIfProvided}[1]{%
+\def\ExternalFilenameValue{#1}%
+\ifx\ExternalFilenameValue\empty
+\else
+  \tikzsetnextfilename{#1}%
+\fi
+}
+
 \newcommand{\XGammaColorByIndex}[1]{%
 \ifcase\numexpr#1\relax
 blue!80!black%
@@ -48,6 +66,8 @@ blue!80!black%
 \newcommand{\BoatPlotFromCsv}[5]{%
 \subsubsection*{#1}
 \pgfplotstableread[col sep=comma]{#2}\boatplotdata
+\SetExternalFilenameFromPath{\BoatPlotExternalName}{#2}
+\SetExternalFilenameIfProvided{boatplot-\BoatPlotExternalName}
 \pgfmathsetmacro{\boatplotyminpct}{100.0*(exp(#4)-1.0)}
 \pgfmathsetmacro{\boatplotymaxpct}{100.0*(exp(#5)-1.0)}
 \begin{figure}[H]
@@ -95,8 +115,14 @@ filter discard warning=false,
 \end{figure}
 }
 
+\newcommand{\SelectedBoatPlot}[5]{%
+\BoatPlotFromCsv{#1}{\BoatPlotDataDir/#2}{#3}{#4}{#5}%
+}
+
 \newcommand{\RaceCdfPlotFromCsv}[4]{%
 \subsubsection*{#1}
+\SetExternalFilenameFromPath{\RaceCdfExternalName}{#2}
+\SetExternalFilenameIfProvided{racecdf-\RaceCdfExternalName}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
@@ -149,6 +175,8 @@ legend columns=2,
 \pgfplotstableread[col sep=comma]{\XGammaTrajManifestCsv}\xgtrajmanifest
 \pgfplotstablegetrowsof{\xgtrajmanifest}
 \pgfmathtruncatemacro{\xgtrajrows}{\pgfplotsretval-1}
+\SetExternalFilenameFromPath{\XGammaTrajExternalName}{\XGammaTrajManifestCsv}
+\SetExternalFilenameIfProvided{xgamma-\XGammaTrajExternalName}
 \subsubsection*{\XGammaTrajTitle}
 \begin{figure}[H]
 \centering
@@ -256,6 +284,9 @@ filter discard warning=false,
 
 \newcommand{\QLocalLikelihoodPlotFromCsv}[1]{%
 \pgfkeys{/q likelihood plot/.cd,#1}%
+\SetExternalFilenameFromPath{\QLikelihoodFirstExternalName}{\QLikelihoodFirstCsv}
+\SetExternalFilenameFromPath{\QLikelihoodSecondExternalName}{\QLikelihoodSecondCsv}
+\SetExternalFilenameIfProvided{qlikelihood-\QLikelihoodFirstExternalName-vs-\QLikelihoodSecondExternalName}
 \section*{\QLikelihoodTitle}
 \begin{figure}[H]
 \centering
@@ -317,6 +348,9 @@ legend columns=2,
 \pgfkeys{/dual boat state/.cd,#1}%
 \pgfplotstableread[col sep=comma]{\DualBoatStateFirstCsv}\firstboatplotdata
 \pgfplotstableread[col sep=comma]{\DualBoatStateSecondCsv}\secondboatplotdata
+\SetExternalFilenameFromPath{\DualBoatStateFirstExternalName}{\DualBoatStateFirstCsv}
+\SetExternalFilenameFromPath{\DualBoatStateSecondExternalName}{\DualBoatStateSecondCsv}
+\SetExternalFilenameIfProvided{dualstate-\DualBoatStateFirstExternalName-vs-\DualBoatStateSecondExternalName}
 \def\DualBoatStateResolvedTitle{\DualBoatStateTitle}%
 \ifx\DualBoatStateResolvedTitle\empty
   \edef\DualBoatStateResolvedTitle{\DualBoatStateFirstName\space og \DualBoatStateSecondName}%
@@ -411,6 +445,9 @@ filter discard warning=false,
 \pgfkeys{/dual boat percent/.cd,#1}%
 \pgfplotstableread[col sep=comma]{\DualBoatPercentFirstCsv}\firstboatplotdata
 \pgfplotstableread[col sep=comma]{\DualBoatPercentSecondCsv}\secondboatplotdata
+\SetExternalFilenameFromPath{\DualBoatPercentFirstExternalName}{\DualBoatPercentFirstCsv}
+\SetExternalFilenameFromPath{\DualBoatPercentSecondExternalName}{\DualBoatPercentSecondCsv}
+\SetExternalFilenameIfProvided{dualpercent-\DualBoatPercentFirstExternalName-vs-\DualBoatPercentSecondExternalName}
 \def\DualBoatPercentResolvedTitle{\DualBoatPercentTitle}%
 \ifx\DualBoatPercentResolvedTitle\empty
   \edef\DualBoatPercentResolvedTitle{\DualBoatPercentFirstName\space og \DualBoatPercentSecondName}%

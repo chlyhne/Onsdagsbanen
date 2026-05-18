@@ -4,32 +4,24 @@
 Dette appendiks samler de individuelle bådplots, som læses direkte fra CSV-filer.
 Data genereres af \texttt{scripts/redress\_2025\_evolution.py}, mens denne LaTeX-fil alene står for visningen.
 
-\pgfplotstableread[col sep=comma]{\BoatPlotDataDir/boat_plot_manifest.csv}\boatplotmanifest
-\pgfplotstableforeachcolumnelement{competitor_display}\of\boatplotmanifest\as\displayname{%
-  \pgfplotstablegetelem{\pgfplotstablerow}{group_display}\of\boatplotmanifest
-  \let\groupdisplay\pgfplotsretval
-  \pgfplotstablegetelem{\pgfplotstablerow}{percent_data_csv}\of\boatplotmanifest
-  \let\datacsv\pgfplotsretval
-  \pgfplotstablegetelem{\pgfplotstablerow}{x_max}\of\boatplotmanifest
-  \let\xmax\pgfplotsretval
-  \pgfplotstablegetelem{\pgfplotstablerow}{y_min}\of\boatplotmanifest
-  \let\ymin\pgfplotsretval
-  \pgfplotstablegetelem{\pgfplotstablerow}{y_max}\of\boatplotmanifest
-  \let\ymax\pgfplotsretval
-  \edef\boatdatapath{\BoatPlotDataDir/\datacsv}
-  \BoatPlotFromCsv{\displayname\space(\groupdisplay)}{\boatdatapath}{\xmax}{\ymin}{\ymax}
-}
+Rediger listen i \texttt{sections/D-2025-boatplot-selection.tex}: kun de linjer, der ikke er udkommenteret, bliver vist her.
 
-\IfFileExists{../analysis/race_cdf_appendix.tex}{%
-  \input{../analysis/race_cdf_appendix.tex}%
-}{%
-  \clearpage
-  \section{Racevise CDF-plots (2025--2026)}
-  CDF-appendiksfilen blev ikke fundet. K\o r \texttt{scripts/redress\_2025\_evolution.py} for at generere den.
-}
+\input{sections/D-2025-boatplot-selection}
 
 \IfFileExists{../analysis/q_local_likelihood_around_fit.tex}{%
-  \input{../analysis/q_local_likelihood_around_fit.tex}%
+  \IfFileExists{../analysis/q_local_likelihood_around_fit_0.csv}{%
+    \IfFileExists{../analysis/q_local_likelihood_around_fit_1.csv}{%
+      \input{../analysis/q_local_likelihood_around_fit.tex}%
+    }{%
+      \clearpage
+      \section{Lokal likelihood omkring fitted q}
+      Likelihood-CSV-filen for Stor Bane blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
+    }%
+  }{%
+    \clearpage
+    \section{Lokal likelihood omkring fitted q}
+    Likelihood-CSV-filen for Lille Bane blev ikke fundet. K\o r det lokale q-likelihood sweep for at generere den.
+  }%
 }{%
   \clearpage
   \section{Lokal likelihood omkring fitted q}
