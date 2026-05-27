@@ -245,9 +245,11 @@ def apply_group_duty_assignments(
             & (lookup["observed"] != True)
         ].copy()
         if lookup_matches.empty:
-            raise ValueError(
-                f"No redress prediction found for duty assignment '{assignment['competitor']}' in {context.group_label} / {class_name} / {race_label}."
+            print(
+                f"[{context.group_label}] Skipping duty assignment for '{assignment['competitor']}' in {class_name} / {race_label} "
+                "because no redress prediction exists."
             )
+            continue
         if len(lookup_matches) > 1:
             raise ValueError(
                 f"Multiple redress predictions found for duty assignment '{assignment['competitor']}' in {context.group_label} / {class_name} / {race_label}."

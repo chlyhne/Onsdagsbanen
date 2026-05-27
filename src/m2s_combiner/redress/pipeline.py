@@ -9,6 +9,7 @@ import pandas as pd
 
 from .collect import build_competitor_year_group_map
 from .collect import build_group_data
+from .collect import filter_groups_for_fitting
 from .common import normalize_text
 from .common import predict_sailed_seconds_from_corrected
 from .common import race_num
@@ -75,7 +76,10 @@ def _fit_group_qs(
 
     for group in groups:
         group_name = str(group["group"])
-        estimated_initial_q = estimate_global_q(group["combined"])
+        fit_candidates = filter_groups_for_fitting([group], min_observed_races=4)
+        fit_group = fit_candidates[0] if fit_candidates else group
+
+        estimated_initial_q = estimate_global_q(fit_group["combined"])
         has_cached_q = group_name in cached_q_map
         has_cached_q_gamma = group_name in cached_q_gamma_map
         has_cached_k = group_name in cached_k_map
@@ -83,7 +87,7 @@ def _fit_group_qs(
         initial_q_for_fit = float(cached_q_map.get(group_name, INITIAL_Q_FOR_FIT))
         initial_q_gamma_for_fit = float(cached_q_gamma_map.get(group_name, INITIAL_Q_GAMMA_FOR_FIT))
         initial_k_for_fit = float(cached_k_map.get(group_name, P0_FROM_Q_SCALE))
-        group_x0 = float(estimate_initial_x0_from_first_observations(group))
+        group_x0 = float(estimate_initial_x0_from_first_observations(fit_group))
         initial_p0_for_fit = float(max(EPS, initial_k_for_fit * initial_q_for_fit))
 
         if has_cached_q and has_cached_q_gamma and has_cached_k and has_cached_initial_state:
@@ -93,7 +97,7 @@ def _fit_group_qs(
             group_initial_state = dict(cached_initial_state_by_group[group_name])
             group_p0_cached = float(max(EPS, group_k * group_q))
             fit_score, fit_obs = evaluate_q_score(
-                [group],
+                [fit_group],
                 group_q,
                 q_objective,
                 q_gamma=group_q_gamma,
@@ -105,7 +109,7 @@ def _fit_group_qs(
         else:
             using_cached_q = False
             group_q, group_q_gamma, group_k, group_initial_state_by_group, fit_score, fit_obs = fit_global_q(
-                [group],
+                [fit_group],
                 initial_q=initial_q_for_fit,
                 objective=q_objective,
                 initial_q_gamma=initial_q_gamma_for_fit,
@@ -121,7 +125,7 @@ def _fit_group_qs(
 
         group_p0 = float(max(EPS, group_k * group_q))
         rmse_score, rmse_obs = evaluate_q_score(
-            [group],
+            [fit_group],
             group_q,
             "rmse",
             q_gamma=group_q_gamma,
@@ -130,7 +134,7 @@ def _fit_group_qs(
             initial_state_by_group={group_name: group_initial_state},
         )
         mle_score, mle_obs = evaluate_q_score(
-            [group],
+            [fit_group],
             group_q,
             "mle",
             q_gamma=group_q_gamma,
@@ -173,7 +177,7 @@ def _fit_group_qs(
         )
         if run_q_diagnostics:
             group_diag = q_diagnostics(
-                [group],
+                [fit_group],
                 q_grid,
                 q_gamma=group_q_gamma,
                 initial_x0=group_x0,
