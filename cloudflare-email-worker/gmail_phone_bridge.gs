@@ -26,6 +26,10 @@ const M2S_CONFIG = {
   archiveProcessedThreads: true,
   // Set true to avoid sending result emails for resultater mode while testing.
   dryRun: false,
+  // Guard hummesse-triggered result emails to the intended Wednesday evening window.
+  resultaterGuardTimeZone: "Europe/Copenhagen",
+  resultaterGuardWeekdayIso: "3",
+  resultaterGuardHour: 19,
 };
 
 function extractEmailAddress(rawFrom) {
@@ -107,6 +111,18 @@ function isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders) {
     return allowedResultaterSenders.has(fromAddress);
   }
   return false;
+}
+
+function isWithinHummesseResultaterWindow_(now) {
+  const current = now || new Date();
+  const timezone = String(M2S_CONFIG.resultaterGuardTimeZone || "Europe/Copenhagen");
+  const weekday = Utilities.formatDate(current, timezone, "u");
+  const hour = Number(Utilities.formatDate(current, timezone, "H"));
+  return (
+    weekday === String(M2S_CONFIG.resultaterGuardWeekdayIso || "3") &&
+    Number.isFinite(hour) &&
+    hour >= Number(M2S_CONFIG.resultaterGuardHour || 19)
+  );
 }
 
 function collectCandidateThreads_() {
@@ -227,6 +243,18 @@ function pollAndTrigger() {
 
     if (!isAllowedSenderForMode_(mode, fromAddress, allowedResultaterSenders)) {
       console.log(`Sender not allowed for mode=${mode}: ${fromAddress}. Marking as processed.`);
+      markThreadProcessed_(thread, processed);
+      continue;
+    }
+
+    if (
+      mode === "resultater" &&
+      fromAddress === normalizeSubject_(M2S_CONFIG.appendSender) &&
+      !isWithinHummesseResultaterWindow_()
+    ) {
+      console.log(
+        "Ignoring resultater from hummesse@gmail.com outside Wednesday after 19:00 Europe/Copenhagen. Marking as processed."
+      );
       markThreadProcessed_(thread, processed);
       continue;
     }

@@ -6,6 +6,9 @@ const DELETE_SUBJECT = "delete";
 const UNSUBSCRIBE_SUBJECT = "afmeld resultater";
 const DUTY_SUBJECT_PREFIX = "dommertjans";
 const DUTY_SUBJECT_PATTERN = /^dommertjans\s+r(\d+)\s+(\d+)$/i;
+const RESULTATER_GUARD_TIMEZONE = "Europe/Copenhagen";
+const RESULTATER_GUARD_WEEKDAY = "wed";
+const RESULTATER_GUARD_HOUR = 19;
 
 function extractEmailAddresses(rawText) {
   const matches = String(rawText || "").match(EMAIL_PATTERN) || [];
@@ -77,6 +80,24 @@ function parseDutySubject(subject) {
     raceLabel: `R${match[1]}`,
     participantNumber: String(Number(match[2])),
   };
+}
+
+function isWithinHummesseResultaterWindow(now = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: RESULTATER_GUARD_TIMEZONE,
+    weekday: "short",
+    hour: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(now)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+  const weekday = String(parts.weekday || "").trim().toLowerCase();
+  const hour = Number.parseInt(String(parts.hour || "-1"), 10);
+  return weekday === RESULTATER_GUARD_WEEKDAY && Number.isFinite(hour) && hour >= RESULTATER_GUARD_HOUR;
 }
 
 function tokenMatches(request, env) {
@@ -185,6 +206,13 @@ async function handleIncomingEmail(message, env) {
 
   if (isUnsubscribe && from === HUMMESSE_SENDER) {
     console.log("Ignoring afmeld resultater for hummesse@gmail.com.");
+    return;
+  }
+
+  if (isResultater && from === HUMMESSE_SENDER && !isWithinHummesseResultaterWindow()) {
+    console.log(
+      "Ignoring resultater from hummesse@gmail.com outside Wednesday after 19:00 Europe/Copenhagen."
+    );
     return;
   }
 
@@ -304,6 +332,13 @@ async function handleHttpTrigger(request, env) {
 
   if (isUnsubscribe && from === HUMMESSE_SENDER) {
     return new Response("hummesse@gmail.com cannot use subject 'afmeld resultater'", { status: 403 });
+  }
+
+  if (isResultater && from === HUMMESSE_SENDER && !isWithinHummesseResultaterWindow()) {
+    return new Response(
+      "hummesse@gmail.com may only use subject 'resultater' on Wednesdays after 19:00 Europe/Copenhagen",
+      { status: 403 }
+    );
   }
 
   const recipientsOverrideFromPayload = normalizeRecipientsOverride(payload.recipients_override);
