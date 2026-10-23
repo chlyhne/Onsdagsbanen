@@ -379,11 +379,23 @@ def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
         updated["combined"] = stacked[stacked["_group_idx"] == idx].drop(columns=["_group_idx"]).reset_index(drop=True)
         updated_groups.append(updated)
 
-    # Keep only competitors with strictly more than 3 observed data points.
-    # Observed means beregnet_seconds exists and race status is not a non-observed code.
+    all_data = pd.concat([group["combined"] for group in updated_groups], ignore_index=True) if updated_groups else pd.DataFrame()
+    return updated_groups, all_data
+
+
+def filter_groups_for_fitting(
+    groups: list[dict[str, Any]],
+    *,
+    min_observed_races: int = 4,
+) -> list[dict[str, Any]]:
+    """Return fit-only group views with low-observation boats removed.
+
+    Prediction history should keep all boats; this filter is only for model fitting.
+    """
+    min_obs = max(1, int(min_observed_races))
     filtered_groups: list[dict[str, Any]] = []
-    filtered_rows: list[pd.DataFrame] = []
-    for group in updated_groups:
+
+    for group in groups:
         combined = group["combined"].copy()
         if combined.empty:
             continue
@@ -393,22 +405,20 @@ def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
         combined["is_obs"] = combined["beregnet_seconds"].notna() & (~combined["status_upper"].isin(NON_OBS_STATUSES))
 
         obs_counts = combined.groupby("competitor")["is_obs"].sum()
-        eligible = set(obs_counts[obs_counts > 3].index.astype(str).tolist())
+        eligible = set(obs_counts[obs_counts >= min_obs].index.astype(str).tolist())
         if not eligible:
             continue
 
-        combined = combined.loc[combined["competitor"].astype(str).isin(eligible)].copy()
-        if combined.empty:
+        fit_combined = combined.loc[combined["competitor"].astype(str).isin(eligible)].copy()
+        if fit_combined.empty:
             continue
 
-        combined = combined.drop(columns=["status_upper", "is_obs"], errors="ignore").reset_index(drop=True)
-        filtered_group = dict(group)
-        filtered_group["combined"] = combined
-        filtered_groups.append(filtered_group)
-        filtered_rows.append(combined)
+        fit_combined = fit_combined.drop(columns=["status_upper", "is_obs"], errors="ignore").reset_index(drop=True)
+        fit_group = dict(group)
+        fit_group["combined"] = fit_combined
+        filtered_groups.append(fit_group)
 
-    all_data = pd.concat(filtered_rows, ignore_index=True) if filtered_rows else pd.DataFrame()
-    return filtered_groups, all_data
+    return filtered_groups
 
 
 def build_competitor_year_group_map(all_data: pd.DataFrame, non_observed_statuses: set[str]) -> dict[tuple[str, int], str]:
