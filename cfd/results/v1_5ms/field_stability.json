@@ -1,0 +1,88 @@
+{
+  "before": "cfd/output/marine_3d_padded_5ms/restart_000400.dat",
+  "after": "cfd/output/marine_3d_padded_5ms/restart_000592.dat",
+  "height_m": 4.0,
+  "before_sha256": "78ef8474949977f5f447773c06f33f8d58794760ad5df2e522ac2d87241bad07",
+  "after_sha256": "2df880ac68764958d39143285eb33a7fac976546d27f96681b0654e25954a4e1",
+  "case_inputs": {
+    "wind_speed": 5.0,
+    "wind_angle": 41.0,
+    "boat_speed": 6.0,
+    "turbulence_intensity": 0.03478714336087684,
+    "turbulence_length": null,
+    "apparent_speed": 8.49551812156879,
+    "gradient": "GREEN_GAUSS",
+    "flow_limiter": "NONE",
+    "marine_profile": {
+      "reference_speed_m_s": 5.0,
+      "reference_height_m": 10.0,
+      "roughness_length_m": 9.611308436911505e-05,
+      "true_angle_deg": 41.0,
+      "boat_speed_knots": 6.0,
+      "kind": "neutral_log",
+      "true_direction_varies_with_height": false,
+      "assumptions": "Neutral atmosphere; prescribed z0, no waves/stability/veer model. Apparent wind includes boat translation at every height.",
+      "source": "https://wasp.dtu.dk/support/frequently-asked-questions/wasp-faq/Wind-shear-exponents"
+    }
+  },
+  "mesh_sha256": "db6d6cfc7de02ff4d47631bfd7b69493a3a3b3379e07a65f900a6bf81cb0b82f",
+  "scope": "All fluid in the displayed viewport, including above the hull; direction excluded below 10% inflow speed",
+  "points_compared": 26655,
+  "changes": {
+    "velocity_vector_m_s": {
+      "p50": 0.00018724119704381295,
+      "p95": 0.0009499165459253143,
+      "maximum": 0.003070253310223547,
+      "maximum_location_xy_m": [
+        2.3700053569757897,
+        0.05431267201317924
+      ]
+    },
+    "speed_m_s": {
+      "p50": 0.00010503371496106695,
+      "p95": 0.0006951430491201726,
+      "maximum": 0.002943708245669807,
+      "maximum_location_xy_m": [
+        2.3516037474945963,
+        0.07006967078462945
+      ]
+    },
+    "direction_deg": {
+      "p50": 0.0002484284685971253,
+      "p95": 0.00168981042829458,
+      "maximum": 0.05853340991840016,
+      "maximum_location_xy_m": [
+        2.3668871863422427,
+        0.05203218585847058
+      ]
+    },
+    "turbulence_percentage_points": {
+      "p50": 0.00013385190104475697,
+      "p95": 0.0008855115904339509,
+      "maximum": 0.013077287536695792,
+      "maximum_location_xy_m": [
+        2.437873098144099,
+        0.0028886968865638727
+      ]
+    }
+  },
+  "maximum_change_limits": {
+    "velocity_vector_m_s": 0.01,
+    "speed_m_s": 0.01,
+    "direction_deg": 0.1,
+    "turbulence_percentage_points": 0.1
+  },
+  "checks": {
+    "velocity_vector_m_s": true,
+    "speed_m_s": true,
+    "direction_deg": true,
+    "turbulence_percentage_points": true
+  },
+  "passed": true,
+  "interpretation": "Iteration stability only; neither grid independence nor validation of this idealised rig",
+  "iteration_window": 192,
+  "native_iterations": [
+    400,
+    592
+  ]
+}

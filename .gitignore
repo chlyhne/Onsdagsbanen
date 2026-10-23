@@ -1,4 +1,6 @@
 __pycache__/
+.cfd-tools/
+cfd/output/
 *.pyc
 *.pyo
 *.pyd

@@ -1,0 +1,822 @@
+{
+  "solver": "SU2 8.5.0",
+  "model": "3D steady INC_RANS SST",
+  "converged_residual_target": true,
+  "plot_data_source": "SU2 binary restart with original mesh coordinates",
+  "checks_passed": false,
+  "field_stability": {
+    "before": "cfd/output/marine_3d_padded_5ms/restart_000400.dat",
+    "after": "cfd/output/marine_3d_padded_5ms/restart_000592.dat",
+    "height_m": 4.0,
+    "before_sha256": "78ef8474949977f5f447773c06f33f8d58794760ad5df2e522ac2d87241bad07",
+    "after_sha256": "2df880ac68764958d39143285eb33a7fac976546d27f96681b0654e25954a4e1",
+    "case_inputs": {
+      "wind_speed": 5.0,
+      "wind_angle": 41.0,
+      "boat_speed": 6.0,
+      "turbulence_intensity": 0.03478714336087684,
+      "turbulence_length": null,
+      "apparent_speed": 8.49551812156879,
+      "gradient": "GREEN_GAUSS",
+      "flow_limiter": "NONE",
+      "marine_profile": {
+        "reference_speed_m_s": 5.0,
+        "reference_height_m": 10.0,
+        "roughness_length_m": 9.611308436911505e-05,
+        "true_angle_deg": 41.0,
+        "boat_speed_knots": 6.0,
+        "kind": "neutral_log",
+        "true_direction_varies_with_height": false,
+        "assumptions": "Neutral atmosphere; prescribed z0, no waves/stability/veer model. Apparent wind includes boat translation at every height.",
+        "source": "https://wasp.dtu.dk/support/frequently-asked-questions/wasp-faq/Wind-shear-exponents"
+      }
+    },
+    "mesh_sha256": "db6d6cfc7de02ff4d47631bfd7b69493a3a3b3379e07a65f900a6bf81cb0b82f",
+    "scope": "All fluid in the displayed viewport, including above the hull; direction excluded below 10% inflow speed",
+    "points_compared": 26655,
+    "changes": {
+      "velocity_vector_m_s": {
+        "p50": 0.00018724119704381295,
+        "p95": 0.0009499165459253143,
+        "maximum": 0.003070253310223547,
+        "maximum_location_xy_m": [
+          2.3700053569757897,
+          0.05431267201317924
+        ]
+      },
+      "speed_m_s": {
+        "p50": 0.00010503371496106695,
+        "p95": 0.0006951430491201726,
+        "maximum": 0.002943708245669807,
+        "maximum_location_xy_m": [
+          2.3516037474945963,
+          0.07006967078462945
+        ]
+      },
+      "direction_deg": {
+        "p50": 0.0002484284685971253,
+        "p95": 0.00168981042829458,
+        "maximum": 0.05853340991840016,
+        "maximum_location_xy_m": [
+          2.3668871863422427,
+          0.05203218585847058
+        ]
+      },
+      "turbulence_percentage_points": {
+        "p50": 0.00013385190104475697,
+        "p95": 0.0008855115904339509,
+        "maximum": 0.013077287536695792,
+        "maximum_location_xy_m": [
+          2.437873098144099,
+          0.0028886968865638727
+        ]
+      }
+    },
+    "maximum_change_limits": {
+      "velocity_vector_m_s": 0.01,
+      "speed_m_s": 0.01,
+      "direction_deg": 0.1,
+      "turbulence_percentage_points": 0.1
+    },
+    "checks": {
+      "velocity_vector_m_s": true,
+      "speed_m_s": true,
+      "direction_deg": true,
+      "turbulence_percentage_points": true
+    },
+    "passed": true,
+    "interpretation": "Iteration stability only; neither grid independence nor validation of this idealised rig",
+    "iteration_window": 192,
+    "native_iterations": [
+      400,
+      592
+    ]
+  },
+  "preliminary": false,
+  "snapshot_iteration": null,
+  "checkpoint_file": "cfd/output/marine_3d_padded_5ms/restart.dat",
+  "free_flow_reference": null,
+  "convergence": {
+    "criteria": {
+      "flow_rms_log10_max": -6.0,
+      "turbulence_residual_reduction_orders": 6.0,
+      "turbulence_absolute_rms_log10_max": {
+        "rms[k]": -11.0,
+        "rms[w]": -5.0
+      },
+      "turbulence_rule": "Each equation must satisfy relative reduction OR its absolute tolerance",
+      "force_window": 200,
+      "force_relative_range_max": 0.001,
+      "force_normalization_floor": 0.01
+    },
+    "turbulence_residual_reference_log10": {
+      "rms[k]": -3.95246808,
+      "rms[w]": 3.224465324
+    },
+    "turbulence_relative_residual_log10": {
+      "rms[k]": -6.7664596999999995,
+      "rms[w]": -8.310366503000001
+    },
+    "turbulence_residual_checks": {
+      "rms[k]": {
+        "relative_passed": true,
+        "absolute_passed": false,
+        "passed": true
+      },
+      "rms[w]": {
+        "relative_passed": true,
+        "absolute_passed": true,
+        "passed": true
+      }
+    },
+    "force_relative_ranges": {
+      "CFx": 0.00038460170200450166,
+      "CFy": 0.0001766081741278914
+    },
+    "checks": {
+      "flow_rms_below_1e_6": true,
+      "turbulence_residuals_converged": true,
+      "forces_stable_0_1_percent_over_200_iterations": true
+    },
+    "passed": true
+  },
+  "wall_resolution": {
+    "main": {
+      "area_m2": 41.123220266819104,
+      "mean_yplus": 0.16236936715517153,
+      "p50_yplus": 0.1587859013997709,
+      "p95_yplus": 0.2634464813555007,
+      "max_yplus": 1.639015,
+      "max_face_average_yplus": 1.1537796333333332,
+      "area_fraction_yplus_above_5": 0.0
+    },
+    "jib": {
+      "area_m2": 25.42070117902289,
+      "mean_yplus": 0.2809465007790586,
+      "p50_yplus": 0.25749062871238404,
+      "p95_yplus": 0.44423750142819063,
+      "max_yplus": 2.56404,
+      "max_face_average_yplus": 1.8221373333333333,
+      "area_fraction_yplus_above_5": 0.0
+    },
+    "hull": {
+      "area_m2": 44.694150388202026,
+      "mean_yplus": 0.22813842614456475,
+      "p50_yplus": 0.1898951961549551,
+      "p95_yplus": 0.5734326116147754,
+      "max_yplus": 1.21937,
+      "max_face_average_yplus": 1.1342886666666667,
+      "area_fraction_yplus_above_5": 0.0
+    },
+    "sea": {
+      "area_m2": 7628.945,
+      "mean_yplus": 0.14242547188059423,
+      "p50_yplus": 0.14608268404353797,
+      "p95_yplus": 0.15281065815252917,
+      "max_yplus": 1.527561,
+      "max_face_average_yplus": 1.4847659999999998,
+      "area_fraction_yplus_above_5": 0.0
+    },
+    "sails_passed": true,
+    "walls_passed": true
+  },
+  "sail_alignment": {
+    "main": {
+      "chord_trim_deg": 12.0,
+      "reference_trim_at_4m_deg": 12.0,
+      "entry_reference_chord_fraction": 0.05,
+      "entry_angle_deg": 28.909271810540783,
+      "awa_minus_entry_deg": -4.191710322336924
+    },
+    "jib": {
+      "chord_trim_deg": 20.0,
+      "reference_trim_at_4m_deg": 20.0,
+      "entry_reference_chord_fraction": 0.05,
+      "entry_angle_deg": 36.90927181054079,
+      "awa_minus_entry_deg": -12.191710322336927
+    }
+  },
+  "entry_angle_reference": {
+    "chord_fraction": 0.05,
+    "method": "camber-line secant from leading edge to 5% of projected chord",
+    "geometry_version": 4
+  },
+  "color_scales": {
+    "vinddrejning.png": {
+      "reference": "entire horizontal slice at least 1 metre from the projected hull footprint",
+      "minimum_distance_from_boat_m": 1.0,
+      "reference_points": 7791,
+      "exterior_min": -0.3552257885310057,
+      "exterior_max": 0.18062255927786453,
+      "normalization": "single linear slope; symmetric signed range about area-weighted median",
+      "neutral_reference": "arealv\u00e6gtet median i billedudsnittet, mindst 1 m fra b\u00e5den",
+      "median_method": "triangle-center field values weighted by triangle area",
+      "median_plot_bounds_m": [
+        [
+          -40,
+          30
+        ],
+        [
+          -50,
+          15.0
+        ]
+      ],
+      "reference_value_in_cached_units": 1.7248451458995746,
+      "subtracted_offset": 1.7248451458995746,
+      "shared_scale_reference": "godhed.png",
+      "units": "knots",
+      "vmg_factor": 0.18,
+      "header_weight_knots_per_deg": 0.18,
+      "speed_conversion_knots_per_m_s": 1.9438444924406046,
+      "display_conversion": "-0.18 * 0.18 * (angle_deg - median_angle_deg)",
+      "vmin": -0.5679661054387062,
+      "vmax": 0.5679661054387062,
+      "neutral": 0.0,
+      "clipped": true,
+      "white_band_relative_to_median_knots": [
+        -0.00874730021598272,
+        0.00874730021598272
+      ],
+      "presentation": true,
+      "wind_arrow": "true wind direction",
+      "contours_delta_vmg_knots": [
+        -0.5,
+        -0.4,
+        -0.30000000000000004,
+        -0.2,
+        -0.1,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5
+      ],
+      "contour_step_knots": 0.1
+    },
+    "vindhastighed.png": {
+      "reference": "entire horizontal slice at least 1 metre from the projected hull footprint",
+      "minimum_distance_from_boat_m": 1.0,
+      "reference_points": 7791,
+      "exterior_min": -0.26380036338126817,
+      "exterior_max": 0.4022779979681748,
+      "normalization": "single linear slope; symmetric signed range about area-weighted median",
+      "neutral_reference": "arealv\u00e6gtet median i billedudsnittet, mindst 1 m fra b\u00e5den",
+      "median_method": "triangle-center field values weighted by triangle area",
+      "median_plot_bounds_m": [
+        [
+          -40,
+          30
+        ],
+        [
+          -50,
+          15.0
+        ]
+      ],
+      "reference_value_in_cached_units": -0.29342032002053653,
+      "subtracted_offset": -0.29342032002053653,
+      "shared_scale_reference": "godhed.png",
+      "units": "knots",
+      "vmg_factor": 0.18,
+      "header_weight_knots_per_deg": 0.18,
+      "speed_conversion_knots_per_m_s": 1.9438444924406046,
+      "display_conversion": "0.18 * (speed_delta_m_s - median_speed_delta_m_s) * 3600/1852",
+      "vmin": -0.5679661054387062,
+      "vmax": 0.5679661054387062,
+      "neutral": 0.0,
+      "clipped": true,
+      "white_band_relative_to_median_knots": [
+        -0.00874730021598272,
+        0.00874730021598272
+      ],
+      "presentation": true,
+      "wind_arrow": "true wind direction",
+      "contours_delta_vmg_knots": [
+        -0.5,
+        -0.4,
+        -0.30000000000000004,
+        -0.2,
+        -0.1,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5
+      ],
+      "contour_step_knots": 0.1
+    },
+    "godhed.png": {
+      "reference": "entire horizontal slice at least 1 metre from the projected hull footprint",
+      "minimum_distance_from_boat_m": 1.0,
+      "reference_points": 7791,
+      "exterior_min": -0.5679661054387062,
+      "exterior_max": 0.4481178335666115,
+      "normalization": "single linear slope; symmetric signed range about area-weighted median",
+      "neutral_reference": "arealv\u00e6gtet median i billedudsnittet, mindst 1 m fra b\u00e5den",
+      "median_method": "triangle-center field values weighted by triangle area",
+      "median_plot_bounds_m": [
+        [
+          -40,
+          30
+        ],
+        [
+          -50,
+          15.0
+        ]
+      ],
+      "reference_value_in_cached_units": -0.1597444374947603,
+      "subtracted_offset": -0.1597444374947603,
+      "shared_scale_reference": "godhed.png",
+      "units": "knots",
+      "vmg_factor": 0.18,
+      "header_weight_knots_per_deg": 0.18,
+      "speed_conversion_knots_per_m_s": 1.9438444924406046,
+      "formula": "0.18 * (speed_delta_m_s * 3600/1852 - 0.18 * angle_deg) - median",
+      "formula_source": "user supplied estimate",
+      "positive": "better",
+      "vmin": -0.5679661054387062,
+      "vmax": 0.5679661054387062,
+      "neutral": 0.0,
+      "clipped": true,
+      "white_band_relative_to_median_knots": [
+        -0.00874730021598272,
+        0.00874730021598272
+      ],
+      "presentation": true,
+      "wind_arrow": "true wind direction",
+      "contours_delta_vmg_knots": [
+        -0.5,
+        -0.4,
+        -0.30000000000000004,
+        -0.2,
+        -0.1,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5
+      ],
+      "contour_step_knots": 0.1
+    }
+  },
+  "wind": {
+    "true_speed_m_s": 4.603432163693412,
+    "true_angle_deg": 41.0,
+    "boat_speed_knots": 6.0,
+    "boat_speed_m_s": 3.086666666666667,
+    "apparent_velocity_m_s": [
+      -6.56092102251173,
+      3.02012323533637,
+      0.0
+    ],
+    "apparent_speed_m_s": 7.222660799196857,
+    "apparent_angle_deg": 24.71756148820386,
+    "profile": {
+      "reference_speed_m_s": 5.0,
+      "reference_height_m": 10.0,
+      "roughness_length_m": 9.611308436911505e-05,
+      "true_angle_deg": 41.0,
+      "boat_speed_knots": 6.0,
+      "kind": "neutral_log",
+      "true_direction_varies_with_height": false,
+      "assumptions": "Neutral atmosphere; prescribed z0, no waves/stability/veer model. Apparent wind includes boat translation at every height.",
+      "source": "https://wasp.dtu.dk/support/frequently-asked-questions/wasp-faq/Wind-shear-exponents"
+    },
+    "true_speed_reference_m_s": 5.0,
+    "true_speed_reference_height_m": 10.0,
+    "native_reference_speed_m_s": 8.49551812156879
+  },
+  "slice_resolution": {
+    "triangles": 57258,
+    "median_max_edge_m": 0.03044223583871388
+  },
+  "turbulence": {
+    "quantity": "100 * sqrt(2*k/3) / |U_infinity|",
+    "units": "percent of undisturbed apparent wind speed",
+    "interpretation": "modelled RMS fluctuation under isotropy assumption; not resolved gusts",
+    "freestream_percent": 3.662447497169482,
+    "inflow_length_scale_m": null,
+    "tke_range_m2_s2": [
+      7.2173828153903684e-09,
+      5.960017363750389
+    ]
+  },
+  "last_history": {
+    "Time_Iter": 0.0,
+    "Outer_Iter": 0.0,
+    "Inner_Iter": 592.0,
+    "rms[P]": -9.22885457,
+    "rms[U]": -8.45909201,
+    "rms[V]": -8.769311945,
+    "rms[W]": -8.991115724,
+    "rms[k]": -10.71892778,
+    "rms[w]": -5.085901179,
+    "LinSolIter": 18.0,
+    "LinSolRes": -2.052490408,
+    "LinSolIterTurb": 3.0,
+    "LinSolResTurb": -2.515607888,
+    "Min_DT": 4.255387645e-05,
+    "Max_DT": 182.0511109,
+    "Min_CFL": 66.45942584,
+    "Max_CFL": 1000.0,
+    "Avg_CFL": 999.9643989,
+    "RefForce": 20.0,
+    "CD": -0.2227421905,
+    "CL": 0.07172049567,
+    "CSF": 0.6892236399,
+    "CMx": -0.3219166594,
+    "CMy": 0.04590891119,
+    "CMz": 0.02959186192,
+    "CFx": 0.1170560201,
+    "CFy": 0.7148015091,
+    "CFz": 0.07172049567,
+    "CEff": -0.3219888226,
+    "relrms[P]": -6.790533404,
+    "relrms[U]": -6.582223047,
+    "relrms[V]": -6.831670922,
+    "relrms[W]": -6.188932329,
+    "relrms[k]": -6.754592758,
+    "relrms[w]": -8.310366502
+  },
+  "parameters": {
+    "output": "cfd/output/marine_3d_padded_5ms",
+    "wind_speed": 5.0,
+    "wind_angle": 41.0,
+    "boat_speed": 6.0,
+    "height": 4.0,
+    "iterations": 3000,
+    "threads": 8,
+    "turbulence_intensity": 0.03478714336087684,
+    "turbulence_length": null,
+    "main_trim": 12.0,
+    "jib_trim": 20.0,
+    "main_twist": 6.0,
+    "jib_twist": 8.0,
+    "marine_profile": {
+      "reference_speed_m_s": 5.0,
+      "reference_height_m": 10.0,
+      "roughness_length_m": 9.611308436911505e-05,
+      "true_angle_deg": 41.0,
+      "boat_speed_knots": 6.0,
+      "kind": "neutral_log",
+      "true_direction_varies_with_height": false,
+      "assumptions": "Neutral atmosphere; prescribed z0, no waves/stability/veer model. Apparent wind includes boat translation at every height.",
+      "source": "https://wasp.dtu.dk/support/frequently-asked-questions/wasp-faq/Wind-shear-exponents"
+    },
+    "gradient": "GREEN_GAUSS",
+    "flow_limiter": "NONE",
+    "apparent_speed": 8.49551812156879,
+    "apparent_angle": 27.209929149033034,
+    "mesh_sha256": "db6d6cfc7de02ff4d47631bfd7b69493a3a3b3379e07a65f900a6bf81cb0b82f",
+    "started_at_utc": "2026-10-23T17:32:40.947186+00:00",
+    "status": "solver_finished",
+    "marine_case": "cfd/output/marine_3d_padded_5ms/marine_case.json",
+    "checkpoint_every": 100,
+    "initial_solution": "initial_atmosphere.dat",
+    "finished_at_utc": "2026-10-23T18:42:42.195324+00:00"
+  },
+  "velocity_range_m_s": [
+    0.0,
+    18.563058489572192
+  ],
+  "limitations": [
+    "Idealised original geometry, not a measured yacht or validated sail shape",
+    "No mesh-independence study; actual sail y+ is reported separately",
+    "Discretization and turbulence settings are recorded in numerics",
+    "Steady one-tack solution; no tacking manoeuvre, heel, waves or sail deformation",
+    "Prescribed neutral marine shear; resolved effective rough flat sea moving relative to boat; air domain only",
+    "Modelled turbulent kinetic energy, not time-resolved gusts",
+    "Horizontal slice, not depth-averaged field",
+    "Equivalent sandgrain roughness is an engineering estimate, not calibrated to this sea state",
+    "Distant top uses ambient farfield; SST diffusive omega flux is approximate; inspect post-simulation profile preservation"
+  ],
+  "marine_profile_preservation": {
+    "passed": false,
+    "checks": {
+      "relative_speed": false,
+      "angle_deg": false,
+      "relative_k": false,
+      "relative_omega": false,
+      "all_four_columns_sampled": true
+    },
+    "limits": {
+      "relative_speed": 0.01,
+      "angle_deg": 0.1,
+      "relative_k": 0.05,
+      "relative_omega": 0.05
+    },
+    "changes": {
+      "relative_speed": {
+        "p50": 0.035048907878046265,
+        "p95": 0.0667824158131999,
+        "max": 0.08198443783414666
+      },
+      "angle_deg": {
+        "p50": 0.8980608494791004,
+        "p95": 2.4965867140929863,
+        "max": 3.157994755587168
+      },
+      "relative_k": {
+        "p50": 0.4352743928578344,
+        "p95": 0.6601627243911463,
+        "max": 0.6824202088465707
+      },
+      "relative_omega": {
+        "p50": 4.7770655066634475,
+        "p95": 6.518015062828457,
+        "max": 6.9493257126246695
+      }
+    },
+    "nodes": 49,
+    "height_range_m": [
+      1.15,
+      11.65
+    ],
+    "regions": [
+      {
+        "center_xy_m": [
+          8.0,
+          -22.0
+        ],
+        "radius_m": 7.0,
+        "nodes": 12
+      },
+      {
+        "center_xy_m": [
+          0.0,
+          -22.0
+        ],
+        "radius_m": 7.0,
+        "nodes": 17
+      },
+      {
+        "center_xy_m": [
+          -35.0,
+          -22.0
+        ],
+        "radius_m": 7.0,
+        "nodes": 12
+      },
+      {
+        "center_xy_m": [
+          -42.0,
+          5.0
+        ],
+        "radius_m": 7.0,
+        "nodes": 13
+      }
+    ],
+    "reference": "prescribed analytical atmosphere",
+    "interpretation": "Post-simulation difference from the reference at real mesh nodes, outside the central wake. This includes physical yacht induction and differences in discretization; not a grid-independence study."
+  },
+  "force_reference": {
+    "height_m": 84.0,
+    "velocity_m_s": [
+      -7.555379844593102,
+      3.884593100676054,
+      0.0
+    ],
+    "speed_m_s": 8.49551812156879
+  },
+  "numerics": {
+    "SST_OPTIONS": "V1994m",
+    "NUM_METHOD_GRAD": "GREEN_GAUSS",
+    "NUM_METHOD_GRAD_RECON": "LEAST_SQUARES",
+    "MUSCL_FLOW": "YES",
+    "SLOPE_LIMITER_FLOW": "NONE",
+    "CONV_NUM_METHOD_TURB": "BOUNDED_SCALAR",
+    "MUSCL_TURB": "NO",
+    "MARKER_WALL_FUNCTIONS": null,
+    "INC_NONDIM": "INITIAL_VALUES",
+    "FREESTREAM_TURBULENCEINTENSITY": "0.03113714265379955",
+    "FREESTREAM_TURB2LAMVISCRATIO": "413614.76865117"
+  },
+  "numerical_controls": {
+    "CFL_NUMBER": "0.2",
+    "CFL_ADAPT": "YES",
+    "CFL_ADAPT_PARAM": "(0.5, 1.05, 0.2, 1000.0, 0.1)",
+    "CFL_REDUCTION_TURB": "1.0",
+    "MAX_UPDATE_SST": "0.2",
+    "LINEAR_SOLVER_ERROR": "0.01",
+    "LINEAR_SOLVER_ITER": "80"
+  },
+  "whole_model_forces": {
+    "scope": "All monitored hull, mast and sail surfaces; not isolated sail forces",
+    "horizontal_lift_coefficient": 0.6892236399268233,
+    "drag_coefficient": 0.22274219047883456,
+    "horizontal_lift_to_drag": 3.0942662386734265,
+    "horizontal_lift_N": 1218.7257594183202,
+    "drag_N": 393.86583616696544,
+    "drive_N": 206.98533643739376,
+    "sideforce_to_port_N": 1263.9540514073933,
+    "projection": "CFx, CFy projected parallel and perpendicular to horizontal apparent wind; raw SU2 CL is vertical in this coordinate system"
+  },
+  "surface_loading": {
+    "reference_area_m2": 40.0,
+    "dynamic_pressure_Pa": 44.20646974426601,
+    "hull": {
+      "pressure_coefficient_vector": [
+        -0.0733418700896771,
+        0.13083682615538245,
+        0.0150936977190383
+      ],
+      "friction_coefficient_vector": [
+        -0.0023406895894389846,
+        0.0011520618778846823,
+        0.00012806870594013893
+      ],
+      "coefficient_vector": [
+        -0.0756825596791161,
+        0.13198888803326714,
+        0.015221766424978439
+      ],
+      "horizontal_lift_coefficient": 0.08277661528381805,
+      "drag_coefficient": 0.12765950166750645,
+      "horizontal_lift_to_drag": 0.6484171894968899,
+      "drive_N": -133.82635138493808,
+      "horizontal_lift_N": 146.370477563074,
+      "drag_N": 225.735035921308
+    },
+    "main": {
+      "pressure_coefficient_vector": [
+        0.06359451402355715,
+        0.2672935007833065,
+        0.006108390353423524
+      ],
+      "friction_coefficient_vector": [
+        -0.0010315232336844317,
+        0.00024128288397729994,
+        6.844638544850162e-05
+      ],
+      "coefficient_vector": [
+        0.06256299078987272,
+        0.2675347836672838,
+        0.006176836738872026
+      ],
+      "horizontal_lift_coefficient": 0.2665356770740703,
+      "drag_coefficient": 0.06669123731901339,
+      "horizontal_lift_to_drag": 3.9965621840109735,
+      "drive_N": 110.62755837853206,
+      "horizontal_lift_N": 471.3040537736937,
+      "drag_N": 117.92736659002517
+    },
+    "jib": {
+      "pressure_coefficient_vector": [
+        0.13173401724271905,
+        0.31457727071301356,
+        0.05025197463128798
+      ],
+      "friction_coefficient_vector": [
+        -0.0018183129807263763,
+        0.0007725544639218915,
+        7.270437265046542e-05
+      ],
+      "coefficient_vector": [
+        0.12991570426199267,
+        0.31534982517693544,
+        0.050324679003938444
+      ],
+      "horizontal_lift_coefficient": 0.33985653614852396,
+      "drag_coefficient": 0.028655493193108617,
+      "horizontal_lift_to_drag": 11.860083295661314,
+      "drive_N": 229.72458599051157,
+      "horizontal_lift_N": 600.9543073056309,
+      "drag_N": 50.670327713927065
+    },
+    "integration_check": {
+      "summed_coefficient_vector": [
+        0.1167961353727493,
+        0.7148734968774864,
+        0.07172328216778891
+      ],
+      "native_SU2_coefficient_vector": [
+        0.1170560201,
+        0.7148015091,
+        0.07172049567
+      ],
+      "relative_vector_error": 0.0003705154443558511,
+      "tolerance": 0.02,
+      "passed": true
+    }
+  },
+  "airfoil_validation": {
+    "case": "NACA0012, incompressible SST V1994m, Re=6e6",
+    "alpha_deg": 10.0,
+    "solver_version": "SU2 8.5.0",
+    "reference_source": "https://tmbwg.github.io/turbmodels/naca0012_val_sst.html",
+    "reference_is": "CFL3D SSTm numerical reference at Mach 0.15; our solver is incompressible",
+    "lift_coefficient": 1.0703765905336522,
+    "drag_coefficient": 0.012552495678166686,
+    "reference_lift_coefficient": 1.0778080613,
+    "reference_drag_coefficient": 0.012362110998,
+    "lift_relative_error_or_absolute_at_zero": 0.006894985325480297,
+    "drag_relative_error": 0.015400660954871562,
+    "wall_yplus": {
+      "p50": 0.18187365,
+      "p95": 0.644503855,
+      "max": 0.6495683
+    },
+    "residuals": {
+      "rms[P]": -10.40358201,
+      "rms[U]": -8.832558436,
+      "rms[V]": -9.043520961,
+      "rms[k]": -10.44449,
+      "rms[w]": -5.45228888
+    },
+    "iterations": 336,
+    "iterations_scope": "Last solver invocation; restart iterations are not cumulative",
+    "convergence": {
+      "criteria": {
+        "flow_rms_log10_max": -6,
+        "turbulence_residual_reduction_orders": 6,
+        "force_window": 200,
+        "force_relative_range_max": 0.001,
+        "force_normalization_floor": 0.01
+      },
+      "turbulence_residual_reference_log10": {
+        "rms[k]": -3.662586338,
+        "rms[w]": 5.125108012
+      },
+      "turbulence_relative_residual_log10": {
+        "rms[k]": -6.7819036619999995,
+        "rms[w]": -10.577396892
+      },
+      "force_relative_ranges": {
+        "CFx": 0.0002916674174812108,
+        "CFy": 0.00022357706222877064
+      },
+      "checks": {
+        "flow_rms_below_1e_6": true,
+        "turbulence_residual_drop_6_orders": true,
+        "forces_stable_0_1_percent_over_200_iterations": true
+      },
+      "passed": true
+    },
+    "checks": {
+      "numerical_convergence": true,
+      "lift_within_5_percent_or_0_001_at_zero": true,
+      "drag_within_10_percent": true,
+      "wall_yplus_p95_below_2": true,
+      "wall_yplus_max_below_5": true
+    },
+    "passed": true,
+    "configuration": {
+      "SOLVER": "INC_RANS",
+      "KIND_TURB_MODEL": "SST",
+      "SST_OPTIONS": "V1994m",
+      "MATH_PROBLEM": "DIRECT",
+      "RESTART_SOL": "YES",
+      "SOLUTION_FILENAME": "restart",
+      "RESTART_FILENAME": "restart",
+      "INC_DENSITY_MODEL": "CONSTANT",
+      "INC_NONDIM": "INITIAL_VALUES",
+      "INC_DENSITY_INIT": "2.13163",
+      "INC_VELOCITY_INIT": "(51.36461797385773, 9.056968002574084, 0.0)",
+      "INC_ENERGY_EQUATION": "NO",
+      "VISCOSITY_MODEL": "CONSTANT_VISCOSITY",
+      "MU_CONSTANT": "1.853e-5",
+      "FREESTREAM_TURBULENCEINTENSITY": "0.0005163977794943222",
+      "FREESTREAM_TURB2LAMVISCRATIO": "0.009",
+      "MARKER_HEATFLUX": "(airfoil, 0.0)",
+      "MARKER_FAR": "(farfield)",
+      "MARKER_MONITORING": "(airfoil)",
+      "MARKER_PLOTTING": "(airfoil)",
+      "REF_LENGTH": "1.0",
+      "REF_AREA": "1.0",
+      "NUM_METHOD_GRAD": "GREEN_GAUSS",
+      "NUM_METHOD_GRAD_RECON": "LEAST_SQUARES",
+      "CFL_NUMBER": "0.2",
+      "CFL_ADAPT": "YES",
+      "CFL_ADAPT_PARAM": "(0.5, 1.1, 0.2, 300.0, 0.1)",
+      "CFL_REDUCTION_TURB": "1.0",
+      "LINEAR_SOLVER": "FGMRES",
+      "LINEAR_SOLVER_PREC": "ILU",
+      "LINEAR_SOLVER_ERROR": "0.001",
+      "LINEAR_SOLVER_ITER": "40",
+      "CONV_NUM_METHOD_FLOW": "FDS",
+      "MUSCL_FLOW": "YES",
+      "SLOPE_LIMITER_FLOW": "NONE",
+      "TIME_DISCRE_FLOW": "EULER_IMPLICIT",
+      "CONV_NUM_METHOD_TURB": "BOUNDED_SCALAR",
+      "MUSCL_TURB": "NO",
+      "TIME_DISCRE_TURB": "EULER_IMPLICIT",
+      "ITER": "600",
+      "CONV_FIELD": "(RMS_PRESSURE, RMS_VELOCITY-X, RMS_VELOCITY-Y, FORCE_X, FORCE_Y)",
+      "CONV_RESIDUAL_MINVAL": "-6",
+      "CONV_STARTITER": "20",
+      "CONV_CAUCHY_ELEMS": "200",
+      "CONV_CAUCHY_EPS": "2e-6",
+      "MESH_FILENAME": "yacht.su2",
+      "MESH_FORMAT": "SU2",
+      "TABULAR_FORMAT": "CSV",
+      "CONV_FILENAME": "history",
+      "VOLUME_FILENAME": "flow",
+      "SURFACE_FILENAME": "surface",
+      "OUTPUT_FILES": "(RESTART, PARAVIEW_ASCII, SURFACE_PARAVIEW_ASCII)",
+      "OUTPUT_WRT_FREQ": "(100, 600, 100)",
+      "VOLUME_OUTPUT": "(COORDINATES, SOLUTION, PRIMITIVE, TIMESTEP)",
+      "SCREEN_OUTPUT": "(INNER_ITER, RMS_PRESSURE, RMS_VELOCITY-X, RMS_VELOCITY-Y, RMS_TKE, RMS_DISSIPATION)",
+      "SCREEN_WRT_FREQ_INNER": "25",
+      "HISTORY_OUTPUT": "(ITER, RMS_RES, REL_RMS_RES, AERO_COEFF, LINSOL, CFL_NUMBER)"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "mesh_size": 0.22,
+  "sail_size": 0.04,
+  "wake_size": 0.55,
+  "wind_angle": 29.908220517279403,
+  "boundary_layers": {
+    "first_node_spacing_m": 1.2e-05,
+    "layers": 30,
+    "growth": 1.2110956827138109,
+    "requested_total_thickness_m": 0.017728223534911682
+  }
+}

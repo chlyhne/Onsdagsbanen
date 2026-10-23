@@ -1,0 +1,161 @@
+{
+  "geometry_version": 4,
+  "mesh_generator": "matched sail surface grids + explicit prism layers + Gmsh tetrahedral core",
+  "sail_definitions": [
+    [
+      0.0,
+      3.7,
+      10.5,
+      12.0
+    ],
+    [
+      3.4,
+      2.8,
+      8.5,
+      20.0
+    ]
+  ],
+  "sail_shapes": [
+    {
+      "name": "main",
+      "camber": 0.08,
+      "thickness_ratio": 0.001,
+      "twist_deg": 6.0,
+      "trim_height_m": 4.0,
+      "head_luff_x_m": 0.0
+    },
+    {
+      "name": "jib",
+      "camber": 0.08,
+      "thickness_ratio": 0.001,
+      "twist_deg": 8.0,
+      "trim_height_m": 4.0,
+      "head_luff_x_m": 0.5
+    }
+  ],
+  "mesh_size": 0.22,
+  "sail_size": 0.04,
+  "wake_size": 0.55,
+  "wind_angle": 29.908220517279403,
+  "domain_min": [
+    -50.0,
+    -50.0,
+    0.0
+  ],
+  "domain_max": [
+    35.0,
+    40.0,
+    84.0
+  ],
+  "nodes": 2053459,
+  "elements": {
+    "triangle": 118040,
+    "tetra": 780234,
+    "wedge": 3516545,
+    "hexahedron": 136350,
+    "quad": 13295
+  },
+  "tetrahedra": 780234,
+  "boundary_layers": {
+    "first_node_spacing_m": 1.2e-05,
+    "layers": 30,
+    "growth": 1.2110956827138109,
+    "requested_total_thickness_m": 0.017728223534911682
+  },
+  "wall_treatment": {
+    "main": "resolved SST, target y+ about 1",
+    "jib": "resolved SST, target y+ about 1",
+    "hull": "resolved SST, target y+ about 1",
+    "sea": "resolved rough SST WILCOX1998; first spacing 12 micrometres"
+  },
+  "checks": {
+    "minimum_element_jacobian": 6.781136995497827e-13,
+    "boundary_nonmanifold_edges": 0,
+    "tetrahedral_minSICN": {
+      "minimum": 0.04324433520245173,
+      "p1": 0.1969746130624967,
+      "p50": 0.8044327127746105,
+      "nonpositive": 0,
+      "below_1e_4": 0,
+      "minimum_required": 0.001
+    },
+    "sail_layers": {
+      "main": {
+        "wall_triangles": 65988,
+        "first_prism_coverage": 1.0,
+        "first_node_normal_spacing_m": {
+          "min": 1.1954370596004442e-05,
+          "p50": 1.199989388397632e-05,
+          "p95": 1.1999974100814494e-05,
+          "max": 1.2039567165522198e-05
+        },
+        "surface_triangle_max_edge_m": {
+          "p50": 0.04027167325407489,
+          "p95": 0.042255771835744006,
+          "max": 0.05376851900811224
+        }
+      },
+      "jib": {
+        "wall_triangles": 44192,
+        "first_prism_coverage": 1.0,
+        "first_node_normal_spacing_m": {
+          "min": 1.1948415852688954e-05,
+          "p50": 1.1999802660696968e-05,
+          "p95": 1.2000121799806152e-05,
+          "max": 1.2035132580883063e-05
+        },
+        "surface_triangle_max_edge_m": {
+          "p50": 0.04568703465389963,
+          "p95": 0.04746239021836121,
+          "max": 0.05772562238779556
+        }
+      },
+      "hull": {
+        "wall_triangles": 3363,
+        "first_prism_coverage": 1.0,
+        "first_node_normal_spacing_m": {
+          "min": 9.125477247124532e-06,
+          "p50": 1.1999999999906656e-05,
+          "p95": 1.2000000000012001e-05,
+          "max": 1.2000000000040546e-05
+        },
+        "surface_triangle_max_edge_m": {
+          "p50": 0.18535824109978835,
+          "p95": 0.29908646656239046,
+          "max": 0.35261752322847595
+        }
+      }
+    }
+  },
+  "marine_mesh": {
+    "method": "existing fine boat mesh + conforming sea extrusion + distant top extrusion",
+    "sea": {
+      "first_node_spacing_m": 1.2e-05,
+      "layers": 45,
+      "growth": 1.18,
+      "total_thickness_m": 0.11437892526088177,
+      "surface_nodes": 4098,
+      "bulk_transition_cutoff_m": 0.8,
+      "minimum_continuous_vertical_map_derivative": 0.7140526868477957
+    },
+    "atmosphere_top_m": 84.0,
+    "top_layers": 20,
+    "top_interface_nodes": 611,
+    "original_nodes": 1856829,
+    "nodes": 2053459,
+    "elements": {
+      "triangle": 118040,
+      "tetra": 780234,
+      "wedge": 3516545,
+      "hexahedron": 136350,
+      "quad": 13295
+    },
+    "original_sail_nodes_unchanged": true,
+    "checks": {
+      "closed_boundary": true,
+      "minimum_element_jacobian": 6.781136995497827e-13,
+      "tetrahedral_minSICN": 0.039667109478045685,
+      "solver_started": false
+    }
+  }
+}

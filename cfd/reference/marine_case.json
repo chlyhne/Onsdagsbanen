@@ -1,0 +1,14 @@
+{
+  "profile": {
+    "reference_speed_m_s": 5.0,
+    "reference_height_m": 10.0,
+    "roughness_length_m": 9.611308436911505e-05,
+    "true_angle_deg": 41.0,
+    "boat_speed_knots": 6.0,
+    "kind": "neutral_log",
+    "true_direction_varies_with_height": false,
+    "assumptions": "Neutral atmosphere; prescribed z0, no waves/stability/veer model. Apparent wind includes boat translation at every height.",
+    "source": "https://wasp.dtu.dk/support/frequently-asked-questions/wasp-faq/Wind-shear-exponents"
+  },
+  "coefficient_reference_height_m": 84.0
+}

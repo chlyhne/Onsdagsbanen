@@ -1,5 +1,7 @@
 # m2s-combiner
 
+Se også [sejlbådens CFD-simulering, version 1.0](cfd/README.md).
+
 Python CLI project to:
 
 1. Fetch Manage2Sail class results via API
