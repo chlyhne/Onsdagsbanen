@@ -203,7 +203,7 @@ def estimate_global_q(all_data: pd.DataFrame) -> float:
         if len(frame) < 2:
             continue
         perf = frame["perf"].to_numpy(dtype=float)
-        dates = pd.to_datetime(frame["race_date"]).dt.to_pydatetime()
+        dates = pd.to_datetime(frame["race_date"]).tolist()
         for idx in range(1, len(perf)):
             delta_days = max(1, (dates[idx] - dates[idx - 1]).days)
             q_samples.append(float((perf[idx] - perf[idx - 1]) ** 2 / delta_days))
