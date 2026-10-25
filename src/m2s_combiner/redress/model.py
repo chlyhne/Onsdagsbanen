@@ -331,6 +331,7 @@ def save_group_qa_cache(
         },
     }
     serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(serialized, encoding="utf-8")
     tmp_path.replace(path)
@@ -339,7 +340,8 @@ def save_group_qa_cache(
 def q_cache_path_for_objective(output_dir: Path, objective: str) -> Path:
     suffix = str(objective).strip().lower()
     stem = Path(GROUP_Q_CACHE_FILENAME).stem
-    return output_dir / f"{stem}_{suffix}.json"
+    model_dir = output_dir.parent / "models" if output_dir.name == "results" else output_dir / "models"
+    return model_dir / f"{stem}_{suffix}.json"
 
 
 def prepare_group_runtime(group: dict[str, Any]) -> dict[str, Any]:

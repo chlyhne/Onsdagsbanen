@@ -1,8 +1,8 @@
-\newcommand{\BoatPlotDataDir}{../analysis/boat_plot_data}
-\newcommand{\MissingRacePredictionTablesTex}{../analysis/missing_race_prediction_tables.tex}
-\newcommand{\StorBaneSplitRecommendationTex}{../analysis/stor_bane_split_recommendation.tex}
-\newcommand{\StorBaneXGammaTrajectoryManifestCsv}{../analysis/stor_bane_x_gamma_trajectories_2025_2026_manifest.csv}
-\newcommand{\StorBaneXGammaTrajectoryBoundsCsv}{../analysis/stor_bane_x_gamma_trajectories_2025_2026_bounds.csv}
+\newcommand{\BoatPlotDataDir}{../analysis/results/boat_plot_data}
+\newcommand{\MissingRacePredictionTablesTex}{../analysis/results/missing_race_prediction_tables.tex}
+\newcommand{\StorBaneSplitRecommendationTex}{../analysis/results/stor_bane_split_recommendation.tex}
+\newcommand{\StorBaneXGammaTrajectoryManifestCsv}{../analysis/results/stor_bane_x_gamma_trajectories_2025_2026_manifest.csv}
+\newcommand{\StorBaneXGammaTrajectoryBoundsCsv}{../analysis/results/stor_bane_x_gamma_trajectories_2025_2026_bounds.csv}
 \newcommand{\ProcessUncertaintyFillOpacity}{0.78}
 \newcommand{\TotalUncertaintyFillOpacity}{0.65}
 
@@ -61,16 +61,16 @@ teal!70!black%
 \ifnum\pdfstrcmp{#1}{Christian Grejs}=0\relax
   \def\xgtrajcolor{red}%
 \fi
-\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_axel-thomsen.csv}=0\relax
+\ifnum\pdfstrcmp{#2}{../analysis/results/x_gamma_trajectories/stor_bane_x_gamma_traj_axel-thomsen.csv}=0\relax
   \def\xgtrajcolor{blue!70!black}%
 \fi
-\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_casper-lyhne.csv}=0\relax
+\ifnum\pdfstrcmp{#2}{../analysis/results/x_gamma_trajectories/stor_bane_x_gamma_traj_casper-lyhne.csv}=0\relax
   \def\xgtrajcolor{green!70!black}%
 \fi
-\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_rikke-m-schnuchel.csv}=0\relax
+\ifnum\pdfstrcmp{#2}{../analysis/results/x_gamma_trajectories/stor_bane_x_gamma_traj_rikke-m-schnuchel.csv}=0\relax
   \def\xgtrajcolor{magenta}%
 \fi
-\ifnum\pdfstrcmp{#2}{../analysis/x_gamma_trajectories/stor_bane_x_gamma_traj_christian-grejs.csv}=0\relax
+\ifnum\pdfstrcmp{#2}{../analysis/results/x_gamma_trajectories/stor_bane_x_gamma_traj_christian-grejs.csv}=0\relax
   \def\xgtrajcolor{red}%
 \fi
 }

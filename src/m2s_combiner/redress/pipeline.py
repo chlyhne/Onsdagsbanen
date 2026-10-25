@@ -317,7 +317,7 @@ def _remove_legacy_q_likelihood_outputs(*, output_dir: Path) -> list[Path]:
 
 def build_redress_lookup(*, q_objective: str = "mle", years: tuple[int, ...] | None = None, output_dir: Path | None = None) -> pd.DataFrame:
     q_objective = resolve_q_objective(q_objective)
-    cache_dir = output_dir if output_dir is not None else Path("analysis")
+    cache_dir = output_dir if output_dir is not None else Path("analysis/results")
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     groups, all_data = build_group_data()

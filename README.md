@@ -1,5 +1,8 @@
 # m2s-combiner
 
+
+Projektets mapper og de nye filstier er beskrevet i [docs/STRUCTURE.md](docs/STRUCTURE.md).
+
 Se også [sejlbådens CFD-simulering, version 1.0](cfd/README.md).
 
 Python CLI project to:
@@ -108,10 +111,10 @@ python -m m2s_combiner.cli --output-pdf Results.pdf --output-dir . --max-race 12
 Judge-duty redress input:
 
 - The CLI can inject synthetic redress times for boats with judge duty.
-- By default it auto-loads `redress_duty_assignments.csv` from the repo root when that file exists.
+- By default it auto-loads `data/redress_duty_assignments.csv` from the data folder when that file exists.
 - You can override the file path with `--duty-assignments path/to/file.csv`.
-- `redress_duty_assignments.csv` remains the authoritative redress input file.
-- `participant_registry_2026.csv` is a separate helper file used only to map mail command numbers to participant names.
+- `data/redress_duty_assignments.csv` remains the authoritative redress input file.
+- `data/participant_registry_2026.csv` is a separate helper file used only to map mail command numbers to participant names.
 - Expected columns are: `year`, `race_local`, `group`, `series`, `competitor`, `note`.
 - Rows are matched strictly on normalized year/race/group/series/competitor and fail fast on duplicates or unknown matches.
 - There can only be one dommertjans entry per race; setting a new participant number for the same race replaces the old row.
@@ -130,7 +133,7 @@ year,race_local,group,series,competitor,note
 Run with an explicit duty file:
 
 ```bash
-python -m m2s_combiner.cli --duty-assignments redress_duty_assignments.csv
+python -m m2s_combiner.cli --duty-assignments data/redress_duty_assignments.csv
 ```
 
 Scoring rule options:
@@ -154,14 +157,14 @@ python -m m2s_combiner.cli --scoring-rule fractional-point
 # Use order-invariant Bayesian scoring
 python -m m2s_combiner.cli --scoring-rule bayesian-point
 
-# run_2026.py forwards extra args to the CLI
-python run_2026.py --scoring-rule high-point
+# scripts/run_2026.py forwards extra args to the CLI
+python scripts/run_2026.py --scoring-rule high-point
 
-# run_2024.py and run_2025.py also forward extra args
-python run_2025.py --scoring-rule fractional-point
+# scripts/run_2024.py and scripts/run_2025.py also forward extra args
+python scripts/run_2025.py --scoring-rule fractional-point
 
 # Bayesian scoring works via run scripts too
-python run_2025.py --scoring-rule bayesian-point
+python scripts/run_2025.py --scoring-rule bayesian-point
 ```
 
 ## Redress Pipeline
@@ -195,14 +198,14 @@ Useful options:
 
 ```bash
 python -m m2s_combiner.redress --q-objective mle
-python -m m2s_combiner.redress --q-objective rmse --output-dir analysis
+python -m m2s_combiner.redress --q-objective rmse --output-dir analysis/results
 ```
 
-Generated artifacts are written to `analysis/`, including state history, prediction tables, boat plot CSVs, q diagnostics, and the LaTeX fragment consumed by `redress-algorithm-paper/`.
+Generated artifacts are written to `analysis/results/`, including state history, prediction tables, boat plot CSVs, q diagnostics, and the LaTeX fragment consumed by `redress-algorithm-paper/`.
 
 ## Email Results (Gmail)
 
-Use the script `send_results_gmail.py` to email result PDFs to multiple recipients.
+Use the script `scripts/send_results_gmail.py` to email result PDFs to multiple recipients.
 
 Recipient privacy:
 
@@ -219,18 +222,18 @@ Important:
 
 - Gmail SMTP requires an App Password (not your normal account password).
 - If you use 2FA, create an App Password in your Google account security settings.
-- By default, the script reads sender email + app password from `gmail_app_password.txt` on this PC.
+- By default, the script reads sender email + app password from `.local/secrets/gmail_app_password.txt` on this PC.
 - If the password file is missing/empty, it falls back to an interactive paste-friendly prompt.
 - You can still override sender with `--from-email`.
 
-Credentials file format (`gmail_app_password.txt`):
+Credentials file format (`.local/secrets/gmail_app_password.txt`):
 
 ```txt
 hummesse@gmail.com
 abcd efgh ijkl mnop
 ```
 
-Recipient list format (`recipients.txt`):
+Recipient list format (`.local/secrets/recipients.txt`):
 
 ```txt
 person1@example.com
@@ -238,17 +241,17 @@ person2@example.com
 # comments are allowed
 ```
 
-A starter template is included as `recipients.txt.example`.
-Send default result PDFs (auto-detects existing `Results2025.pdf`, `Results2026.pdf`, `Results.pdf`) using `recipients.txt`:
+A starter template is included as `config/email/recipients.txt.example`.
+Send default result PDFs (uses `output/results/Results2026.pdf`) using `.local/secrets/recipients.txt`:
 
 ```bash
-python send_results_gmail.py
+python scripts/send_results_gmail.py
 ```
 
 Use a custom credentials file path if needed:
 
 ```bash
-python send_results_gmail.py --app-password-file my_gmail_credentials.txt
+python scripts/send_results_gmail.py --app-password-file my_gmail_credentials.txt
 ```
 
 Attachment naming:
@@ -260,35 +263,35 @@ Attachment naming:
 
 Default attachment behavior:
 
-- If `--attach` is not provided, the script sends `Results2026.pdf` from the current folder.
+- If `--attach` is not provided, the script sends `Results2026.pdf` from `output/results/`.
 
 Or provide a custom recipients file:
 
 ```bash
-python send_results_gmail.py --to-file recipients_crew.txt --subject "Onsdagsbanen results"
+python scripts/send_results_gmail.py --to-file recipients_crew.txt --subject "Onsdagsbanen results"
 ```
 
 You can also send one explicitly:
 
 ```bash
-python send_results_gmail.py --to-file recipients.txt --attach Results2026.pdf
+python scripts/send_results_gmail.py --to-file .local/secrets/recipients.txt --attach output/results/Results2026.pdf
 ```
 
 Dry-run (validate inputs without sending):
 
 ```bash
-python send_results_gmail.py --to-file recipients.txt --dry-run
+python scripts/send_results_gmail.py --to-file .local/secrets/recipients.txt --dry-run
 ```
 
 Skip popup confirmation (password prompt still appears):
 
 ```bash
-python send_results_gmail.py --to-file recipients.txt --yes
+python scripts/send_results_gmail.py --to-file .local/secrets/recipients.txt --yes
 ```
 
 Automation credentials fallback:
 
-- `send_results_gmail.py` now also reads credentials from environment variables.
+- `scripts/send_results_gmail.py` now also reads credentials from environment variables.
 - Sender address: `M2S_GMAIL_FROM`
 - App password: `M2S_GMAIL_APP_PASSWORD`
 
@@ -299,7 +302,7 @@ This repo includes an email-triggered automation path:
 1. Cloudflare Email Worker receives incoming email.
 2. Worker verifies sender + trigger token in subject.
 3. Worker dispatches GitHub Actions workflow.
-4. Workflow runs `run_2026.py` and then `send_results_gmail.py --yes`.
+4. Workflow runs `scripts/run_2026.py` and then `scripts/send_results_gmail.py --yes`.
 
 ### Files
 
@@ -315,12 +318,12 @@ This repo includes an email-triggered automation path:
 
 Recipient source of truth:
 
-- Main registry file: `recipients_repo.enc` (encrypted and committed to the repo).
-- Workflow runtime file: `recipients.txt` (generated during Actions runs).
+- Main registry file: `config/email/recipients_repo.enc` (encrypted and committed to the repo).
+- Workflow runtime file: `.local/runtime/recipients.txt` (generated during Actions runs).
 - Registry data is decrypted only inside the GitHub Actions job using `M2S_RECIPIENTS_KEY`, then re-encrypted before commit.
 - If sender is `hummesse@gmail.com` and body emails are provided, those addresses are used for that run, then merged into the encrypted registry at the end of the workflow (deduped).
 - For other senders, behavior stays sender-only for that run, and that sender address is merged into the encrypted registry at the end of the workflow (deduped).
-- If `recipients_repo.enc` is empty/missing and no body override is provided, the run fails fast.
+- If `config/email/recipients_repo.enc` is empty/missing and no body override is provided, the run fails fast.
 
 Email trigger subjects:
 

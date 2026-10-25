@@ -301,7 +301,7 @@ def export_stor_bane_x_gamma_trajectories(
                 "competitor": competitor,
                 "competitor_display": display_name(competitor),
                 "competitor_label": latex_escape_text(display_name(competitor)),
-                "trajectory_csv": f"../analysis/x_gamma_trajectories/{trajectory_name}",
+                "trajectory_csv": f"../analysis/results/x_gamma_trajectories/{trajectory_name}",
             }
         )
 
@@ -785,8 +785,8 @@ def export_race_cdf_appendix(history: pd.DataFrame, *, output_dir: Path, years: 
     for row in manifest.itertuples(index=False):
         title = f"{int(row.year)} {str(row.race_local)} ({str(row.group_display)})"
         title_escaped = latex_escape_text(title)
-        empirical_rel = f"../analysis/race_cdf_data/{row.empirical_csv}"
-        model_rel = f"../analysis/race_cdf_data/{row.model_csv}"
+        empirical_rel = f"../analysis/results/race_cdf_data/{row.empirical_csv}"
+        model_rel = f"../analysis/results/race_cdf_data/{row.model_csv}"
         tex_lines.extend(
             [
                 r"\clearpage",

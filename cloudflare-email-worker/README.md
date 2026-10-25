@@ -40,10 +40,10 @@ Sender and mode rules:
 - `dommertjans r<m> <n>`
 	- Only `hummesse@gmail.com` can use this.
 	- Example: `dommertjans r3 4`
-	- Means: set redress in `R3` 2026 for participant number `4` from `participant_registry_2026.csv`.
+	- Means: set redress in `R3` 2026 for participant number `4` from `data/participant_registry_2026.csv`.
 	- There can only be one dommertjans entry per race, so a new `n>0` replaces the old one for that race.
 	- Special case: `dommertjans r3 0` removes all dommertjans-redress rows for `R3` 2026.
-	- Updates the existing `redress_duty_assignments.csv` file and sends a confirmation email with the resolved participant name.
+	- Updates the existing `data/redress_duty_assignments.csv` file and sends a confirmation email with the resolved participant name.
 
 ## Required Worker configuration
 

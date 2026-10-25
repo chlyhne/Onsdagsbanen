@@ -1,0 +1,3 @@
+# Copy to .local/secrets/recipients.txt and replace with your recipients.
+# One address per line; blank lines and comments are ignored.
+crew@example.org

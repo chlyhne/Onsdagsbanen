@@ -1,6 +1,17 @@
 __pycache__/
 .cfd-tools/
 cfd/output/
+cfd/cases/
+cfd/archives/
+# Publish selected standalone viewers, not their local data caches or drafts.
+cfd/results/**/visualizations/*
+!cfd/results/v1_5ms/visualizations/wind_3d.html
+!cfd/results/v1_5ms/visualizations/separation_3d_both_sides.html
+cfd/results/**/diagnostics/
+cfd/results/**/weighted_2d/*.npz
+.local/
+/build/
+.ruff_cache/
 *.pyc
 *.pyo
 *.pyd
@@ -19,6 +30,12 @@ Results*.pdf
 analysis/*.csv
 analysis/redress_group_q_cache*.json
 !analysis/redress_group_q_cache_mle.json
+analysis/results/*.csv
+analysis/models/redress_group_q_cache*.json
+!analysis/models/redress_group_q_cache_mle.json
+analysis/models/.tmp/
+redress-algorithm-paper/build/
+redress-algorithm-paper/output/
 redress-algorithm-paper/*.aux
 redress-algorithm-paper/*.fdb_latexmk
 redress-algorithm-paper/*.fls

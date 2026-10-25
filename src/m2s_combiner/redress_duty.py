@@ -8,7 +8,7 @@ import unicodedata
 import pandas as pd
 
 
-DEFAULT_DUTY_ASSIGNMENTS_PATH = Path("redress_duty_assignments.csv")
+DEFAULT_DUTY_ASSIGNMENTS_PATH = Path(__file__).resolve().parents[2] / "data" / "redress_duty_assignments.csv"
 REDRESS_DUTY_RESULT_SOURCE = "redress-duty"
 REQUIRED_DUTY_COLUMNS = ["year", "race_local", "group", "series", "competitor"]
 OPTIONAL_DUTY_COLUMNS = ["note"]

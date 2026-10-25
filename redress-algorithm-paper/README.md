@@ -5,6 +5,10 @@ Dette er et selvstændigt LaTeX-projekt, som beskriver en Bayesiansk/Kalman-lign
 ## Struktur
 
 - `main.tex`: hoveddokument
+- `assets/`: faste illustrationer
+- `build/latex/`: hjælpefiler og TikZ-figurer
+- `build/logs/`: byggelogfiler
+- `output/main.pdf`: færdig rapport
 - `sections/A-overblik.tex`: formål, intuition og kort notation
 - `sections/B-model-opdatering.tex`: model + opdateringsregler
 - `sections/C-plot-macros.tex`: fælles plot- og tabelmakroer
@@ -13,26 +17,43 @@ Dette er et selvstændigt LaTeX-projekt, som beskriver en Bayesiansk/Kalman-lign
 
 ## Build
 
+`build_external_plots.py` only renders figures from local analysis files. It does
+not download results from Manage2Sail. To refresh the data and rebuild the paper,
+run this from the repository root (the directory containing `scripts/`):
+
 ```bash
-cd Onsdagsbanen/redress-algorithm-paper
-latexmk -pdf main.tex
+python3 scripts/redress_2025_evolution.py
+python3 redress-algorithm-paper/build.py
+```
+
+Despite its historical name, the analysis script fetches all configured seasons,
+including 2026. It reuses the fitted model parameters in the Q cache while
+recomputing predictions and exports from the fetched results.
+
+The figure builder checks local TeX and analysis CSV modification times as well
+as TikZ metadata. Use `--force` to rebuild every figure or `--dry-run` to inspect
+what would rebuild. `build.py` runs the initial LaTeX pass, builds figures, and finishes with latexmk.
+The final PDF is `output/main.pdf`. The appendix selection file contains manually set
+axis bounds; review those against `analysis/results/boat_plot_data/boat_plot_manifest.csv`
+when adding races, and review prose describing specific results.
+
+To compile already refreshed local data:
+
+```bash
+python3 redress-algorithm-paper/build.py
 ```
 
 VS Code:
 
-- The workspace now defines a LaTeX Workshop recipe named `Parallel externalized PGF build`.
-- Pressing the LaTeX build/play button on `main.tex` runs one `pdflatex` pass to emit the externalization list, rebuilds stale `tikzcache/*.pdf` figures in parallel via `build_external_plots.py`, and finishes with `latexmk` so the generated plot PDFs are included in the final document.
-- The recipe calls `python3`, so that executable needs to be available on `PATH` in both Windows and Linux.
-
-Equivalent manual flow:
+The LaTeX Workshop build recipe runs `build.py`. All compiler output and
+externalized figures go to `build/`; the finished PDF is copied to `output/`.
+The same build can be run from the paper directory:
 
 ```bash
-pdflatex -synctex=1 -interaction=nonstopmode -file-line-error -shell-escape main.tex
-python3 ./build_external_plots.py --tex-file ./main.tex
-latexmk -synctex=1 -interaction=nonstopmode -file-line-error -shell-escape -pdf main.tex
+python3 build.py
 ```
 
 ## Noter
 
 - Projektet er bevidst adskilt fra implementering af pointsystemer.
-- Næste trin er Python-implementering mod samme datakilde/scraper.
+- Analysedata genereres med `scripts/redress_2025_evolution.py` fra projektets rodmappe.

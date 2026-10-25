@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument(
 		"--output-dir",
-		default="analysis",
+		default="analysis/results",
 		help="Directory for generated CSV and TeX artifacts.",
 	)
 	parser.add_argument(

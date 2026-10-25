@@ -7,8 +7,9 @@ from pathlib import Path
 
 DEFAULT_YEAR = 2026
 DEFAULT_NOTE = "Dommertjans"
-DEFAULT_REGISTRY_PATH = Path("participant_registry_2026.csv")
-DEFAULT_DUTY_PATH = Path("redress_duty_assignments.csv")
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_REGISTRY_PATH = ROOT / "data" / "participant_registry_2026.csv"
+DEFAULT_DUTY_PATH = ROOT / "data" / "redress_duty_assignments.csv"
 SERIES_TO_GROUP = {
     "Stor bane 1": "Stor Bane",
     "Stor bane 2": "Stor Bane",

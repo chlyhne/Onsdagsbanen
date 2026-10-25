@@ -21,6 +21,7 @@ from .parser import parse_completed_race_labels_from_result_payload
 from .parser import parse_discard_after_races_from_result_payload
 from .parser import parse_race_rows_from_result_payload
 from .pdf_report import build_combined_pdf
+from .paths import RESULTS
 from .redress_duty import DEFAULT_DUTY_ASSIGNMENTS_PATH
 from .redress_duty import DutyApplicationContext
 from .redress_duty import apply_group_duty_assignments
@@ -59,7 +60,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-dir",
-        default=".",
+        default=str(RESULTS),
         help="Folder for output PDF files.",
     )
     parser.add_argument(
@@ -79,7 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="",
         help=(
             "Optional CSV file with judge-duty redress assignments. "
-            "If omitted, the CLI automatically uses redress_duty_assignments.csv when present."
+            "If omitted, the CLI automatically uses data/redress_duty_assignments.csv when present."
         ),
     )
     return parser

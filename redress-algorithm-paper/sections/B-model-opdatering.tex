@@ -135,9 +135,9 @@ grid=major,
 legend style={at={(0.5,1.02)},anchor=south,draw=none,font=\scriptsize},
 legend columns=2,
 ]
-\addplot[gray!70, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/ml_fit_example_empirical_cdf.csv};
+\addplot[gray!70, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/results/ml_fit_example_empirical_cdf.csv};
 \addlegendentry{Empirisk CDF}
-\addplot[black, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/ml_fit_example_model_cdf.csv};
+\addplot[black, thick] table[x=time_seconds,y=cdf, col sep=comma] {../analysis/results/ml_fit_example_model_cdf.csv};
 \addlegendentry{Fittet log-normal}
 \end{axis}
 \end{tikzpicture}
