@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 import urllib.request
 import zipfile
 import numpy as np
@@ -24,16 +25,24 @@ def solver_path(install=False):
     if sys.platform != "win32":
         raise RuntimeError("Automatic installation supports Windows; install SU2 on PATH on other systems")
     TOOLS.mkdir(parents=True, exist_ok=True)
-    archive = TOOLS / "download.zip"
+    downloads = TOOLS.parent / "downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    archive = downloads / f"SU2-v{VERSION}-win64-omp.zip"
     url = f"https://github.com/su2code/SU2/releases/download/v{VERSION}/SU2-v{VERSION}-win64-omp.zip"
     print(f"Downloading {url}", flush=True)
     urllib.request.urlretrieve(url, archive)
-    with zipfile.ZipFile(archive) as z:
-        z.extractall(TOOLS)
-    # Official Windows release contains another zip.
-    for nested in list(TOOLS.glob("win64*.zip")):
-        with zipfile.ZipFile(nested) as z:
-            z.extractall(TOOLS / "bin")
+    with tempfile.TemporaryDirectory(prefix="su2-install-", dir=downloads) as staging:
+        with zipfile.ZipFile(archive) as z:
+            z.extractall(staging)
+        # The official Windows release contains another zip. Keep both
+        # download archives and extraction files outside the installed tools.
+        nested_archives = list(Path(staging).glob("win64*.zip"))
+        if nested_archives:
+            for nested in nested_archives:
+                with zipfile.ZipFile(nested) as z:
+                    z.extractall(TOOLS / "bin")
+        else:
+            shutil.copytree(staging, TOOLS / "bin", dirs_exist_ok=True)
     return solver_path()
 
 

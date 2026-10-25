@@ -5,6 +5,7 @@ import csv
 import json
 import math
 from pathlib import Path
+from cfd.storage import case_file
 
 from cfd.rans_checks import (FLOW_LOG10_MAX, FORCE_NORMALIZATION_FLOOR,
     FORCE_RELATIVE_RANGE_MAX, FORCE_WINDOW, TURBULENCE_ABSOLUTE_LOG10_MAX,
@@ -12,7 +13,8 @@ from cfd.rans_checks import (FLOW_LOG10_MAX, FORCE_NORMALIZATION_FLOOR,
 
 
 class ConvergenceProgress:
-    def __init__(self, reference=None):
+    def __init__(self, reference=None, dimensions=3):
+        self.dimensions = dimensions
         self.fixed_reference = reference is not None
         self.reference = dict(reference or {})
         self.latest = {}
@@ -21,8 +23,9 @@ class ConvergenceProgress:
 
     @classmethod
     def from_case(cls, case):
-        path = Path(case) / 'residual_reference.json'
-        return cls(json.loads(path.read_text()) if path.exists() else None)
+        path = case_file(case, 'residual_reference.json')
+        dimensions = 2 if case_file(case, 'section_case.json').exists() else 3
+        return cls(json.loads(path.read_text()) if path.exists() else None, dimensions)
 
     def update(self, row):
         iteration = row.get('Inner_Iter')
@@ -53,7 +56,8 @@ class ConvergenceProgress:
             gap = max(values) - limit
             return 10.**gap if gap < 300 else math.inf
 
-        ratios = {'flow': ratio(('rms[P]', 'rms[U]', 'rms[V]', 'rms[W]'), FLOW_LOG10_MAX)}
+        flow = ('rms[P]', 'rms[U]', 'rms[V]') + (('rms[W]',) if self.dimensions == 3 else ())
+        ratios = {'flow': ratio(flow, FLOW_LOG10_MAX)}
         for label, name in (('k', 'rms[k]'), ('omega', 'rms[w]')):
             reference = self.reference.get(name)
             limit = max(TURBULENCE_ABSOLUTE_LOG10_MAX[name], reference - TURBULENCE_REDUCTION_ORDERS) \
@@ -85,7 +89,7 @@ class ConvergenceProgress:
 def from_history(case):
     """Read only the small scalar history, including a possibly incomplete last line."""
     monitor = ConvergenceProgress.from_case(case)
-    with (Path(case) / 'history.csv').open(encoding='utf-8-sig', newline='') as source:
+    with case_file(case, 'history.csv').open(encoding='utf-8-sig', newline='') as source:
         reader = csv.reader(source, skipinitialspace=True)
         names = [name.strip() for name in next(reader, [])]
         for values in reader:

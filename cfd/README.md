@@ -136,3 +136,83 @@ python -m unittest discover -s cfd -p "test_*.py"
 Testene kontrollerer blandt andet mesh-/snitgeometri, shear-initialisering,
 genstart, konvergensrapportering og adskillelsen mellem simulering og plot.
 De starter ikke en CFD-beregning.
+
+## Filstruktur for lokale 2D-sager
+
+Lokale sager ligger i `cfd/cases/`. Hver sag har `input/` til geometri,
+konfiguration og mesh, `checkpoints/` til genstartsfiler, `fields/` til
+solvereksporter, `history/` til iterationshistorik, `logs/` til logfiler og
+`results/` til vindkort, rapport og plotdata. Kommandoernes `--case` peger
+på selve sagsmappen. Ældre flade mapper og den gemte 3D-resultatpakke kan
+stadig læses. Se også [projektets mappestruktur](../docs/STRUCTURE.md).
+
+## Selvstændig 2D-version
+
+`section_2d` beregner strømningen omkring et vandret snit af storsejl,
+forsejl og mast med samme inkompressible SST-model. Standardhøjden er 4 m.
+Geometri, trim, twist og vindprofil hentes fra `cfd/reference`; `--source`
+kan i stedet pege på en gemt 3D-sag med `geometry.json` og `marine_case.json`.
+Det er en ny beregning i to dimensioner. Vindprofilen ved den valgte højde
+bestemmer både relativ vind og turbulens ved indløbet.
+
+```bash
+python -m cfd.section_2d prepare --case cfd/cases/section_2d --height 4
+python -m cfd.section_2d run --case cfd/cases/section_2d --threads 2 --iterations 3000
+```
+
+`prepare` opretter et ægte 2D-mesh med grænselag og en solverkonfiguration.
+Der køres ingen solver ved forberedelse. Vælg en ny mappe for hver geometri
+eller vindstyrke. Eksempel med 7 m/s sand vind ved profilens referencehøjde
+(normalt 10 m), 41° sand vindvinkel og 6 knobs bådfart:
+
+```bash
+python -m cfd.section_2d prepare --case cfd/cases/section_2d_7ms --wind-speed 7 --wind-angle 41 --boat-speed 6
+```
+
+`--height` skal skære begge sejl (1,15–9,65 m for standardgeometrien).
+`--mesh-size` og `--sail-size` styrer opløsningen i det frie felt og langs
+sejlene. Efter kørsel gemmes residual-, y+- og feltstabilitetskontroller i `results/report.json`,
+og de tre sædvanlige vindkort får en **2D**-markering. Fejlede kontroller
+giver en fejlkode; resultat og billeder bevares. Fortsæt et gemt resultat
+med `run --restart`. 2D-solveren kører det valgte iterationsbudget;
+de samlede krav kontrolleres efter kørslen, så flow- og kraftkonvergens
+alene ikke afslutter beregningen, mens turbulensen stadig ændrer sig.
+Efterbehandling og plotting kan køres særskilt:
+
+```bash
+python -m cfd.section_2d analyse --case cfd/cases/section_2d
+python -m cfd.section_2d plot --case cfd/cases/section_2d
+```
+
+For to identiske både på samme kurs bruges `--second-boat` ved forberedelse.
+Standardplaceringen er 0,75 bådlængde agterude og 2 bådbredder til luv,
+målt mellem bådenes centre langs og på tværs af bådene. For standardbåden
+(10 × 3 m) er forskydningen 7,5 m agterude og 6 m til luv; bådene har
+2,5 m overlap i længderetningen. Ved vind fra styrbord ligger båd 2 mod
+styrbord, altså til højre og lidt længere nede i vindkortet.
+
+```bash
+python -m cfd.section_2d prepare --source cfd/cases/section_2d --case cfd/cases/section_2d_two_boats --second-boat
+python -m cfd.section_2d run --case cfd/cases/section_2d_two_boats --threads 4 --iterations 6000
+```
+
+`--source` kan også være en tidligere 2D-sag; dens geometri og vindprofil
+genbruges. Afstandene kan ændres med `--aft-lengths` og `--windward-beams`.
+Begge både har separate sejl- og mastflader i solvermeshet og indgår i
+vægkontrollerne. Vindkort og farvereference tager højde for begge skrogomrids.
+
+2D-modellen har ingen vertikal strømning, tiphvirvler eller havoverflade.
+Skrogets omrids i vindkortet er kun en visuel reference; i denne højde
+indgår masten og sejlene som faste flader. Kræfter gælder pr. meter
+sejlhøjde. Resultatet kan bruges til at undersøge samspillet mellem sejlene,
+men mesh-uafhængighed og overensstemmelse med 3D-modellen er ikke dokumenteret.
+
+## Tests
+
+```powershell
+python -m unittest discover -s cfd/tests -p "test_*.py"
+```
+
+Testene kontrollerer blandt andet mesh-/snitgeometri, shear-initialisering,
+genstart, konvergensrapportering og adskillelsen mellem simulering og plot.
+De starter ikke en CFD-beregning.

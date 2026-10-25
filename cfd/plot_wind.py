@@ -16,6 +16,7 @@ from time import perf_counter
 import numpy as np
 
 from cfd.plot_data import load_plot_data
+from cfd.storage import case_file, result_dir
 
 DPI=240
 FIGURE_SIZE=(12,11)
@@ -51,7 +52,7 @@ def outside_color_limits(values, reference_mask):
     return float(exterior.min()),float(exterior.max())
 
 
-def spatial_median(triangulation, values, xlim, ylim, hull):
+def spatial_median(triangulation, values, xlim, ylim, hull, other_hulls=()):
     """Area-weight triangle-centre values so fine sail cells do not dominate."""
     cells=triangulation.get_masked_triangles()
     xy=np.column_stack((triangulation.x,triangulation.y))[cells]
@@ -59,7 +60,7 @@ def spatial_median(triangulation, values, xlim, ylim, hull):
     physical=np.column_stack((centers[:,1],-centers[:,0]))
     mask=(centers[:,0]>=xlim[0])&(centers[:,0]<=xlim[1]) \
         &(centers[:,1]>=ylim[0])&(centers[:,1]<=ylim[1]) \
-        &(distance_from_boat(physical,hull)>=SCALE_CLEARANCE_M)
+        &(distance_from_boats(physical,[hull,*other_hulls])>=SCALE_CLEARANCE_M)
     ab=xy[:,1]-xy[:,0];ac=xy[:,2]-xy[:,0]
     weights=np.abs(ab[:,0]*ac[:,1]-ab[:,1]*ac[:,0])/2
     samples=np.asarray(values)[cells].mean(axis=1)
@@ -83,6 +84,11 @@ def distance_from_boat(points, outline):
         squared=np.minimum(squared,np.sum(offset**2,axis=1))
     inside=PlotPath(outline).contains_points(points,radius=1e-9)
     return np.where(inside,0.,np.sqrt(squared))
+
+
+def distance_from_boats(points, outlines):
+    """Nearest hull footprint; retain all gaps between separate boats."""
+    return np.minimum.reduce([distance_from_boat(points, outline) for outline in outlines])
 
 
 def linear_color_norm(low,high,neutral):
@@ -109,7 +115,7 @@ def render(case,field='all',output_dir=None,height=None):
         raise ValueError(f'The saved slice is at z={context["height_m"]:g} m. '
                          'Prepare a different height with python -m cfd.plot_data --case '
                          f'"{case}" --height {height:g}. No simulation is needed.')
-    output=Path(output_dir) if output_dir is not None else case
+    output=Path(output_dir) if output_dir is not None else result_dir(case)
     output.mkdir(parents=True,exist_ok=True)
     selected=set(FIELD_FILES.values()) if field=='all' else {FIELD_FILES[field]}
     loaded=perf_counter()
@@ -120,16 +126,17 @@ def render(case,field='all',output_dir=None,height=None):
     angle_tri.set_mask(np.ma.getmaskarray(angle)[triangles].any(axis=1))
     delta=arrays['speed_delta']
     hull_outline=np.asarray(context['hull_outline'])
-    color_reference=distance_from_boat(xy,hull_outline)>=SCALE_CLEARANCE_M
+    hull_outlines=context.get('hull_outlines',[hull_outline])
+    color_reference=distance_from_boats(xy,hull_outlines)>=SCALE_CLEARANCE_M
     wind=context['wind']
     BOAT_LENGTH=context['boat_length_m']
     xlim=(-40,30)
     ylim=(-50,BOAT_LENGTH/2+BOAT_LENGTH)
-    reference_speed_delta=spatial_median(tri,delta,xlim,ylim,hull_outline)
-    reference_angle=spatial_median(angle_tri,angle.filled(0),xlim,ylim,hull_outline)
+    reference_speed_delta=spatial_median(tri,delta,xlim,ylim,hull_outline,hull_outlines[1:])
+    reference_angle=spatial_median(angle_tri,angle.filled(0),xlim,ylim,hull_outline,hull_outlines[1:])
     # Positive direction is a header on this tack, hence a negative contribution.
     goodness=delta_vmg(delta,angle)
-    reference_goodness=spatial_median(angle_tri,goodness.filled(0),xlim,ylim,hull_outline)
+    reference_goodness=spatial_median(angle_tri,goodness.filled(0),xlim,ylim,hull_outline,hull_outlines[1:])
     goodness=goodness-reference_goodness
     reference_label='arealvægtet median i billedudsnittet, mindst 1 m fra båden'
     # Recenter only the presentation; retain the original physical slice cache.
@@ -144,10 +151,11 @@ def render(case,field='all',output_dir=None,height=None):
                       'godhed.png':reference_goodness}
 
     def draw_boat(target):
-        target.add_patch(Polygon(top_view(hull_outline),
-                                 facecolor='#b8b8b8',edgecolor='#142b3b',
-                                 linewidth=1.7,zorder=5,
-                                 path_effects=[path_effects.withStroke(linewidth=3.5,foreground='white')]))
+        for outline in hull_outlines:
+            target.add_patch(Polygon(top_view(outline),
+                                     facecolor='#b8b8b8',edgecolor='#142b3b',
+                                     linewidth=1.7,zorder=5,
+                                     path_effects=[path_effects.withStroke(linewidth=3.5,foreground='white')]))
         for section in context['sail_sections']:
             target.add_patch(Polygon(top_view(section),facecolor='black',
                                      edgecolor='black',linewidth=1.3,zorder=7,
@@ -234,7 +242,7 @@ def render(case,field='all',output_dir=None,height=None):
         ax.quiver(23,5,*wind_arrow,angles="xy",scale_units="xy",scale=1,color="black",zorder=6)
         ax.text(13,-4,"Sand vind",fontsize=15)
         ax.set(xlim=xlim,ylim=ylim,aspect='equal')
-        ax.set_title(title,fontsize=22,pad=12)
+        ax.set_title(title+context.get('title_suffix',''),fontsize=22,pad=12)
         ax.set_axis_off()
         ax.grid(False)
         # Settle the equal-aspect/colorbar layout before the higher-DPI save;
@@ -249,11 +257,11 @@ def render(case,field='all',output_dir=None,height=None):
     scales.update(color_scales)
     scales_file.write_text(json.dumps(scales,indent=2),encoding='utf8')
     # Preserve the existing report interface; only presentation metadata changes.
-    if output.resolve()==case.resolve() and (case/'report.json').exists():
-        report=json.loads((case/'report.json').read_text(encoding='utf8'))
+    if output.resolve()==result_dir(case).resolve() and case_file(case,'report.json').exists():
+        report=json.loads(case_file(case,'report.json').read_text(encoding='utf8'))
         report.get('color_scales',{}).pop('turbulens.png',None)
         report.setdefault('color_scales',{}).update(color_scales)
-        (case/'report.json').write_text(json.dumps(report,indent=2),encoding='utf8')
+        case_file(case,'report.json').write_text(json.dumps(report,indent=2),encoding='utf8')
     (output/'samlet_vindulempe.png').unlink(missing_ok=True)
     (output/'turbulens.png').unlink(missing_ok=True)
     result={'load_seconds':loaded-started,'render_seconds':perf_counter()-loaded,

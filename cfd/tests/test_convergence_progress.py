@@ -19,6 +19,21 @@ def row(iteration, **changes):
 
 
 class ConvergenceProgressTests(unittest.TestCase):
+    def test_2d_case_does_not_wait_for_vertical_velocity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            case = Path(folder)
+            (case/'section_case.json').write_text('{}')
+            monitor = ConvergenceProgress.from_case(case)
+            sample = row(0)
+            del sample['rms[W]']
+            monitor.update(sample)
+            self.assertTrue(monitor.status()['checks']['flow'])
+            self.assertEqual(monitor.dimensions, 2)
+            (case/'section_case.json').unlink()
+            monitor = ConvergenceProgress.from_case(case)
+            monitor.update(sample)
+            self.assertIsNone(monitor.status()['checks']['flow'])
+
     def test_matches_postprocessing_for_cold_and_warm_references(self):
         for reference in ({'rms[k]': -3., 'rms[w]': 2.},
                           {'rms[k]': -10., 'rms[w]': -5.}):

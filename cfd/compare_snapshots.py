@@ -20,6 +20,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from cfd.rans_slice import horizontal_slice
 from cfd.transfer_solution import read_restart
+from cfd.storage import case_file
 
 
 def file_hash(path):
@@ -37,7 +38,7 @@ def physical_inputs(parameters):
 def comparison_frames(case,started,last_iteration,window=100):
     """Select current-run frames separated by a full verification window."""
     frames=[]
-    for path in Path(case).glob('restart_*.dat'):
+    for path in case_file(case, 'restart.dat').parent.glob('restart_*.dat'):
         match=re.fullmatch(r'restart_(\d+)\.dat',path.name)
         if match and path.stat().st_mtime>=started and int(match[1])<=last_iteration:
             frames.append((int(match[1]),path))

@@ -29,7 +29,8 @@ def run_solver(command, *, cwd, env, iterations, stream=None):
     print("Foreloebig konvergens hver 25. iteration: residualtal <=1x opfylder graensen; "
           "kraftvariation skal vaere <0.1% over 200 iterationer. "
           "Vindfeltets stabilitet kontrolleres foerst efter koerslen.", file=stream, flush=True)
-    with (cwd / "solver.log").open("w", encoding="utf8") as log:
+    from cfd.storage import case_file
+    with case_file(cwd, "solver.log").open("w", encoding="utf8") as log:
         with subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, encoding="utf8",
                               errors="replace", bufsize=1) as process:

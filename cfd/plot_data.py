@@ -12,6 +12,7 @@ import re
 from types import SimpleNamespace
 
 import numpy as np
+from cfd.storage import case_file
 
 
 def status_text(report,geometry):
@@ -63,8 +64,8 @@ def load_plot_data(case):
     """Read only the compact snapshot. No raw CFD files or validation work."""
     case=Path(case)
     try:
-        context=json.loads((case/'plot_context.json').read_text(encoding='utf8'))
-        with np.load(case/context['slice_file'],allow_pickle=False) as saved:
+        context=json.loads(case_file(case,'plot_context.json').read_text(encoding='utf8'))
+        with np.load(case_file(case,context['slice_file']),allow_pickle=False) as saved:
             arrays={key:saved[key] for key in saved.files}
     except FileNotFoundError as exc:
         raise FileNotFoundError(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import numpy as np
+from cfd.storage import case_file
 
 FLOW_LOG10_MAX = -6.
 TURBULENCE_REDUCTION_ORDERS = 6.
@@ -14,12 +15,12 @@ FORCE_NORMALIZATION_FLOOR = .01
 
 
 def archive_history(out):
-    folder=out/'history_segments';folder.mkdir(exist_ok=True)
+    folder=case_file(out,'history_segments');folder.mkdir(exist_ok=True)
     name=f'{len(list(folder.glob("*.csv"))):03d}'
-    shutil.copy2(out/'history.csv',folder/f'{name}.csv')
-    if (out/'run_parameters.json').exists():
-        shutil.copy2(out/'run_parameters.json',folder/f'{name}.json')
-    shutil.copy2(out/'history.csv',out/'history_before_restart.csv')
+    shutil.copy2(case_file(out,'history.csv'),folder/f'{name}.csv')
+    if case_file(out,'run_parameters.json').exists():
+        shutil.copy2(case_file(out,'run_parameters.json'),folder/f'{name}.json')
+    shutil.copy2(case_file(out,'history.csv'),case_file(out,'history_before_restart.csv'))
     return str(folder/f'{name}.csv')
 
 
@@ -27,12 +28,12 @@ def convergence(out,history,dimensions=3):
     names=history.dtype.names
     def column(name):
         return np.atleast_1d(history[name])
-    reference_file=out/'residual_reference.json'
+    reference_file=case_file(out,'residual_reference.json')
     if reference_file.exists():
         reference=json.loads(reference_file.read_text())
     else:
         source=history
-        previous=out/'history_before_restart.csv'
+        previous=case_file(out,'history_before_restart.csv')
         if previous.exists():
             source=np.genfromtxt(previous,delimiter=',',names=True,deletechars=' "')
         reference={name:float(np.max(np.atleast_1d(source[name]))) for name in ('rms[k]','rms[w]')}
