@@ -1,6 +1,8 @@
 numpy>=2.0
 scipy>=1.14
 matplotlib>=3.9
+plotly>=6.0,<7
+pyvista>=0.46,<0.50
 gmsh==4.15.2
 meshio==5.3.5
 netgen-mesher==6.2.2608

@@ -1,0 +1,156 @@
+{
+  "source": "cfd/results/v1_5ms/visualizations",
+  "solver_run": false,
+  "geometry": {
+    "geometry_version": 4,
+    "hull": [
+      [
+        -5,
+        -0.5
+      ],
+      [
+        -4,
+        -1.15
+      ],
+      [
+        -2,
+        -1.5
+      ],
+      [
+        0,
+        -1.42
+      ],
+      [
+        2,
+        -1.05
+      ],
+      [
+        4,
+        -0.4
+      ],
+      [
+        5,
+        -0.025
+      ],
+      [
+        5,
+        0.025
+      ],
+      [
+        4,
+        0.4
+      ],
+      [
+        2,
+        1.05
+      ],
+      [
+        0,
+        1.42
+      ],
+      [
+        -2,
+        1.5
+      ],
+      [
+        -4,
+        1.15
+      ],
+      [
+        -5,
+        0.5
+      ]
+    ],
+    "sail_definitions": [
+      [
+        0.0,
+        3.7,
+        10.5,
+        12.0
+      ],
+      [
+        3.4,
+        2.8,
+        8.5,
+        20.0
+      ]
+    ],
+    "sail_shapes": [
+      {
+        "name": "main",
+        "camber": 0.08,
+        "thickness_ratio": 0.001,
+        "twist_deg": 6.0,
+        "trim_height_m": 4.0,
+        "head_luff_x_m": 0.0
+      },
+      {
+        "name": "jib",
+        "camber": 0.08,
+        "thickness_ratio": 0.001,
+        "twist_deg": 8.0,
+        "trim_height_m": 4.0,
+        "head_luff_x_m": 0.5
+      }
+    ],
+    "model": "Original idealised smooth thin sails; cubic CAD splines; thickness scales with chord"
+  },
+  "formula": "integral F(x,y,z)*(c_main(z)+c_jib(z)) dz / integral (c_main(z)+c_jib(z)) dz",
+  "averaged_quantity": "The displayed VMG score of each layer, before color mapping; not velocity vectors or RGB colors",
+  "height_range_m": [
+    1.15,
+    11.65
+  ],
+  "vertical_interpolation": "Linear between saved 3D layers",
+  "quadrature": "Two-point Gauss on intervals split at sampled heights and every sail foot/head",
+  "total_chord_area_m2": 32.57800000000001,
+  "sail_chord_areas_m2": {
+    "main": 20.201999999999995,
+    "jib": 12.375999999999989
+  },
+  "weighted_mean_height_m": 4.521615814353244,
+  "calibration": {
+    "minimum": -0.5679661054387062,
+    "maximum": 0.5679661054387062,
+    "white_band": 0.00874730021598272,
+    "speed_offset_m_s": -0.29342032002053653,
+    "angle_offset_deg": 1.7248451458995746,
+    "goodness_offset_knots": -0.1597444374947603
+  },
+  "palette": [
+    [
+      0.0,
+      "#67001f"
+    ],
+    [
+      0.24614972613144487,
+      "#ef8a62"
+    ],
+    [
+      0.49229945226288974,
+      "#ffffff"
+    ],
+    [
+      0.5077005477371103,
+      "#ffffff"
+    ],
+    [
+      0.7538502738685551,
+      "#67a9cf"
+    ],
+    [
+      1.0,
+      "#053061"
+    ]
+  ],
+  "centering": "No new median subtracted; average of the viewer's height-centered layer values",
+  "missing_data": "Mask columns with any missing active height weight; no zero filling or redistribution",
+  "sail_outline_reference_height_m": 4.0,
+  "true_wind_angle_deg": 41.0,
+  "iteration": 592.0,
+  "checks_passed": false,
+  "source_sha256": {
+    "wind_3d.json": "07cb6c832ed83c789db410884f22d1a937081a06978ee263d2482761c92e8de5",
+    "wind_3d.npz": "3906f36ca4d558b689582df43a448b31498d86ac5246f9852b80187e16fd2757"
+  }
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vindfelt i 3D</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f8fa;color:#253b49;font:14px system-ui,sans-serif}
+header{padding:18px 24px 12px;border-bottom:1px solid #dce3e9;background:#fff}
+h1{margin:0 0 12px;font-size:23px;font-weight:600;letter-spacing:-.5px}.intro{color:#627483;font-size:13px;margin-left:14px;font-weight:400;letter-spacing:0}
+.toolbar{display:flex;gap:12px 20px;align-items:center;flex-wrap:wrap}label{display:flex;gap:8px;align-items:center}select,button{font:inherit;color:inherit;background:#fff;border:1px solid #cbd6df;border-radius:6px;padding:7px 10px;cursor:pointer}
+button:hover{background:#edf2f6}button.active{background:#294d64;color:white;border-color:#294d64}.group{display:flex;gap:5px}input[type=range]{width:115px;accent-color:#315e79}output{min-width:40px;font-variant-numeric:tabular-nums}
+#plot{height:calc(100vh - 175px);min-height:470px}footer{padding:8px 24px;color:#627483;font-size:12px;line-height:1.6}#status{float:right}#error{display:none;padding:20px;color:#8a2525}.loading{position:absolute;top:50%;left:45%;color:#627483;z-index:3}
+@media(max-width:900px){header{padding:12px}.intro{display:block;margin:4px 0 0}.toolbar{gap:10px}#plot{height:70vh}#status{float:none;display:block}}
+</style>
+<script>__PLOTLY_JS__</script>
+</head>
+<body>
+<header>
+<h1>Vindfelt i 3D <span class="intro">Rød = dårligere · blå = bedre</span></h1>
+<div class="toolbar">
+<label>Vis <select id="field"><option value="goodness">Samlet VMG</option><option value="speed">Vindstyrkens bidrag</option><option value="direction">Vinddrejningens bidrag</option></select></label>
+<div class="group" aria-label="Visning"><button id="volumeMode" class="active">3D-felt</button><button id="sliceMode">Vandret snit</button><button id="bothMode">Begge</button></div>
+<label>Snithøjde <input id="height" type="range" min="0.5" max="15.5" step="0.5" value="4"><output id="heightValue">4 m</output></label>
+<label>Synlighed <input id="opacity" type="range" min="0.02" max="0.50" step="0.01" value="0.18"></label>
+<div class="group"><button id="nearView">Tæt på båden</button><button id="fullView">Hele feltet</button><button id="topView">Ovenfra</button></div>
+</div>
+</header>
+<div id="loading" class="loading">Åbner 3D-feltet …</div><div id="error"></div><div id="plot"></div>
+<footer><span id="reference"></span><span id="status"></span></footer>
+<script>
+'use strict';
+const payload=__PAYLOAD__;
+const info=payload.info, ref=info.calibration, axes=payload.axes;
+const gd=document.getElementById('plot');
+function decode(text,Type=Float32Array){const raw=atob(text), bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Type(bytes.buffer);}
+const fields={},planeFields={};for(const name of ['goodness','speed','direction']){fields[name]=decode(payload.fields[name]);planeFields[name]=decode(payload.planeFields[name]);}
+const [nx,ny,nz]=info.dimensions, count=nx*ny*nz;
+const isoMeshes={};for(const name of ['goodness','speed','direction']){
+ const source=payload.isosurfaces[name],points=decode(source.points),faces=decode(source.faces,Int32Array);
+ const mesh={x:[],y:[],z:[],i:[],j:[],k:[],intensity:decode(source.values)};
+ for(let i=0;i<points.length;i+=3){mesh.x.push(points[i]);mesh.y.push(points[i+1]);mesh.z.push(points[i+2]);}
+ for(let i=0;i<faces.length;i+=3){mesh.i.push(faces[i]);mesh.j.push(faces[i+1]);mesh.k.push(faces[i+2]);}isoMeshes[name]=mesh;
+}
+const points=decode(payload.planePoints),triangles=decode(payload.planeTriangles,Int32Array);
+const px=[],py=[],pz=[],pi=[],pj=[],pk=[];
+for(let i=0;i<points.length;i+=3){px.push(points[i]);py.push(points[i+1]);pz.push(points[i+2]);}
+for(let i=0;i<triangles.length;i+=3){pi.push(triangles[i]);pj.push(triangles[i+1]);pk.push(triangles[i+2]);}
+const geometryCount=payload.geometry.length, volumeIndex=geometryCount, planeIndex=geometryCount+1, exactIndex=geometryCount+2, outlineIndex=geometryCount+3;
+let field='goodness',mode='volume',height=4;
+const palette=info.palette;
+const title={goodness:'Ændring i VMG',speed:'VMG-bidrag fra vindstyrke',direction:'VMG-bidrag fra vinddrejning'};
+const colorbar={title:{text:'ΔVMG [knob]',side:'right'},len:.65,thickness:15,x:.98,tickformat:'+.2f',outlinewidth:0};
+const common={colorscale:palette,cmin:ref.minimum,cmax:ref.maximum,showscale:false,colorbar:colorbar};
+const volume={...common,...isoMeshes[field],type:'mesh3d',opacity:.18,showscale:true,colorbar:structuredClone(colorbar),
+  lighting:{ambient:.85,diffuse:.25,specular:.05},name:'3D-felt',showlegend:false,
+  hovertemplate:'ΔVMG %{intensity:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+function gridPlane(name,h){const k=Math.max(0,Math.min(nz-1,Math.round((h-axes.z[0])/(axes.z[1]-axes.z[0]))));
+  const rows=[],z=[];for(let j=0;j<ny;j++){rows.push(Array.from(fields[name].subarray((k*ny+j)*nx,(k*ny+j+1)*nx)));z.push(Array(nx).fill(axes.z[k]));}return {surfacecolor:rows,z:z};}
+const initial=gridPlane(field,height);
+const plane={...common,colorbar:structuredClone(colorbar),type:'surface',x:axes.x,y:axes.y,z:initial.z,surfacecolor:initial.surfacecolor,visible:false,opacity:1,
+  lighting:{ambient:1,diffuse:0,specular:0},connectgaps:false,showlegend:false,hovertemplate:'ΔVMG %{surfacecolor:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+const exact={...common,colorbar:structuredClone(colorbar),type:'mesh3d',x:px,y:py,z:pz,i:pi,j:pj,k:pk,intensity:planeFields[field],visible:false,opacity:1,
+  lighting:{ambient:1,diffuse:0,specular:0},flatshading:false,showlegend:false,
+  hovertemplate:'ΔVMG %{intensity:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+const hull=info.geometry.hull, outline={type:'scatter3d',mode:'lines',x:[...hull.map(p=>p[0]),hull[0][0]],y:[...hull.map(p=>p[1]),hull[0][1]],z:Array(hull.length+1).fill(height+.015),
+  line:{color:'#536774',width:3},visible:false,showlegend:false,hoverinfo:'skip'};
+const fullRanges={'scene.xaxis.range':info.bounds_m[0],'scene.yaxis.range':info.bounds_m[1],'scene.zaxis.range':[0,info.bounds_m[2][1]]};
+const nearRanges={'scene.xaxis.range':[-16,9],'scene.yaxis.range':[-8,16],'scene.zaxis.range':[0,14]};
+const camera={eye:{x:-.8,y:1.25,z:.7},up:{x:0,y:0,z:1},projection:{type:'orthographic'}};
+function aspect(ranges){const sizes=['x','y','z'].map(a=>ranges['scene.'+a+'axis.range'][1]-ranges['scene.'+a+'axis.range'][0]);const max=Math.max(...sizes);return {x:sizes[0]/max,y:sizes[1]/max,z:sizes[2]/max};}
+const layout={paper_bgcolor:'#f6f8fa',font:{family:'Arial',color:'#253b49'},margin:{l:0,r:75,t:20,b:10},showlegend:false,
+ scene:{aspectmode:'manual',aspectratio:aspect(nearRanges),bgcolor:'#f6f8fa',camera:camera,
+ xaxis:{title:{text:'Mod stævnen [m]'},range:nearRanges['scene.xaxis.range'],showbackground:false},
+ yaxis:{title:{text:'Bagbord [m]'},range:nearRanges['scene.yaxis.range'],showbackground:false},
+ zaxis:{title:{text:'Højde [m]'},range:[0,14],showbackground:false}}};
+function setBusy(busy){document.getElementById('loading').style.display=busy?'block':'none';}
+async function refresh(){
+ const exactHeight=Math.abs(height-info.reference_height_m)<1e-6,vol=mode!=='slice',slice=mode!=='volume';
+ const grid=gridPlane(field,height);
+ const mesh=isoMeshes[field];
+ await Plotly.restyle(gd,{x:[mesh.x],y:[mesh.y],z:[mesh.z],i:[mesh.i],j:[mesh.j],k:[mesh.k],intensity:[mesh.intensity],visible:vol,showscale:vol},[volumeIndex]);
+ await Plotly.restyle(gd,{surfacecolor:[grid.surfacecolor],z:[grid.z],visible:slice&&!exactHeight,showscale:!vol&&!exactHeight},[planeIndex]);
+ await Plotly.restyle(gd,{intensity:[planeFields[field]],visible:slice&&exactHeight,showscale:!vol&&exactHeight},[exactIndex]);
+ await Plotly.restyle(gd,{z:[Array(hull.length+1).fill(height+.015)],visible:slice},[outlineIndex]);
+ document.getElementById('heightValue').textContent=height.toLocaleString('da-DK')+' m';
+ for(const [name,id] of [['volume','volumeMode'],['slice','sliceMode'],['both','bothMode']])document.getElementById(id).classList.toggle('active',mode===name);
+ document.title=title[field]+' · 3D';
+ window.viewerState={field,mode,height,exactHeight};
+}
+async function setMode(value){mode=value;await refresh();}
+document.getElementById('field').onchange=async e=>{field=e.target.value;await refresh();};
+document.getElementById('volumeMode').onclick=()=>setMode('volume');
+document.getElementById('sliceMode').onclick=()=>setMode('slice');
+document.getElementById('bothMode').onclick=()=>setMode('both');
+const heightInput=document.getElementById('height');heightInput.min=axes.z[0];heightInput.max=axes.z[nz-1];heightInput.step=axes.z[1]-axes.z[0];
+heightInput.oninput=e=>document.getElementById('heightValue').textContent=Number(e.target.value).toLocaleString('da-DK')+' m';
+heightInput.onchange=async e=>{height=Number(e.target.value);await setMode(mode==='volume'?'both':mode);};
+document.getElementById('opacity').onchange=e=>Plotly.restyle(gd,{opacity:Number(e.target.value)},[volumeIndex]);
+document.getElementById('nearView').onclick=()=>Plotly.relayout(gd,{...nearRanges,'scene.aspectratio':aspect(nearRanges),'scene.camera':camera});
+document.getElementById('fullView').onclick=()=>Plotly.relayout(gd,{...fullRanges,'scene.aspectratio':aspect(fullRanges),'scene.camera':camera});
+document.getElementById('topView').onclick=()=>Plotly.relayout(gd,{'scene.camera':{eye:{x:0,y:0,z:2.4},up:{x:1,y:0,z:0},projection:{type:'orthographic'}}});
+document.getElementById('reference').textContent='Samme farveskala som 2D · nulpunkt følger højden · nøjagtig 2D-reference ved '+info.reference_height_m+' m · VMG-skøn i knob.';
+document.getElementById('status').textContent='Gemt 3D-resultat · iteration '+info.iteration+(info.checks_passed?'':' · foreløbig beregning');
+Plotly.newPlot(gd,[...payload.geometry,volume,plane,exact,outline],layout,{responsive:true,displaylogo:false,scrollZoom:true}).then(()=>{setBusy(false);window.viewerReady=true;window.viewerState={field,mode,height,exactHeight:true};}).catch(error=>{setBusy(false);document.getElementById('error').style.display='block';document.getElementById('error').textContent='Visningen kunne ikke åbnes: '+error.message;});
+</script>
+</body>
+</html>
