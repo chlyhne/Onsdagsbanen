@@ -283,7 +283,9 @@ Programmet læser `visualizations/wind_3d.npz`; det gennemsnitsberegner
 VMG-værdierne i lagene før farvelægning. Hastighedsvektorer eller RGB-farver
 gennemsnitsberegnes ikke. VMG-skala, hvidt interval og lagenes hidtidige
 nulreferencer bevares, og der fratrækkes ingen ny median efter gennemsnittet.
-Felterne fra vindstyrke og vinddrejning gemmes også i den kompakte cache.
+Felterne fra vindstyrke og vinddrejning vægtes på samme måde og gemmes både
+som billeder og i den kompakte cache. Alle tre kort viser VMG-bidrag i knob
+med samme farveskala, hvide interval og uændrede nulreferencer fra lagene.
 
 Lagene interpoleres lineært i højden. Integralproduktet med den lineære
 korde beregnes med to Gauss-punkter pr. interval og deles præcist ved
@@ -295,6 +297,8 @@ med manglende aktive højder maskeres; vægtene fordeles ikke til andre lag.
 Resultatet ligger i `cfd/results/v1_5ms/weighted_2d/`:
 
 - `godhed.png`: Det samlede, kordevægtede VMG-kort i samme format som 4 m-kortet.
+- `vinddrejning.png`: Kordevægtet VMG-bidrag fra vinddrejning (skræller og rummer).
+- `vindhastighed.png`: Kordevægtet VMG-bidrag fra vindhastighed.
 - `weighted_wind.npz`: Gennemsnittene, dækningsgraderne og de beregnede vægte.
 - `weighted_wind.json`: Metode, højder, kordernes arealer, farveskala og kilders SHA-256.
 - `height_weights.csv`: Højde, hver kordelængde, integralvægt og normaliseret vægt.
@@ -302,7 +306,7 @@ Resultatet ligger i `cfd/results/v1_5ms/weighted_2d/`:
 Sejlomridsene i billedet er fortsat 4 m-snittet som placeringsreference;
 farvefeltet er gennemsnittet af hele det aktive højdespænd. Scriptet er
 gemt i `cfd/weighted_wind_2d.py`, og beregningen starter ingen solver.
-Billedet kan genskabes fra gennemsnitscachen alene:
+Billederne kan genskabes fra gennemsnitscachen alene:
 
 ```bash
 python -m cfd.weighted_wind_2d --from-cache

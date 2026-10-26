@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from cfd.case import case_section
-from cfd.plot_wind import DPI, FIGURE_SIZE, VMG_CONTOUR_STEP_KNOTS, top_view
+from cfd.plot_wind import DPI, FIGURE_SIZE, FIELD_FILES, VMG_CONTOUR_STEP_KNOTS, top_view
 from cfd.rans_mesh import FOOT
 from cfd.separation_3d import sha
 from cfd.storage import case_file
@@ -128,7 +128,7 @@ def prepare(source, output):
     return metadata, arrays
 
 
-def render(metadata, arrays, target):
+def render(metadata, arrays, target, field="goodness"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -142,7 +142,8 @@ def render(metadata, arrays, target):
     norm = Normalize(ref["minimum"], ref["maximum"], clip=True)
     x, y = np.meshgrid(arrays["x"], arrays["y"])
     px, py = -y, x
-    score = np.ma.masked_invalid(arrays["goodness"])
+    titles = {"goodness": "Ændring i VMG", "speed": "Vindhastighed", "direction": "Skræller og rummer"}
+    score = np.ma.masked_invalid(arrays[field])
     fig, ax = plt.subplots(figsize=FIGURE_SIZE, layout="constrained")
     image = ax.pcolormesh(px, py, score, shading="gouraud", cmap=cmap, norm=norm)
     ax.contourf(px, py, score, levels=[-ref["white_band"], ref["white_band"]], colors=["white"], zorder=2)
@@ -173,7 +174,7 @@ def render(metadata, arrays, target):
     bar.set_label("Ændring i VMG [knob] · rød = dårligere · blå = bedre", fontsize=15, labelpad=10)
     bar.outline.set_visible(False)
     ax.set(xlim=(-40, 30), ylim=(-50, 15), aspect="equal")
-    ax.set_title("Ændring i VMG · vægtet over sejlhøjden", fontsize=22, pad=12)
+    ax.set_title(f"{titles[field]} · vægtet over sejlhøjden", fontsize=22, pad=12)
     ax.set_axis_off()
     fig.canvas.draw()
     fig.savefig(target, dpi=DPI)
@@ -192,8 +193,10 @@ def main():
             arrays = dict(saved)
     else:
         metadata, arrays = prepare(args.source, args.output)
-    render(metadata, arrays, args.output / "godhed.png")
-    print(f"Saved combined 2D map: {args.output / 'godhed.png'}", flush=True)
+    for field in FIELDS:
+        target = args.output / FIELD_FILES[field]
+        render(metadata, arrays, target, field=field)
+        print(f"Saved combined 2D map: {target}", flush=True)
 
 
 if __name__ == "__main__":

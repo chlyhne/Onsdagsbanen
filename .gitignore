@@ -3,6 +3,7 @@ __pycache__/
 cfd/output/
 cfd/cases/
 cfd/archives/
+cfd/results/marine_3d_padded_5ms.zip
 # Publish selected standalone viewers, not their local data caches or drafts.
 cfd/results/**/visualizations/*
 !cfd/results/v1_5ms/visualizations/wind_3d.html
@@ -26,6 +27,7 @@ web/node_modules/
 web/dist/
 cloudflare-email-worker/node_modules/
 cloudflare-email-worker/.wrangler/
+cloudflare-email-worker/.wrangler-dry-run/
 Results*.pdf
 analysis/*.csv
 analysis/redress_group_q_cache*.json
