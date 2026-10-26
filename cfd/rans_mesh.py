@@ -20,6 +20,24 @@ SHAPES=[{"name":"main","camber":.08,"thickness_ratio":.001,"twist_deg":6.,"trim_
         {"name":"jib","camber":.08,"thickness_ratio":.001,"twist_deg":8.,"trim_height_m":4.,"head_luff_x_m":.5}]
 
 
+def camber_profile(t, shape):
+    """Chord-normalised depth and slope; old files retain their 50% draft.
+
+    Two parabolas meet with zero slope at the requested maximum depth.
+    This is the NACA mean-camber construction, not a thick NACA airfoil.
+    """
+    t = np.asarray(t, dtype=float)
+    m, p = float(shape['camber']), float(shape.get('draft_position', .5))
+    if not np.isfinite([m, p]).all() or m < 0 or not 0 < p < 1:
+        raise ValueError('Require finite nonnegative camber and 0 < draft_position < 1')
+    forward = t <= p
+    depth = np.where(forward, m / p**2 * (2*p*t - t*t),
+                     m / (1-p)**2 * (1-2*p + 2*p*t - t*t))
+    slope = np.where(forward, 2*m / p**2 * (p-t),
+                     2*m / (1-p)**2 * (p-t))
+    return depth, slope
+
+
 def _skin_points(sail,height,t,shape,side):
     leading,chord,span,trim=sail
     height,t=np.broadcast_arrays(height,t)
@@ -29,7 +47,7 @@ def _skin_points(sail,height,t,shape,side):
     c=chord*(1-.96*f)
     angle=trim+shape["twist_deg"]*(f-(shape["trim_height_m"]-FOOT)/span)
     a=np.radians(angle)
-    camber=4*shape["camber"]*c*t*(1-t)
+    camber=c*camber_profile(t,shape)[0]
     half=.5*shape["thickness_ratio"]*c*(.15+.85*np.sin(np.pi*t))
     u=t*c
     v=camber+side*half
@@ -44,10 +62,12 @@ def section(sail,height,shape,n=97,cosine=True):
 
 
 def entry_angle(sail,height,shape,fraction=.05):
-    # Exact secant of the smooth parabolic camber, including spanwise twist.
+    # Exact entry secant of the selected camber line, including twist.
+    if not 0 < fraction <= 1:
+        raise ValueError('Entry fraction must be in (0, 1]')
     f=(height-FOOT)/sail[2]
     trim=sail[3]+shape["twist_deg"]*(f-(shape["trim_height_m"]-FOOT)/sail[2])
-    return float(trim+np.degrees(np.arctan(4*shape["camber"]*(1-fraction))))
+    return float(trim+np.degrees(np.arctan(camber_profile(fraction,shape)[0]/fraction)))
 
 
 def _sail(sail,shape,surface_size):

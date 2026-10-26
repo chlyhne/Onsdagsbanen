@@ -18,7 +18,7 @@ from cfd.case import case_chord_trim, case_entry_angle, wind_angle_from_velocity
 from cfd.marine_rans import read_profile
 from cfd.plot_data import load_plot_data
 from cfd.rans_checks import marked_triangles
-from cfd.rans_mesh import FOOT, _skin_points
+from cfd.rans_mesh import FOOT, _skin_points, camber_profile
 from cfd.sail_loads import surface_geometry
 from cfd.separation_3d import sail_coordinates, sha
 from cfd.storage import case_file
@@ -116,7 +116,7 @@ def analyse(case, output, height=4.):
     leading = _skin_points(sail, height, 0., shape, 0)[0]
     chord = sail[1] * (1 - .96 * (height - FOOT) / sail[2])
     trim = case_chord_trim(geometry, 1, height)
-    tangent = trim + np.degrees(np.arctan(4 * shape["camber"]))
+    tangent = trim + np.degrees(np.arctan(camber_profile(0., shape)[1]))
     secant = case_entry_angle(geometry, 1, height)
     ambient = np.asarray(profile.at(height)["apparent_velocity_m_s"])
     ambient_awa = wind_angle_from_velocity(ambient)
@@ -145,7 +145,7 @@ def analyse(case, output, height=4.):
     profiles = []
     a = np.radians(trim)
     for t in (.005, .01, .025, .05, .1, .25, .5, .75, .95):
-        slope = 4 * shape["camber"] * (1 - 2 * t)
+        slope = camber_profile(t, shape)[1]
         normal = np.array([np.sin(a) + slope * np.cos(a), np.cos(a) - slope * np.sin(a), 0.])
         normal /= np.linalg.norm(normal)
         for side, sign in (("leeward", 1), ("windward", -1)):

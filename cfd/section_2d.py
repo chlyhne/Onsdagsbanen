@@ -43,10 +43,17 @@ def boat_offsets(geometry):
     return offsets
 
 
-def wall_markers(geometry):
+def active_sails(geometry, height=None):
+    height = geometry.get('section_height_m') if height is None else height
+    return [i for i, sail in enumerate(geometry['sail_definitions'])
+            if height is None or SAIL_FOOT_HEIGHT <= height <= SAIL_FOOT_HEIGHT + sail[2]]
+
+
+def wall_markers(geometry, height=None):
+    active = {geometry['sail_shapes'][i]['name'] for i in active_sails(geometry, height)} if geometry else {'main', 'jib'}
     return {name if i == 0 else f'{name}_{i + 1}': tag + 10 * i
             for i in range(len(boat_offsets(geometry)))
-            for name, tag in MARKERS.items() if name != 'farfield'}
+            for name, tag in MARKERS.items() if name == 'mast' or name in active}
 
 
 def add_second_boat(geometry, wind_angle, aft_lengths=.75, windward_beams=2.):
@@ -68,7 +75,7 @@ def add_second_boat(geometry, wind_angle, aft_lengths=.75, windward_beams=2.):
 def plot_geometry(geometry, height):
     offsets = boat_offsets(geometry)
     hull = np.asarray(geometry['hull'])
-    sections = [case_section(geometry, i, height) for i in range(2)]
+    sections = [case_section(geometry, i, height) for i in active_sails(geometry, height)]
     return {'hull_outline': hull.tolist(),
             'hull_outlines': [(hull + offset).tolist() for offset in offsets],
             'sail_sections': [(section + np.r_[offset, 0.]).tolist()
@@ -89,11 +96,13 @@ def mesh_2d(case, geometry, height, size=2., sail_size=.035, threads=2):
                    ((-50., -50.), (35., -50.), (35., 40.), (-50., 40.))]
         outer = [geo.addLine(corners[i], corners[(i + 1) % 4]) for i in range(4)]
         holes = []; walls = {}
-        markers = {'farfield': MARKERS['farfield'], **wall_markers(geometry)}
+        markers = {'farfield': MARKERS['farfield'], **wall_markers(geometry, height)}
         for boat, offset in enumerate(boat_offsets(geometry)):
             def wall_name(name):
                 return name if boat == 0 else f'{name}_{boat + 1}'
             for i, shape in enumerate(geometry['sail_shapes']):
+                if i not in active_sails(geometry, height):
+                    continue
                 xy = case_section(geometry, i, height)[:, :2] + offset
                 nodes = [geo.addPoint(x, y, 0., sail_size) for x, y in xy]
                 half = len(nodes) // 2
@@ -215,15 +224,16 @@ def prepare(source, case, height=4., wind_speed=None, wind_angle=None, boat_spee
     if not np.isfinite([height, mesh_size, sail_size, profile.reference_speed_m_s,
                         profile.true_angle_deg, profile.boat_speed_knots]).all():
         raise ValueError('Height, wind and mesh settings must be finite')
-    top = min(SAIL_FOOT_HEIGHT + sail[2] for sail in geometry['sail_definitions'])
+    top = max(SAIL_FOOT_HEIGHT + sail[2] for sail in geometry['sail_definitions'])
     if not SAIL_FOOT_HEIGHT <= height <= top:
-        raise ValueError(f'Height must intersect both sails: {SAIL_FOOT_HEIGHT:g} to {top:g} m')
+        raise ValueError(f'Height must intersect a sail: {SAIL_FOOT_HEIGHT:g} to {top:g} m')
     if not mesh_size > 0 or not sail_size > 0 or threads < 1:
         raise ValueError('Mesh sizes and threads must be positive')
     if [s['name'] for s in geometry['sail_shapes']] != ['main', 'jib']:
         raise ValueError('Expected saved main and jib geometry')
     if second_boat:
         geometry = add_second_boat(geometry, profile.true_angle_deg, aft_lengths, windward_beams)
+    geometry['section_height_m'] = float(height)
     create_case(case)
     metadata = mesh_2d(case / 'input', geometry, height, mesh_size, sail_size, threads)
     save_json(case_file(case, 'geometry.json'), geometry)
@@ -368,7 +378,7 @@ def analyse(case):
     return report
 
 
-def run(case, threads=2, iterations=3000, restart=False):
+def run(case, threads=2, iterations=3000, restart=False, *, plot=True):
     from cfd.solver import solver_path
     from cfd.solver_progress import run_solver
     from cfd.rans_checks import archive_history, convergence
@@ -408,7 +418,8 @@ def run(case, threads=2, iterations=3000, restart=False):
     manifest['finished_at_utc'] = datetime.now(timezone.utc).isoformat()
     save_json(case_file(case, 'section_case.json'), manifest)
     report = analyse(case)
-    render(case)
+    if plot:
+        render(case)
     return report
 
 

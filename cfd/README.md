@@ -4,6 +4,11 @@ Stationær, tredimensionel RANS med SU2 8.5.0 og SST V1994m. Båden bevæger
 sig med 6 knob, sand vind kommer 41° fra styrbord, og den seneste kørsel
 har 5 m/s sand vind ved 10 m. Sejlene har separat trim og twist.
 
+Den nye [2D-trimoptimering](TRIM_2D.md) bruger 12 % camber,
+45 % dybdeposition og fast 2° samlet twist. Den optimerer de to skødevinkler
+med ét fælles 2D-snit og eksporterer input og kode til 3D-kørsel på en anden
+computer. Eksisterende resultater bevares.
+
 ## Restoring the transferred results ZIP on another machine
 
 Run the following from the **repository root** (the folder containing `cfd/`).

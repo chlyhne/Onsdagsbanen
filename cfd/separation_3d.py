@@ -15,7 +15,7 @@ import meshio
 import numpy as np
 
 from cfd.plot_geometry_3d import COLORS, geometry_surfaces, interactive_figure
-from cfd.rans_mesh import FOOT
+from cfd.rans_mesh import FOOT, camber_profile
 from cfd.storage import case_file, result_dir
 from cfd.transfer_solution import read_restart
 
@@ -44,8 +44,8 @@ def sail_coordinates(points, velocity, sail, shape, side=1):
     u = -(points[:, 0] - leading) * np.cos(angle) + points[:, 1] * np.sin(angle)
     v = (points[:, 0] - leading) * np.sin(angle) + points[:, 1] * np.cos(angle)
     t = np.clip(u / chord, 0, 1)
-    slope = 4 * shape["camber"] * (1 - 2 * t)
-    clearance = side * (v - 4 * shape["camber"] * chord * t * (1 - t))
+    depth, slope = camber_profile(t, shape)
+    clearance = side * (v - chord * depth)
     tangent_x = -np.cos(angle) + slope * np.sin(angle)
     tangent_y = np.sin(angle) + slope * np.cos(angle)
     ut = (velocity[:, 0] * tangent_x + velocity[:, 1] * tangent_y) / np.sqrt(1 + slope**2)
