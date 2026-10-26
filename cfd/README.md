@@ -4,6 +4,68 @@ Stationær, tredimensionel RANS med SU2 8.5.0 og SST V1994m. Båden bevæger
 sig med 6 knob, sand vind kommer 41° fra styrbord, og den seneste kørsel
 har 5 m/s sand vind ved 10 m. Sejlene har separat trim og twist.
 
+## Restoring the transferred results ZIP on another machine
+
+Run the following from the **repository root** (the folder containing `cfd/`).
+First pull the latest code, then extract the manually transferred archive into
+`cfd/cases`. Replace the ZIP path with its actual location:
+
+```powershell
+git pull
+New-Item -ItemType Directory -Force cfd/cases
+Expand-Archive -LiteralPath "C:\path\to\marine_3d_padded_5ms.zip" -DestinationPath "cfd/cases"
+```
+
+The archive already contains a `marine_3d_padded_5ms/` directory. The resulting
+layout must be:
+
+```text
+cfd/cases/marine_3d_padded_5ms/
+  geometry.json
+  marine_case.json
+  yacht.msh
+  yacht.su2
+  restart.dat
+  flow.vtk
+  ...
+```
+
+Do not add another nested `marine_3d_padded_5ms` directory or create an `input/`
+subdirectory. The readers support this original flat case layout. Some older
+examples below use `cfd/output/marine_3d_padded_5ms`; for this restored archive,
+use `cfd/cases/marine_3d_padded_5ms` wherever a case or source path is required.
+Do not extract the raw case over the published `cfd/results/v1_5ms` snapshot.
+
+Verify the extraction and install the Python dependencies:
+
+```powershell
+Test-Path cfd/cases/marine_3d_padded_5ms/restart.dat
+Test-Path cfd/cases/marine_3d_padded_5ms/yacht.msh
+python -m pip install -r cfd/requirements.txt
+```
+
+Both path checks should print `True`. To rebuild the local 3D wind cache and
+then all three chord-weighted maps, run these commands **in order**, still
+from the repository root:
+
+```powershell
+python -m cfd.wind_viewer_3d --case cfd/cases/marine_3d_padded_5ms
+python -m cfd.weighted_wind_2d
+```
+
+The first command reads the restored mesh/checkpoint and the committed
+`cfd/results/v1_5ms` plotting snapshot. It creates `wind_3d.npz`,
+`wind_3d.json` and the HTML viewer in `cfd/results/v1_5ms/visualizations/`.
+The second creates the weighted cache and `godhed.png`, `vinddrejning.png`
+and `vindhastighed.png` in `cfd/results/v1_5ms/weighted_2d/`.
+Neither command starts a new CFD simulation; solver installation is not
+required for this post-processing. Use `--from-cache` only after the relevant
+cache has been generated. Local cases and caches are excluded from Git.
+
+The committed standalone HTML viewers and PNG figures can already be opened
+without extracting the archive or rebuilding anything. The original ZIP can
+be kept in `cfd/archives/`, which is also excluded from Git.
+
 ## Installation
 
 Kør fra projektets rod med Python 3.11 eller nyere:
