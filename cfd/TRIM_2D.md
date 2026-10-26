@@ -16,8 +16,8 @@ span**. It does not estimate a whole-rig force or optimise boat speed/VMG.
 From the repository root, using the Python environment with CFD dependencies:
 
 ```bash
-.venv/bin/python -m cfd.trim_2d prepare --study cfd/cases/trim_2d_fixed_twist
-.venv/bin/python -u -m cfd.trim_2d run --study cfd/cases/trim_2d_fixed_twist --max-evaluations 12 --max-hours 8 --export-to cfd/cases/trim_2d_fixed_twist/handoff
+.venv/bin/python -m cfd.trim_2d prepare --study cfd/cases/trim_2d_next
+.venv/bin/python -u -m cfd.trim_2d run --study cfd/cases/trim_2d_next --max-evaluations 12 --max-hours 8 --export-to cfd/trimmed_reference_v2
 ```
 
 Skip `prepare` if that study already exists. Preparation only copies small
@@ -40,7 +40,7 @@ Do not run two writers against one study.
 For a short status report:
 
 ```bash
-.venv/bin/python -m cfd.trim_2d status --study cfd/cases/trim_2d_fixed_twist
+.venv/bin/python -m cfd.trim_2d status --study cfd/cases/trim_2d_next
 ```
 
 The study saves frozen settings in `study.json`, resumable state in
@@ -82,21 +82,39 @@ The representative-section assumption deliberately omits variation through the
 rig. Spanwise flow and tip vortices await the final 3D check; mesh independence
 is not established by one resolution.
 
-## Transfer to the other PC
+## Run the selected trim on the other PC
 
-When the run finishes, `--export-to` packages the best accepted geometry,
-atmospheric and mesh settings, and CFD code into a folder and adjacent ZIP.
-Its README contains the commands for the other PC. The geometry retains the
-fixed 2-degree twist through both complete sails. No old mesh or restart is
-included; the other PC must generate a fresh 3D mesh.
+The accepted result of the 12-trial search is committed in
+[`trimmed_reference/`](trimmed_reference/README.md). It contains the chosen
+geometry (main foot angle 10.69 degrees, jib 22.54 degrees), 2-degree total
+twist, wind and mesh settings, and the 2D check reports.
 
-A budget-limited best is explicitly provisional. If no candidate passes the
-checks, no transfer package is created. Previous transfer folders and ZIPs are
-preserved. When resuming after an export, omit `--export-to` or use a new name.
-Manual export is also available:
+From the repository root on the other PC:
 
-```bash
-.venv/bin/python -m cfd.trim_2d export --study cfd/cases/trim_2d_fixed_twist --destination cfd/cases/trim_2d_fixed_twist/handoff_v2
+```powershell
+git pull
+python -m pip install -r cfd/requirements.txt
+python -m cfd.solver --install
+python -m cfd.prepare_compact --source cfd/trimmed_reference --case cfd/output/trimmed_3d --threads 8
+python -m cfd.marine_rans run --case cfd/output/trimmed_3d --threads 8 --iterations 3000
 ```
 
-No optimisation command starts 3D work locally.
+Adjust the thread count for that PC. Use a new case path if trimmed_3d already
+exists. The first CFD command generates a fresh mesh; the second starts 3D RANS.
+The 2D result is a ballpark candidate pending that 3D check.
+
+## Save future optimisation results in the repository
+
+`--export-to` writes small input files and reports to the chosen folder. Add,
+commit and push that folder, then pull on the other PC. Code is used directly
+from the repository. Meshes, checkpoints and bulky calculation files stay local.
+
+The existing selected inputs are preserved, so export a later result to a new
+folder, for example:
+
+```bash
+.venv/bin/python -m cfd.trim_2d export --study cfd/cases/trim_2d_next --destination cfd/trimmed_reference_v3
+```
+
+If no candidate passes the checks, no input folder is created. No optimisation
+or export command starts 3D work locally.

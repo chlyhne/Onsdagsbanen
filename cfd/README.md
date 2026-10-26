@@ -8,6 +8,8 @@ Den nye [2D-trimoptimering](TRIM_2D.md) bruger 12 % camber,
 45 % dybdeposition og fast 2° samlet twist. Den optimerer de to skødevinkler
 med ét fælles 2D-snit og eksporterer input og kode til 3D-kørsel på en anden
 computer. Eksisterende resultater bevares.
+Det valgte trim ligger i [trimmed_reference/](trimmed_reference/README.md);
+på 3D-computeren er det nok at hente repoet og bruge denne mappe som `--source`.
 
 ## Restoring the transferred results ZIP on another machine
 

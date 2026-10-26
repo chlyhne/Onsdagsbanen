@@ -1,7 +1,7 @@
 """Two-sheeting-angle search using one paired-sail 2D RANS section.
 
 No command in this module generates a 3D mesh or starts a 3D solver.
-prepare -> run (resumable) -> export (portable input for another PC).
+prepare -> run (resumable) -> export (small repository inputs for the 3D PC).
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
-import zipfile
 
 import numpy as np
 from scipy.optimize import minimize
@@ -312,8 +311,8 @@ def export_best(study, destination):
     verify_inputs(study, config)
     if state['best'] is None or not state['best']['checks_passed']:
         raise ValueError('No candidate has passed the section checks; there is no accepted geometry to export')
-    if destination.exists() or destination.with_suffix('.zip').exists():
-        raise ValueError('Choose a new export path; previous transfer packages are preserved')
+    if destination.exists():
+        raise ValueError('Choose a new export path; previous trim inputs are preserved')
     destination.mkdir(parents=True)
     geometry = trimmed_geometry(read(study/'source/geometry.json'), state['best']['parameters'])
     save(destination/'geometry.json', geometry)
@@ -322,43 +321,51 @@ def export_best(study, destination):
     save(destination/'trim_result.json', {'search_status': state['status'], 'best': state['best'],
                                         'study': config, 'exported_at_utc': stamp(),
                                         'requires_3d_validation': True, 'solver_3d_run': False})
-    code = destination/'code/cfd'
-    code.mkdir(parents=True)
-    for path in Path(__file__).parent.glob('*.py'):
-        shutil.copy2(path, code/path.name)
-    for name in ('reference', 'viewer_templates'):
-        shutil.copytree(Path(__file__).parent/name, code/name)
-    shutil.copy2(Path(__file__).with_name('requirements.txt'), code/'requirements.txt')
-    instructions = '''# Transfer to the 3D PC
+    for key in state['best'].get('section_keys', []):
+        force_file = study/'sections'/key/'force.json'
+        if force_file.exists():
+            force = read(force_file)
+            report = study/force['report']
+            force['report'] = 'section_report.json'
+            save(destination/'section_force.json', force)
+            shutil.copy2(report, destination/'section_report.json')
+    repo = Path(__file__).resolve().parents[1]
+    try:
+        source_path = destination.resolve().relative_to(repo).as_posix()
+    except ValueError:
+        source_path = 'PATH_TO_EXPORTED_INPUTS'
+    write_handoff_readme(destination, source_path)
+    print(f'Exported repository inputs to {destination}; add, commit and push this folder.', flush=True)
 
-Copy this folder or unzip the adjacent ZIP. The code/ folder contains the CFD
-Python package needed for this geometry; an existing checkout is not required.
-The two sheeting angles are in trim_result.json. geometry.json contains those
-angles and 2 degrees of total twist on each sail. Forces are per metre at the
-selected height, not whole-rig forces. The result is pending 3D validation.
-Check search_status: budget_exhausted is a provisional best, not a converged search.
-No old mesh or restart is included: changed sails require a new mesh.
 
-From this transfer folder (adjust thread counts as appropriate):
+def write_handoff_readme(destination, source_path='cfd/trimmed_reference'):
+    status = read(Path(destination)/'trim_result.json')['search_status']
+    instructions = f'''# Selected trim for the 3D run
+
+These small input files belong in the Onsdagsbanen repository. The selected
+sheeting angles and fixed 2-degree twist are already in geometry.json.
+trim_result.json records the optimisation settings and accepted best result;
+section_force.json and section_report.json contain its 2D checks when available.
+Search status: `{status}`. This is a ballpark trim pending 3D validation.
+Section forces are in N/m, not whole-rig forces.
+
+After pulling the repository on the 3D PC, run from its root:
 
 ```powershell
-cd code
+git pull
 python -m pip install -r cfd/requirements.txt
 python -m cfd.solver --install
-python -m cfd.prepare_compact --source .. --case cfd/output/trimmed_3d --threads 8
+python -m cfd.prepare_compact --source {source_path} --case cfd/output/trimmed_3d --threads 8
 python -m cfd.marine_rans run --case cfd/output/trimmed_3d --threads 8 --iterations 3000
 ```
 
-Mesh preparation and the 3D solver belong on the other PC. Inspect convergence, surface loading,
-reverse flow and the background wind-profile check before interpreting the result.
-If checks fail, diagnose or continue the fresh case; do not publish it as validated.
+Adjust the thread count for that PC. SU2 automatic installation is for Windows;
+other systems need SU2_CFD on PATH. Use a fresh case path if trimmed_3d already
+exists. Mesh preparation and the solver are separate; no 3D result is included.
+Inspect convergence, loading, separation and background wind-profile checks
+before interpreting the final result.
 '''
-    (destination/'README.md').write_text(instructions, encoding='utf8')
-    with zipfile.ZipFile(destination.with_suffix('.zip'), 'x', zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(destination.rglob('*')):
-            if path.is_file():
-                archive.write(path, f'{destination.name}/{path.relative_to(destination).as_posix()}')
-    print(f'Exported {destination} and {destination.with_suffix(".zip")}; no 3D work performed.', flush=True)
+    (Path(destination)/'README.md').write_text(instructions, encoding='utf8')
 
 
 def run_search(study, max_evaluations=12, max_hours=8.):
@@ -456,7 +463,7 @@ def main():
     parser.add_argument('--max-evaluations', type=int, default=12)
     parser.add_argument('--max-hours', type=float, default=8.)
     parser.add_argument('--destination', type=Path)
-    parser.add_argument('--export-to', type=Path, help='After run, package the best accepted candidate for the 3D PC')
+    parser.add_argument('--export-to', type=Path, help='After run, save the best accepted candidate as repository inputs for the 3D PC')
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare_study(args.source, args.study, iterations=args.iterations, continuations=args.continuations,
@@ -467,7 +474,7 @@ def main():
         print(json.dumps({'status': state['status'], 'evaluations': len(state['evaluations']), 'best': state['best']}, indent=2))
         if args.export_to:
             if state['best'] is None:
-                print('No candidate passed all checks; no 3D transfer package was created.')
+                print('No candidate passed all checks; no 3D input folder was created.')
             else:
                 export_best(args.study, args.export_to)
     elif args.action == 'status':

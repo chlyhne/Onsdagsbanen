@@ -12,6 +12,32 @@ from cfd.marine_inflow import marine_profile, initial_values
 
 
 class CompactTests(unittest.TestCase):
+    def test_committed_trim_is_sufficient_for_fresh_3d_preparation(self):
+        source=Path(__file__).resolve().parents[1]/'trimmed_reference'
+        geometry=json.loads((source/'geometry.json').read_text())
+        result=json.loads((source/'trim_result.json').read_text())
+        force=json.loads((source/'section_force.json').read_text())
+        report=json.loads((source/force['report']).read_text())
+        self.assertTrue(result['best']['checks_passed'])
+        self.assertTrue(force['checks_passed'] and report['checks_passed'])
+        np.testing.assert_allclose([s[3] for s in geometry['sail_definitions']],result['best']['parameters'])
+        for shape in geometry['sail_shapes']:
+            self.assertEqual((shape['camber'],shape['draft_position'],shape['twist_deg']),(.12,.45,2.))
+        with tempfile.TemporaryDirectory() as folder:
+            case=Path(folder)/'fresh_3d'
+            def prepared(base,target,**kwargs):
+                target.mkdir()
+                return {'status':'prepared_not_simulated'}
+            with patch('cfd.prepare_compact.make_mesh') as mesh, \
+                 patch('cfd.prepare_compact.prepare',side_effect=prepared) as prepare, \
+                 patch('subprocess.Popen',side_effect=AssertionError('Unexpected CFD')):
+                prepare_compact(source,case)
+            self.assertEqual(mesh.call_args.args[5],geometry['sail_definitions'])
+            self.assertEqual(mesh.call_args.kwargs['shapes'],geometry['sail_shapes'])
+            self.assertEqual(prepare.call_args.kwargs['wind'],5.)
+            self.assertEqual(prepare.call_args.kwargs['angle'],41.)
+            self.assertEqual(prepare.call_args.kwargs['boat_speed'],6.)
+
     def test_preparation_maps_plot_bounds_and_retains_source_physics(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);source=root/'old';source.mkdir();case=root/'new'

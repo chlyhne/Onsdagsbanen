@@ -7,7 +7,6 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
 import meshio
 import numpy as np
@@ -299,7 +298,7 @@ class SearchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'older optimisation'):
                 verify_inputs(study,config)
 
-    def test_portable_export_contains_matching_geometry_and_code_but_no_old_mesh(self):
+    def test_repository_export_contains_matching_inputs_without_duplicate_code_or_archive(self):
         with tempfile.TemporaryDirectory() as folder:
             study=Path(folder)/'study';self.make_study(study)
             values=[8.,15.]
@@ -309,13 +308,13 @@ class SearchTests(unittest.TestCase):
             target=Path(folder)/'handoff'
             with redirect_stdout(io.StringIO()):export_best(study,target)
             self.assertEqual(read(target/'geometry.json'),trimmed_geometry(read(study/'source/geometry.json'),values))
-            self.assertTrue((target/'code/cfd/rans_mesh.py').exists())
+            self.assertFalse((target/'code').exists())
+            self.assertFalse(target.with_suffix('.zip').exists())
+            self.assertIn('git pull',(target/'README.md').read_text())
             result=read(target/'trim_result.json')
             self.assertTrue(result['requires_3d_validation'])
             self.assertFalse(result['solver_3d_run'])
-            with zipfile.ZipFile(target.with_suffix('.zip')) as archive:
-                self.assertIn('handoff/code/cfd/rans_mesh.py',archive.namelist())
-                self.assertFalse(any(p.endswith(('.su2','.msh','.dat')) for p in archive.namelist()))
+            self.assertFalse(any(p.suffix in ('.su2','.msh','.dat') for p in target.rglob('*')))
             with self.assertRaisesRegex(ValueError,'preserved'):
                 export_best(study,target)
 

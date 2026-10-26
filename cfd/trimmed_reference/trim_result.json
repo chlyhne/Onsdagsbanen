@@ -1,0 +1,85 @@
+{
+  "search_status": "budget_exhausted",
+  "best": {
+    "parameters": [
+      10.6925124570924,
+      22.54140362507657
+    ],
+    "checks_passed": true,
+    "forces": {
+      "drive_N_per_m": 87.41953441974289,
+      "side_force_N_per_m": 245.0687580137632
+    },
+    "section_keys": [
+      "146ba8645ee433ed10a7"
+    ],
+    "completed_at_utc": "2026-10-26T21:28:51.781590+00:00"
+  },
+  "study": {
+    "format_version": 3,
+    "created_at_utc": "2026-10-26T20:30:00.859111+00:00",
+    "parameters": [
+      "main_foot_deg",
+      "jib_foot_deg"
+    ],
+    "initial": [
+      12.192512457092402,
+      15.041403625076569
+    ],
+    "bounds": [
+      [
+        0.0,
+        30.0
+      ],
+      [
+        0.0,
+        30.0
+      ]
+    ],
+    "foot_angle_bounds_deg": [
+      0.0,
+      30.0
+    ],
+    "total_twist_deg": 2.0,
+    "initial_simplex": [
+      [
+        12.192512457092402,
+        15.041403625076569
+      ],
+      [
+        15.192512457092402,
+        15.041403625076569
+      ],
+      [
+        12.192512457092402,
+        18.04140362507657
+      ]
+    ],
+    "initial_jib_aoa_deg": 9.0,
+    "initial_main_tighter_deg": 3.0,
+    "aoa_reference": "Chord relative to undisturbed apparent wind at the selected section",
+    "angle_tolerance_deg": 1.0,
+    "relative_force_tolerance": 0.01,
+    "camber": 0.12,
+    "draft_position": 0.45,
+    "height_m": 4.521615814353244,
+    "iterations": 3500,
+    "continuations": 1,
+    "threads": 2,
+    "sail_size_m": 0.06,
+    "objective": "Maximise forward force per metre in one section at fixed speed and heading",
+    "search_method": "Bounded Nelder-Mead around the seeded trim; coarse local search, not a precise or global optimum",
+    "limitations": [
+      "2D sections have no spanwise induction or tip vortices.",
+      "No keel drag, heel equilibrium or speed/VMG optimisation.",
+      "One representative section is used; whole-rig forces are not estimated.",
+      "Published sail shapes are plausibility references, not validation."
+    ],
+    "implementation_sha256": "6e6757fc30aa9b499c49b5f889822dbfd7722408cf5c82cbcd0e58b1b0b2a22b",
+    "inputs_sha256": "3466b98ae902c343ee95fa2bfd11a8b556db1cd2d9cd4cf15d99de37250f72d1",
+    "configuration_sha256": "edd24f9cf4feaaa4f41fcb499652ee4fe2f4aeadb19d7e237e9f73bfd8415aac"
+  },
+  "exported_at_utc": "2026-10-26T21:31:54.522058+00:00",
+  "requires_3d_validation": true,
+  "solver_3d_run": false
+}

@@ -1,0 +1,107 @@
+{
+  "model": "2D steady INC_RANS SST V1994m",
+  "height_m": 4.521615814353244,
+  "convergence": {
+    "criteria": {
+      "flow_rms_log10_max": -6.0,
+      "turbulence_residual_reduction_orders": 6.0,
+      "turbulence_absolute_rms_log10_max": {
+        "rms[k]": -11.0,
+        "rms[w]": -5.0
+      },
+      "turbulence_rule": "Each equation must satisfy relative reduction OR its absolute tolerance",
+      "force_window": 200,
+      "force_relative_range_max": 0.001,
+      "force_normalization_floor": 0.01
+    },
+    "turbulence_residual_reference_log10": {
+      "rms[k]": -4.661596953,
+      "rms[w]": 4.684430144
+    },
+    "turbulence_relative_residual_log10": {
+      "rms[k]": -6.234906637,
+      "rms[w]": -11.198958698
+    },
+    "turbulence_residual_checks": {
+      "rms[k]": {
+        "relative_passed": true,
+        "absolute_passed": false,
+        "passed": true
+      },
+      "rms[w]": {
+        "relative_passed": true,
+        "absolute_passed": true,
+        "passed": true
+      }
+    },
+    "force_relative_ranges": {
+      "CFx": 5.973899294475594e-06,
+      "CFy": 4.880494921298114e-06
+    },
+    "checks": {
+      "flow_rms_below_1e_6": true,
+      "turbulence_residuals_converged": true,
+      "forces_stable_0_1_percent_over_200_iterations": true
+    },
+    "passed": true
+  },
+  "wall_resolution": {
+    "mast": {
+      "p95_yplus": 0.655020925,
+      "max_yplus": 0.6768433,
+      "passed": true
+    },
+    "main": {
+      "p95_yplus": 0.41453488499999996,
+      "max_yplus": 1.470852,
+      "passed": true
+    },
+    "jib": {
+      "p95_yplus": 0.506457335,
+      "max_yplus": 1.663206,
+      "passed": true
+    }
+  },
+  "checks_passed": true,
+  "field_stability": {
+    "before_sha256": "ab43fe7a1489932300227452f70eb7416fcf58ab4ad5249eb0965374fda750f9",
+    "after_sha256": "c6e00eee1b36b151ec5dbaac6e04afb0c598f10aff5ce039142821f079316083",
+    "native_iterations": [
+      3300,
+      3499
+    ],
+    "iteration_window": 199,
+    "maximum_changes": {
+      "velocity_vector_m_s": 0.001750563358558273,
+      "direction_deg": 0.006855882994272131,
+      "turbulence_percentage_points": 0.003061307882676334
+    },
+    "maximum_change_limits": {
+      "velocity_vector_m_s": 0.01,
+      "direction_deg": 0.1,
+      "turbulence_percentage_points": 0.1
+    },
+    "checks": {
+      "velocity_vector_m_s": true,
+      "direction_deg": true,
+      "turbulence_percentage_points": true
+    },
+    "passed": true,
+    "scope": "All fluid in the displayed viewport; direction excludes near-zero speeds"
+  },
+  "iterations": 3500,
+  "boat_offsets_xy_m": [
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "iterations_scope": "Last solver invocation; restart iterations are not cumulative",
+  "limitations": [
+    "Independent 2D RANS, not a slice extracted from the 3D solution.",
+    "No vertical velocity, tip vortices, spanwise transport, hull or sea boundary.",
+    "Wind shear and sail twist are sampled at the selected height only.",
+    "Forces describe one metre of span, not the complete yacht.",
+    "Mesh independence and agreement with the 3D model have not been established."
+  ]
+}
