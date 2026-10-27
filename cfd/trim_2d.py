@@ -21,7 +21,7 @@ import time
 import numpy as np
 from scipy.optimize import minimize
 
-from cfd.case import SAIL_FOOT_HEIGHT
+from cfd.case import SAIL_FOOT_HEIGHT, case_chord_trim
 from cfd.marine_rans import read_profile
 from cfd.section_2d import REFERENCE, prepare as prepare_section, run as run_section
 from cfd.section_loads import loads
@@ -148,7 +148,7 @@ def implementation_hash():
 
 
 def prepare_study(source, study, *, iterations=3500, continuations=1, threads=2,
-                  sail_size=.06, height=None):
+                  sail_size=.06, height=None, initial_trim=None):
     source, study = Path(source), Path(study)
     if study.exists():
         raise ValueError('Choose a new study directory; use run to resume an existing study')
@@ -161,7 +161,12 @@ def prepare_study(source, study, *, iterations=3500, continuations=1, threads=2,
     top = SAIL_FOOT_HEIGHT + min(s[2] for s in geometry['sail_definitions'])
     if not np.isfinite(height) or not SAIL_FOOT_HEIGHT < height < top:
         raise ValueError('The selected section must intersect both sails between foot and head')
-    initial = initial_angles(geometry, profile, height)
+    if initial_trim is None:
+        initial = initial_angles(geometry, profile, height)
+    else:
+        seed = read(case_file(Path(initial_trim), 'geometry.json'))
+        initial = [float(case_chord_trim(seed, i, SAIL_FOOT_HEIGHT)) for i in range(2)]
+        trimmed_geometry(geometry, initial)  # Validate before creating any files.
     simplex = starting_simplex(initial, bounds)
     geometry = trimmed_geometry(geometry, initial)
     study.mkdir(parents=True)
@@ -177,8 +182,9 @@ def prepare_study(source, study, *, iterations=3500, continuations=1, threads=2,
               'parameters': list(PARAMETERS), 'initial': initial, 'bounds': bounds.tolist(),
               'foot_angle_bounds_deg': [0., 30.], 'total_twist_deg': TOTAL_TWIST_DEG,
               'initial_simplex': simplex.tolist(),
-              'initial_jib_aoa_deg': INITIAL_JIB_AOA_DEG,
-              'initial_main_tighter_deg': INITIAL_MAIN_TIGHTER_DEG,
+              'initial_trim_source': str(initial_trim) if initial_trim is not None else None,
+              'initial_jib_aoa_deg': INITIAL_JIB_AOA_DEG if initial_trim is None else None,
+              'initial_main_tighter_deg': INITIAL_MAIN_TIGHTER_DEG if initial_trim is None else None,
               'aoa_reference': 'Chord relative to undisturbed apparent wind at the selected section',
               'angle_tolerance_deg': ANGLE_TOLERANCE_DEG,
               'relative_force_tolerance': RELATIVE_FORCE_TOLERANCE,
@@ -455,6 +461,7 @@ def main():
     parser.add_argument('action', choices=('prepare', 'run', 'status', 'export'))
     parser.add_argument('--study', type=Path, default=Path('cfd/cases/trim_2d_fixed_twist'))
     parser.add_argument('--source', type=Path, default=REFERENCE)
+    parser.add_argument('--initial-trim', type=Path, help='Seed sheeting angles from this previous trim directory (prepare only)')
     parser.add_argument('--iterations', type=int, default=3500)
     parser.add_argument('--continuations', type=int, default=1)
     parser.add_argument('--threads', type=int, default=2)
@@ -468,7 +475,7 @@ def main():
     if args.action == 'prepare':
         prepare_study(args.source, args.study, iterations=args.iterations, continuations=args.continuations,
                       threads=args.threads, sail_size=args.sail_size,
-                      height=args.height)
+                      height=args.height, initial_trim=args.initial_trim)
     elif args.action == 'run':
         state = run_search(args.study, args.max_evaluations, args.max_hours)
         print(json.dumps({'status': state['status'], 'evaluations': len(state['evaluations']), 'best': state['best']}, indent=2))

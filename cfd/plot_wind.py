@@ -1,10 +1,10 @@
-"""Render full-resolution wind maps from the compact plotting snapshot.
+"""Render sail-chord-weighted height-averaged wind maps by default.
 
 python -m cfd.plot_wind --case cfd/results/v1_5ms
 python -m cfd.plot_wind --case cfd/results/v1_5ms --field speed
 
-This command never reads the 3D solution or runs CFD/validation checks.
-Edit the palette, scale and layout here, then rerun this module.
+Reads saved 3D results for post-processing; never runs a CFD simulation.
+Use --slice for an explicitly requested single-height map.
 """
 from __future__ import annotations
 
@@ -100,7 +100,42 @@ def linear_color_norm(low,high,neutral):
 
 
 
-def render(case,field='all',output_dir=None,height=None):
+def render(case,field='all',output_dir=None,height=None,*,averaged=True):
+    if not averaged:
+        return render_slice(case,field,output_dir,height)
+    if height is not None:
+        raise ValueError('A height applies only to a slice; use averaged=False.')
+    from tempfile import TemporaryDirectory
+    import shutil
+    from cfd.wind_viewer_3d import prepare as prepare_volume
+    from cfd.weighted_wind_2d import prepare as prepare_average, render as render_average
+
+    case=Path(case)
+    output=Path(output_dir) if output_dir is not None else result_dir(case)
+    output.mkdir(parents=True,exist_ok=True)
+    # Keep the single-height calibration needed by the 3D post-processor,
+    # but publish only averaged PNGs at the normal result paths.
+    with TemporaryDirectory(prefix='wind-calibration-') as directory:
+        render_slice(case,output_dir=directory)
+        scales=case_file(case,'plot_scales.json')
+        scales.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(Path(directory)/'plot_scales.json',scales)
+    source=result_dir(case)/'visualizations'
+    prepare_volume(case,case,source)
+    metadata,arrays=prepare_average(source,output)
+    fields=tuple(FIELD_FILES) if field=='all' else (field,)
+    files=[]
+    for name in fields:
+        target=output/FIELD_FILES[name]
+        render_average(metadata,arrays,target,field=name)
+        files.append(str(target))
+    result={'files':files,'averaging':'sail-chord-weighted height average',
+            'height_range_m':metadata['height_range_m'],'solver_run':False}
+    print(json.dumps(result,indent=2),flush=True)
+    return result
+
+
+def render_slice(case,field='all',output_dir=None,height=None):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -276,8 +311,9 @@ def main():
     parser.add_argument('--case',type=Path,default=Path('cfd/results/v1_5ms'))
     parser.add_argument('--field',choices=('all',*FIELD_FILES),default='all')
     parser.add_argument('--output-dir',type=Path,help='Optional destination for the PNGs')
+    parser.add_argument('--slice',action='store_true',help='Explicitly render the saved single-height slice instead of the default height average')
     args=parser.parse_args()
-    render(args.case,args.field,args.output_dir)
+    render(args.case,args.field,args.output_dir,averaged=not args.slice)
 
 
 if __name__=='__main__':

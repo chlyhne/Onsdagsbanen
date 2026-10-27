@@ -3,6 +3,7 @@ __pycache__/
 cfd/output/
 cfd/cases/
 cfd/archives/
+cfd/visualizations/datasets/
 cfd/results/marine_3d_padded_5ms.zip
 # Publish selected standalone viewers, not their local data caches or drafts.
 cfd/results/**/visualizations/*

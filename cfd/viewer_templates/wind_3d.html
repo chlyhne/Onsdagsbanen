@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="da">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vindfelt i 3D</title>
+<title>3D wind field</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f6f8fa;color:#253b49;font:14px system-ui,sans-serif}
 header{padding:18px 24px 12px;border-bottom:1px solid #dce3e9;background:#fff}
@@ -17,16 +17,16 @@ button:hover{background:#edf2f6}button.active{background:#294d64;color:white;bor
 </head>
 <body>
 <header>
-<h1>Vindfelt i 3D <span class="intro">Rød = dårligere · blå = bedre</span></h1>
+<h1>3D wind field <span class="intro">Red = worse · blue = better</span></h1>
 <div class="toolbar">
-<label>Vis <select id="field"><option value="goodness">Samlet VMG</option><option value="speed">Vindstyrkens bidrag</option><option value="direction">Vinddrejningens bidrag</option></select></label>
-<div class="group" aria-label="Visning"><button id="volumeMode" class="active">3D-felt</button><button id="sliceMode">Vandret snit</button><button id="bothMode">Begge</button></div>
-<label>Snithøjde <input id="height" type="range" min="0.5" max="15.5" step="0.5" value="4"><output id="heightValue">4 m</output></label>
-<label>Synlighed <input id="opacity" type="range" min="0.02" max="0.50" step="0.01" value="0.18"></label>
-<div class="group"><button id="nearView">Tæt på båden</button><button id="fullView">Hele feltet</button><button id="topView">Ovenfra</button></div>
+<label>Show <select id="field"><option value="goodness">Overall VMG</option><option value="speed">Wind speed contribution</option><option value="direction">Wind direction contribution</option><option value="backflow">Sail backflow</option></select></label>
+<div class="group" aria-label="View"><button id="volumeMode" class="active">3D field</button><button id="sliceMode">Horizontal slice</button><button id="bothMode">Both</button></div>
+<label>Slice height <input id="height" type="range" min="0.5" max="15.5" step="0.5" value="4"><output id="heightValue">4 m</output></label>
+<label>Opacity <input id="opacity" type="range" min="0.02" max="0.50" step="0.01" value="0.18"></label>
+<div class="group"><button id="nearView">Near boat</button><button id="fullView">Full field</button><button id="topView">Top view</button></div>
 </div>
 </header>
-<div id="loading" class="loading">Åbner 3D-feltet …</div><div id="error"></div><div id="plot"></div>
+<div id="loading" class="loading">Loading 3D field …</div><div id="error"></div><div id="plot"></div>
 <footer><span id="reference"></span><span id="status"></span></footer>
 <script>
 'use strict';
@@ -48,21 +48,53 @@ for(let i=0;i<points.length;i+=3){px.push(points[i]);py.push(points[i+1]);pz.pus
 for(let i=0;i<triangles.length;i+=3){pi.push(triangles[i]);pj.push(triangles[i+1]);pk.push(triangles[i+2]);}
 const geometryCount=payload.geometry.length, volumeIndex=geometryCount, planeIndex=geometryCount+1, exactIndex=geometryCount+2, outlineIndex=geometryCount+3;
 let field='goodness',mode='volume',height=4;
+const backflow=payload.backflow;
+const backflowTraces=backflow?.traces||[];
+const backflowIndices=backflowTraces.map((_,i)=>geometryCount+4+i);
 const palette=info.palette;
-const title={goodness:'Ændring i VMG',speed:'VMG-bidrag fra vindstyrke',direction:'VMG-bidrag fra vinddrejning'};
-const colorbar={title:{text:'ΔVMG [knob]',side:'right'},len:.65,thickness:15,x:.98,tickformat:'+.2f',outlinewidth:0};
+const title={goodness:'Change in VMG',speed:'VMG contribution from wind speed',direction:'VMG contribution from wind direction',backflow:'Sail backflow'};
+const colorbar={title:{text:'ΔVMG [knots]',side:'right'},len:.65,thickness:15,x:.98,tickformat:'+.2f',outlinewidth:0};
 const common={colorscale:palette,cmin:ref.minimum,cmax:ref.maximum,showscale:false,colorbar:colorbar};
 const volume={...common,...isoMeshes[field],type:'mesh3d',opacity:.18,showscale:true,colorbar:structuredClone(colorbar),
-  lighting:{ambient:.85,diffuse:.25,specular:.05},name:'3D-felt',showlegend:false,
-  hovertemplate:'ΔVMG %{intensity:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
-function gridPlane(name,h){const k=Math.max(0,Math.min(nz-1,Math.round((h-axes.z[0])/(axes.z[1]-axes.z[0]))));
-  const rows=[],z=[];for(let j=0;j<ny;j++){rows.push(Array.from(fields[name].subarray((k*ny+j)*nx,(k*ny+j+1)*nx)));z.push(Array(nx).fill(axes.z[k]));}return {surfacecolor:rows,z:z};}
+  lighting:{ambient:.85,diffuse:.25,specular:.05},name:'3D field',showlegend:false,
+  hovertemplate:'ΔVMG %{intensity:+.3f} knots<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+const slicePlanes=new Map();
+let sliceAxes=axes;
+function gridPlane(name,h){
+ const k=Math.max(0,Math.min(sliceAxes.z.length-1,Math.round((h-sliceAxes.z[0])/(sliceAxes.z[1]-sliceAxes.z[0]))));
+ const key=name+':'+k;
+ if(slicePlanes.has(key))return slicePlanes.get(key);
+ const rows=[],z=Array.from({length:ny},()=>Array(nx).fill(axes.z[k]));
+ for(let j=0;j<ny;j++)rows.push(fields[name].subarray((k*ny+j)*nx,(k*ny+j+1)*nx));
+ const plane={surfacecolor:rows,z};slicePlanes.set(key,plane);return plane;
+}
+async function preloadSlices(){
+ const cache=window.windSliceCache;
+ if(!cache)return;
+ document.getElementById('loading').textContent='Preparing cached high-resolution slices …';
+ const width=cache.x.length,rows=cache.y.length,size=width*rows;
+ const decoded=await Promise.all(['goodness','speed','direction'].map(async name=>{
+  const bytes=decode(cache.fields[name],Uint8Array);
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return [name,new Float32Array(await new Response(stream).arrayBuffer())];
+ }));
+ slicePlanes.clear();sliceAxes=cache;
+ for(let k=0;k<cache.z.length;k++){
+  const z=Array.from({length:rows},()=>Array(width).fill(cache.z[k]));
+  for(const [name,values] of decoded){
+   const surfacecolor=Array.from({length:rows},(_,j)=>values.subarray(k*size+j*width,k*size+(j+1)*width));
+   slicePlanes.set(name+':'+k,{surfacecolor,z});
+  }
+ }
+ await Plotly.restyle(gd,{x:[cache.x],y:[cache.y]},[planeIndex]);
+ window.sliceCacheState={ready:true,heights:cache.z.length,width,rows,planes:slicePlanes.size};
+}
 const initial=gridPlane(field,height);
 const plane={...common,colorbar:structuredClone(colorbar),type:'surface',x:axes.x,y:axes.y,z:initial.z,surfacecolor:initial.surfacecolor,visible:false,opacity:1,
-  lighting:{ambient:1,diffuse:0,specular:0},connectgaps:false,showlegend:false,hovertemplate:'ΔVMG %{surfacecolor:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+  lighting:{ambient:1,diffuse:0,specular:0},connectgaps:false,showlegend:false,hovertemplate:'ΔVMG %{surfacecolor:+.3f} knots<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
 const exact={...common,colorbar:structuredClone(colorbar),type:'mesh3d',x:px,y:py,z:pz,i:pi,j:pj,k:pk,intensity:planeFields[field],visible:false,opacity:1,
   lighting:{ambient:1,diffuse:0,specular:0},flatshading:false,showlegend:false,
-  hovertemplate:'ΔVMG %{intensity:+.3f} knob<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
+  hovertemplate:'ΔVMG %{intensity:+.3f} knots<br>x=%{x:.1f} m · y=%{y:.1f} m · z=%{z:.1f} m<extra></extra>'};
 const hull=info.geometry.hull, outline={type:'scatter3d',mode:'lines',x:[...hull.map(p=>p[0]),hull[0][0]],y:[...hull.map(p=>p[1]),hull[0][1]],z:Array(hull.length+1).fill(height+.015),
   line:{color:'#536774',width:3},visible:false,showlegend:false,hoverinfo:'skip'};
 const fullRanges={'scene.xaxis.range':info.bounds_m[0],'scene.yaxis.range':info.bounds_m[1],'scene.zaxis.range':[0,info.bounds_m[2][1]]};
@@ -70,20 +102,37 @@ const nearRanges={'scene.xaxis.range':[-16,9],'scene.yaxis.range':[-8,16],'scene
 const camera={eye:{x:-.8,y:1.25,z:.7},up:{x:0,y:0,z:1},projection:{type:'orthographic'}};
 function aspect(ranges){const sizes=['x','y','z'].map(a=>ranges['scene.'+a+'axis.range'][1]-ranges['scene.'+a+'axis.range'][0]);const max=Math.max(...sizes);return {x:sizes[0]/max,y:sizes[1]/max,z:sizes[2]/max};}
 const layout={paper_bgcolor:'#f6f8fa',font:{family:'Arial',color:'#253b49'},margin:{l:0,r:75,t:20,b:10},showlegend:false,
- scene:{aspectmode:'manual',aspectratio:aspect(nearRanges),bgcolor:'#f6f8fa',camera:camera,
- xaxis:{title:{text:'Mod stævnen [m]'},range:nearRanges['scene.xaxis.range'],showbackground:false},
- yaxis:{title:{text:'Bagbord [m]'},range:nearRanges['scene.yaxis.range'],showbackground:false},
- zaxis:{title:{text:'Højde [m]'},range:[0,14],showbackground:false}}};
+ scene:{dragmode:'orbit',aspectmode:'manual',aspectratio:aspect(nearRanges),bgcolor:'#f6f8fa',camera:camera,
+ xaxis:{title:{text:'Toward bow [m]'},range:nearRanges['scene.xaxis.range'],showbackground:false},
+ yaxis:{title:{text:'Port [m]'},range:nearRanges['scene.yaxis.range'],showbackground:false},
+ zaxis:{title:{text:'Height [m]'},range:[0,14],showbackground:false}}};
 function setBusy(busy){document.getElementById('loading').style.display=busy?'block':'none';}
 async function refresh(){
+ const isBackflow=field==='backflow';
+ const traces=gd.data.slice();
+ for(const id of ['volumeMode','sliceMode','bothMode','height','opacity'])document.getElementById(id).disabled=isBackflow;
+ for(const index of backflowIndices)traces[index]={...traces[index],visible:isBackflow};
+ if(isBackflow){
+  for(const index of [volumeIndex,planeIndex,exactIndex,outlineIndex])traces[index]={...traces[index],visible:false,showscale:false};
+  await Plotly.react(gd,traces,gd.layout);
+  document.getElementById('reference').textContent=backflow
+   ? 'Orange: resolved backflow · '+(backflow.reverse_speed_m_s==null?'Reverse tangential flow': 'Tangential velocity < −'+backflow.reverse_speed_m_s+' m/s')+' · separation indicator, not the full separated region.'
+   : 'Backflow data is not available for this dataset.';
+  document.title=title.backflow;
+  window.viewerState={field,mode,height};return;
+ }
+ document.getElementById('reference').textContent=sharedScale
+  ? 'Shared colour scale across datasets · zero reference varies with height · estimated VMG in knots.'
+  : 'Same colour scale as 2D · zero reference varies with height · estimated VMG in knots.';
  const exactHeight=Math.abs(height-info.reference_height_m)<1e-6,vol=mode!=='slice',slice=mode!=='volume';
  const grid=gridPlane(field,height);
  const mesh=isoMeshes[field];
- await Plotly.restyle(gd,{x:[mesh.x],y:[mesh.y],z:[mesh.z],i:[mesh.i],j:[mesh.j],k:[mesh.k],intensity:[mesh.intensity],visible:vol,showscale:vol},[volumeIndex]);
- await Plotly.restyle(gd,{surfacecolor:[grid.surfacecolor],z:[grid.z],visible:slice&&!exactHeight,showscale:!vol&&!exactHeight},[planeIndex]);
- await Plotly.restyle(gd,{intensity:[planeFields[field]],visible:slice&&exactHeight,showscale:!vol&&exactHeight},[exactIndex]);
- await Plotly.restyle(gd,{z:[Array(hull.length+1).fill(height+.015)],visible:slice},[outlineIndex]);
- document.getElementById('heightValue').textContent=height.toLocaleString('da-DK')+' m';
+ traces[volumeIndex]={...traces[volumeIndex],...mesh,visible:vol,showscale:vol};
+ traces[planeIndex]={...traces[planeIndex],surfacecolor:grid.surfacecolor,z:grid.z,visible:slice&&!exactHeight,showscale:!vol&&!exactHeight};
+ traces[exactIndex]={...traces[exactIndex],intensity:planeFields[field],visible:slice&&exactHeight,showscale:!vol&&exactHeight};
+ traces[outlineIndex]={...traces[outlineIndex],z:Array(hull.length+1).fill(height+.015),visible:slice};
+ await Plotly.react(gd,traces,gd.layout);
+ document.getElementById('heightValue').textContent=height.toLocaleString('en-GB')+' m';
  for(const [name,id] of [['volume','volumeMode'],['slice','sliceMode'],['both','bothMode']])document.getElementById(id).classList.toggle('active',mode===name);
  document.title=title[field]+' · 3D';
  window.viewerState={field,mode,height,exactHeight};
@@ -94,15 +143,47 @@ document.getElementById('volumeMode').onclick=()=>setMode('volume');
 document.getElementById('sliceMode').onclick=()=>setMode('slice');
 document.getElementById('bothMode').onclick=()=>setMode('both');
 const heightInput=document.getElementById('height');heightInput.min=axes.z[0];heightInput.max=axes.z[nz-1];heightInput.step=axes.z[1]-axes.z[0];
-heightInput.oninput=e=>document.getElementById('heightValue').textContent=Number(e.target.value).toLocaleString('da-DK')+' m';
+heightInput.oninput=e=>document.getElementById('heightValue').textContent=Number(e.target.value).toLocaleString('en-GB')+' m';
 heightInput.onchange=async e=>{height=Number(e.target.value);await setMode(mode==='volume'?'both':mode);};
 document.getElementById('opacity').onchange=e=>Plotly.restyle(gd,{opacity:Number(e.target.value)},[volumeIndex]);
-document.getElementById('nearView').onclick=()=>Plotly.relayout(gd,{...nearRanges,'scene.aspectratio':aspect(nearRanges),'scene.camera':camera});
-document.getElementById('fullView').onclick=()=>Plotly.relayout(gd,{...fullRanges,'scene.aspectratio':aspect(fullRanges),'scene.camera':camera});
-document.getElementById('topView').onclick=()=>Plotly.relayout(gd,{'scene.camera':{eye:{x:0,y:0,z:2.4},up:{x:1,y:0,z:0},projection:{type:'orthographic'}}});
-document.getElementById('reference').textContent='Samme farveskala som 2D · nulpunkt følger højden · nøjagtig 2D-reference ved '+info.reference_height_m+' m · VMG-skøn i knob.';
-document.getElementById('status').textContent='Gemt 3D-resultat · iteration '+info.iteration+(info.checks_passed?'':' · foreløbig beregning');
-Plotly.newPlot(gd,[...payload.geometry,volume,plane,exact,outline],layout,{responsive:true,displaylogo:false,scrollZoom:true}).then(()=>{setBusy(false);window.viewerReady=true;window.viewerState={field,mode,height,exactHeight:true};}).catch(error=>{setBusy(false);document.getElementById('error').style.display='block';document.getElementById('error').textContent='Visningen kunne ikke åbnes: '+error.message;});
+document.getElementById('nearView').onclick=()=>Plotly.relayout(gd,{...nearRanges,'scene.dragmode':'orbit','scene.aspectratio':aspect(nearRanges),'scene.camera':camera});
+document.getElementById('fullView').onclick=()=>Plotly.relayout(gd,{...fullRanges,'scene.dragmode':'orbit','scene.aspectratio':aspect(fullRanges),'scene.camera':camera});
+document.getElementById('topView').onclick=()=>Plotly.relayout(gd,{'scene.dragmode':'orbit','scene.camera':{eye:{x:0,y:0,z:2.4},up:{x:1,y:0,z:0},projection:{type:'orthographic'}}});
+document.getElementById('reference').textContent='Same colour scale as 2D · zero reference varies with height · exact 2D reference at '+info.reference_height_m+' m · estimated VMG in knots.';
+document.getElementById('status').textContent='Saved 3D result · iteration '+info.iteration+(info.checks_passed?'':' · preliminary calculation');
+let sharedScale=null;
+function captureView(){
+ const scene=gd.layout.scene;
+ return structuredClone({field,mode,height,opacity:Number(document.getElementById('opacity').value),
+  camera:scene.camera,ranges:['x','y','z'].map(axis=>scene[axis+'axis'].range),
+  aspectratio:scene.aspectratio,aspectmode:scene.aspectmode});
+}
+async function restoreView(state,scale){
+ if(scale){
+  sharedScale=scale;
+  await Plotly.restyle(gd,{cmin:scale.minimum,cmax:scale.maximum,colorscale:[scale.palette]},[volumeIndex,planeIndex,exactIndex]);
+  document.getElementById('reference').textContent='Shared colour scale across datasets · zero reference varies with height · estimated VMG in knots.';
+ }
+ if(!state)return;
+ field=state.field;mode=state.mode;height=state.height;
+ document.getElementById('field').value=field;heightInput.value=height;
+ document.getElementById('opacity').value=state.opacity;
+ await refresh();
+ await Plotly.restyle(gd,{opacity:state.opacity},[volumeIndex]);
+ const ranges=Object.fromEntries(['x','y','z'].map((axis,i)=>['scene.'+axis+'axis.range',state.ranges[i]]));
+ await Plotly.relayout(gd,{...ranges,'scene.camera':state.camera,'scene.aspectmode':state.aspectmode,'scene.aspectratio':state.aspectratio});
+}
+window.addEventListener('message',async event=>{
+ if(event.source!==window.parent||!window.viewerReady)return;
+ if(event.data?.type==='capture-view')window.parent.postMessage({type:'captured-view',state:captureView()},'*');
+ if(event.data?.type==='restore-view')await restoreView(event.data.state,event.data.scale);
+});
+Plotly.newPlot(gd,[...payload.geometry,volume,plane,exact,outline,...backflowTraces],layout,{responsive:true,displaylogo:false,scrollZoom:true}).then(async()=>{
+ await preloadSlices();
+ await refresh();
+ setBusy(false);window.viewerReady=true;window.viewerState={field,mode,height,exactHeight:true};
+ if(window.parent!==window)window.parent.postMessage({type:'viewer-ready'},'*');
+}).catch(error=>{setBusy(false);document.getElementById('error').style.display='block';document.getElementById('error').textContent='Could not open viewer: '+error.message;});
 </script>
 </body>
 </html>

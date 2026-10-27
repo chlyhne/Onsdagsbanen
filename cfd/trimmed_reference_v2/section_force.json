@@ -1,0 +1,74 @@
+{
+  "height_m": 4.521615814353244,
+  "dynamic_pressure_Pa": 32.40445199746212,
+  "force_N_per_m": [
+    87.98576407161838,
+    238.90402983839505
+  ],
+  "bodies": {
+    "mast": {
+      "force_N_per_m": [
+        -6.2390478343829585,
+        5.478364391558902
+      ],
+      "pressure_N_per_m": [
+        -6.135993487538185,
+        5.383845985887477
+      ],
+      "friction_N_per_m": [
+        -0.10305434684477356,
+        0.0945184056714242
+      ]
+    },
+    "main": {
+      "force_N_per_m": [
+        31.458685285744927,
+        114.93464459659351
+      ],
+      "pressure_N_per_m": [
+        31.963622388399916,
+        114.7941020758086
+      ],
+      "friction_N_per_m": [
+        -0.504937102654987,
+        0.14054252078491727
+      ],
+      "reverse_wall_shear_length_percent": 2.170991510092068
+    },
+    "jib": {
+      "force_N_per_m": [
+        62.7661266202564,
+        118.49102085024263
+      ],
+      "pressure_N_per_m": [
+        63.14528615660401,
+        118.30828427627524
+      ],
+      "friction_N_per_m": [
+        -0.37915953634760957,
+        0.18273657396738704
+      ],
+      "reverse_wall_shear_length_percent": 2.8993165396125278
+    }
+  },
+  "history_force_N_per_m": [
+    87.9901008644521,
+    238.90182695272165
+  ],
+  "relative_force_integration_error": 1.9105987829744447e-05,
+  "force_integration_passed": true,
+  "axes": {
+    "x": "forward",
+    "y": "port"
+  },
+  "reverse_flow_note": "Reverse wall-shear length is a separation indicator, not full separation topology.",
+  "checks_passed": true,
+  "report": "section_report.json",
+  "attempts": [
+    {
+      "completed_at_utc": "2026-10-27T09:38:08.734438+00:00",
+      "seconds": 162.13282189999973,
+      "checks_passed": true
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "case": "NACA0012, incompressible SST V1994m, Re=6e6",
+  "alpha_deg": 10.0,
+  "solver_version": "SU2 8.5.0",
+  "reference_source": "https://tmbwg.github.io/turbmodels/naca0012_val_sst.html",
+  "reference_is": "CFL3D SSTm numerical reference at Mach 0.15; our solver is incompressible",
+  "lift_coefficient": 1.0703765905336522,
+  "drag_coefficient": 0.012552495678166686,
+  "reference_lift_coefficient": 1.0778080613,
+  "reference_drag_coefficient": 0.012362110998,
+  "lift_relative_error_or_absolute_at_zero": 0.006894985325480297,
+  "drag_relative_error": 0.015400660954871562,
+  "wall_yplus": {
+    "p50": 0.18187365,
+    "p95": 0.644503855,
+    "max": 0.6495683
+  },
+  "residuals": {
+    "rms[P]": -10.40358201,
+    "rms[U]": -8.832558436,
+    "rms[V]": -9.043520961,
+    "rms[k]": -10.44449,
+    "rms[w]": -5.45228888
+  },
+  "iterations": 336,
+  "iterations_scope": "Last solver invocation; restart iterations are not cumulative",
+  "convergence": {
+    "criteria": {
+      "flow_rms_log10_max": -6,
+      "turbulence_residual_reduction_orders": 6,
+      "force_window": 200,
+      "force_relative_range_max": 0.001,
+      "force_normalization_floor": 0.01
+    },
+    "turbulence_residual_reference_log10": {
+      "rms[k]": -3.662586338,
+      "rms[w]": 5.125108012
+    },
+    "turbulence_relative_residual_log10": {
+      "rms[k]": -6.7819036619999995,
+      "rms[w]": -10.577396892
+    },
+    "force_relative_ranges": {
+      "CFx": 0.0002916674174812108,
+      "CFy": 0.00022357706222877064
+    },
+    "checks": {
+      "flow_rms_below_1e_6": true,
+      "turbulence_residual_drop_6_orders": true,
+      "forces_stable_0_1_percent_over_200_iterations": true
+    },
+    "passed": true
+  },
+  "checks": {
+    "numerical_convergence": true,
+    "lift_within_5_percent_or_0_001_at_zero": true,
+    "drag_within_10_percent": true,
+    "wall_yplus_p95_below_2": true,
+    "wall_yplus_max_below_5": true
+  },
+  "passed": true,
+  "configuration": {
+    "SOLVER": "INC_RANS",
+    "KIND_TURB_MODEL": "SST",
+    "SST_OPTIONS": "V1994m",
+    "MATH_PROBLEM": "DIRECT",
+    "RESTART_SOL": "YES",
+    "SOLUTION_FILENAME": "restart",
+    "RESTART_FILENAME": "restart",
+    "INC_DENSITY_MODEL": "CONSTANT",
+    "INC_NONDIM": "INITIAL_VALUES",
+    "INC_DENSITY_INIT": "2.13163",
+    "INC_VELOCITY_INIT": "(51.36461797385773, 9.056968002574084, 0.0)",
+    "INC_ENERGY_EQUATION": "NO",
+    "VISCOSITY_MODEL": "CONSTANT_VISCOSITY",
+    "MU_CONSTANT": "1.853e-5",
+    "FREESTREAM_TURBULENCEINTENSITY": "0.0005163977794943222",
+    "FREESTREAM_TURB2LAMVISCRATIO": "0.009",
+    "MARKER_HEATFLUX": "(airfoil, 0.0)",
+    "MARKER_FAR": "(farfield)",
+    "MARKER_MONITORING": "(airfoil)",
+    "MARKER_PLOTTING": "(airfoil)",
+    "REF_LENGTH": "1.0",
+    "REF_AREA": "1.0",
+    "NUM_METHOD_GRAD": "GREEN_GAUSS",
+    "NUM_METHOD_GRAD_RECON": "LEAST_SQUARES",
+    "CFL_NUMBER": "0.2",
+    "CFL_ADAPT": "YES",
+    "CFL_ADAPT_PARAM": "(0.5, 1.1, 0.2, 300.0, 0.1)",
+    "CFL_REDUCTION_TURB": "1.0",
+    "LINEAR_SOLVER": "FGMRES",
+    "LINEAR_SOLVER_PREC": "ILU",
+    "LINEAR_SOLVER_ERROR": "0.001",
+    "LINEAR_SOLVER_ITER": "40",
+    "CONV_NUM_METHOD_FLOW": "FDS",
+    "MUSCL_FLOW": "YES",
+    "SLOPE_LIMITER_FLOW": "NONE",
+    "TIME_DISCRE_FLOW": "EULER_IMPLICIT",
+    "CONV_NUM_METHOD_TURB": "BOUNDED_SCALAR",
+    "MUSCL_TURB": "NO",
+    "TIME_DISCRE_TURB": "EULER_IMPLICIT",
+    "ITER": "600",
+    "CONV_FIELD": "(RMS_PRESSURE, RMS_VELOCITY-X, RMS_VELOCITY-Y, FORCE_X, FORCE_Y)",
+    "CONV_RESIDUAL_MINVAL": "-6",
+    "CONV_STARTITER": "20",
+    "CONV_CAUCHY_ELEMS": "200",
+    "CONV_CAUCHY_EPS": "2e-6",
+    "MESH_FILENAME": "yacht.su2",
+    "MESH_FORMAT": "SU2",
+    "TABULAR_FORMAT": "CSV",
+    "CONV_FILENAME": "history",
+    "VOLUME_FILENAME": "flow",
+    "SURFACE_FILENAME": "surface",
+    "OUTPUT_FILES": "(RESTART, PARAVIEW_ASCII, SURFACE_PARAVIEW_ASCII)",
+    "OUTPUT_WRT_FREQ": "(100, 600, 100)",
+    "VOLUME_OUTPUT": "(COORDINATES, SOLUTION, PRIMITIVE, TIMESTEP)",
+    "SCREEN_OUTPUT": "(INNER_ITER, RMS_PRESSURE, RMS_VELOCITY-X, RMS_VELOCITY-Y, RMS_TKE, RMS_DISSIPATION)",
+    "SCREEN_WRT_FREQ_INNER": "25",
+    "HISTORY_OUTPUT": "(ITER, RMS_RES, REL_RMS_RES, AERO_COEFF, LINSOL, CFL_NUMBER)"
+  }
+}

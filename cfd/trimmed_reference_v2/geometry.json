@@ -1,0 +1,96 @@
+{
+  "geometry_version": 4,
+  "hull": [
+    [
+      -5,
+      -0.5
+    ],
+    [
+      -4,
+      -1.15
+    ],
+    [
+      -2,
+      -1.5
+    ],
+    [
+      0,
+      -1.42
+    ],
+    [
+      2,
+      -1.05
+    ],
+    [
+      4,
+      -0.4
+    ],
+    [
+      5,
+      -0.025
+    ],
+    [
+      5,
+      0.025
+    ],
+    [
+      4,
+      0.4
+    ],
+    [
+      2,
+      1.05
+    ],
+    [
+      0,
+      1.42
+    ],
+    [
+      -2,
+      1.5
+    ],
+    [
+      -4,
+      1.15
+    ],
+    [
+      -5,
+      0.5
+    ]
+  ],
+  "sail_definitions": [
+    [
+      0.0,
+      3.7,
+      10.5,
+      12.1251296445924
+    ],
+    [
+      3.4,
+      2.8,
+      8.5,
+      23.32070050007657
+    ]
+  ],
+  "sail_shapes": [
+    {
+      "name": "main",
+      "camber": 0.12,
+      "thickness_ratio": 0.001,
+      "twist_deg": 2.0,
+      "trim_height_m": 1.15,
+      "head_luff_x_m": 0.0,
+      "draft_position": 0.45
+    },
+    {
+      "name": "jib",
+      "camber": 0.12,
+      "thickness_ratio": 0.001,
+      "twist_deg": 2.0,
+      "trim_height_m": 1.15,
+      "head_luff_x_m": 0.5,
+      "draft_position": 0.45
+    }
+  ],
+  "model": "12% depth at 45% chord; fixed 2-degree total twist; single-section sheeting study"
+}

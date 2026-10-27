@@ -27,6 +27,19 @@ than the jib there. Foot angles compensate for the fixed 2-degree twist. These
 are starting guesses; both sheeting angles remain free during the search, and
 the solver calculates the actual wind rotation from their interaction.
 
+To start a new search from the previously selected trim instead of these
+default angles, pass `--initial-trim` during preparation:
+
+```powershell
+python -m cfd.trim_2d prepare --study cfd/cases/trim_2d_100_seeded --initial-trim cfd/trimmed_reference
+python -u -m cfd.trim_2d run --study cfd/cases/trim_2d_100_seeded --max-evaluations 100 --max-hours 24
+```
+
+This seeds main and jib foot angles from the saved geometry (10.69° and
+22.54° respectively), with the initial simplex around that trim. Fixed shape,
+twist and numerical settings remain as specified for the new study. Existing
+studies are not modified; use a fresh study directory when changing the seed.
+
 The run uses two threads and calculates one candidate at a time. The budget is
 12 **total** evaluations, including any completed before resuming. Wall time
 is checked between solver invocations; a calculation already running may

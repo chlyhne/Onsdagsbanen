@@ -29,6 +29,20 @@ INITIAL = initial_angles(original(), read(REFERENCE/'marine_case.json'), represe
 
 
 class ShapeTests(unittest.TestCase):
+    def test_prepare_seeds_previous_trim_and_builds_simplex_around_it(self):
+        seed = Path('cfd/trimmed_reference')
+        expected = [case_chord_trim(read(seed/'geometry.json'), i, FOOT) for i in range(2)]
+        with tempfile.TemporaryDirectory() as directory:
+            study = Path(directory)/'study'
+            config = prepare_study(REFERENCE, study, initial_trim=seed)
+            np.testing.assert_allclose(config['initial'], expected)
+            np.testing.assert_allclose(config['initial_simplex'][0], expected)
+            np.testing.assert_allclose(config['initial_simplex'][1], [expected[0]+3., expected[1]])
+            np.testing.assert_allclose(config['initial_simplex'][2], [expected[0], expected[1]+3.])
+            self.assertEqual(config['initial_trim_source'], str(seed))
+            self.assertIsNone(config['initial_jib_aoa_deg'])
+            verify_inputs(study, config)
+
     def test_seed_gives_nine_degree_jib_chord_aoa_and_main_three_degrees_tighter(self):
         g=original()
         profile=read(REFERENCE/'marine_case.json')

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>3D wind field</title>
+<style>body{margin:0;font:14px system-ui;background:#f6f8fa;color:#253b49}label{display:block;padding:12px 20px}select{font:inherit;padding:6px}iframe{width:100%;height:calc(100vh - 60px);border:0}</style>
+<label>Dataset <select id="dataset"></select></label><iframe title="3D wind field" id="viewer"></iframe>
+<script>
+const datasets=[{"name": "trimmed_3d", "url": "datasets/output/trimmed_3d/wind_3d.html"}, {"name": "trimmed_3d_v2", "url": "datasets/output/trimmed_3d_v2/wind_3d.html"}, {"name": "v1_5ms", "url": "datasets/results/v1_5ms/wind_3d.html"}],select=document.getElementById('dataset'),frame=document.getElementById('viewer');
+const scale={"minimum": -0.5720351748917646, "maximum": 0.5720351748917646, "white_band": 0.00874730021598272, "palette": [[0.0, "#67001f"], [0.24617711436292455, "#ef8a62"], [0.4923542287258491, "#ffffff"], [0.5076457712741509, "#ffffff"], [0.7538228856370754, "#67a9cf"], [1.0, "#053061"]]};
+let state=null,ready=false,pending=null;
+for(const dataset of datasets){const option=new Option(dataset.name,dataset.url);select.add(option);}
+select.onchange=()=>{
+ pending=select.value;
+ if(ready)frame.contentWindow.postMessage({type:'capture-view'},'*');
+ else{frame.src=pending;pending=null;}
+};
+window.addEventListener('message',event=>{
+ if(event.source!==frame.contentWindow)return;
+ if(event.data?.type==='captured-view'){
+  state=event.data.state;
+  if(pending){ready=false;frame.src=pending;pending=null;}
+ }
+ if(event.data?.type==='viewer-ready'){
+  ready=true;frame.contentWindow.postMessage({type:'restore-view',state,scale},'*');
+ }
+});
+select.onchange();
+</script></html>

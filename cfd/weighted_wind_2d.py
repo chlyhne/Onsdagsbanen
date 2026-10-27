@@ -128,7 +128,11 @@ def prepare(source, output):
     return metadata, arrays
 
 
-def render(metadata, arrays, target, field="goodness"):
+def render(metadata, arrays, target, field="goodness", *, title=None, english=False, percentage=None):
+    if percentage is None:
+        percentage = metadata.get('display_units') == 'percent'
+    if percentage:
+        english = True
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -146,15 +150,18 @@ def render(metadata, arrays, target, field="goodness"):
     score = np.ma.masked_invalid(arrays[field])
     fig, ax = plt.subplots(figsize=FIGURE_SIZE, layout="constrained")
     image = ax.pcolormesh(px, py, score, shading="gouraud", cmap=cmap, norm=norm)
+    if Path(target).suffix.lower() == '.svg':
+        image.set_rasterized(True)
     ax.contourf(px, py, score, levels=[-ref["white_band"], ref["white_band"]], colors=["white"], zorder=2)
-    levels = np.arange(VMG_CONTOUR_STEP_KNOTS, ref["maximum"] + 1e-12, VMG_CONTOUR_STEP_KNOTS)
+    contour_step = metadata.get('contour_step', 2. if percentage else VMG_CONTOUR_STEP_KNOTS)
+    levels = np.arange(contour_step, ref["maximum"] + 1e-12, contour_step)
     levels = np.r_[-levels[::-1], levels]
     active = levels[(levels > score.min()) & (levels < score.max())]
     if len(active):
         contours = ax.contour(px, py, score, levels=active,
                               colors=["#a44b42" if v < 0 else "#427b9b" for v in active], linewidths=.7, zorder=3)
         contours.set_path_effects([path_effects.withStroke(linewidth=1.4, foreground="white")])
-        ax.clabel(contours, fmt=lambda v: f"{v:+.2f} knob".replace(".", ","), fontsize=9, inline=True)
+        ax.clabel(contours, fmt=lambda v: f"{v:+.0f}%" if percentage else f"{v:+.2f} knots" if english else f"{v:+.2f} knob".replace(".", ","), fontsize=9, inline=True)
     geometry = metadata["geometry"]
     hull = np.asarray(geometry["hull"])
     ax.add_patch(Polygon(top_view(hull), facecolor="#b8b8b8", edgecolor="#142b3b", linewidth=1.7, zorder=5,
@@ -166,15 +173,15 @@ def render(metadata, arrays, target, field="goodness"):
     # Same direction and placement as the existing map's true-wind arrow.
     twa = np.radians(metadata["true_wind_angle_deg"])
     ax.quiver(23, 5, -7 * np.sin(twa), -7 * np.cos(twa), angles="xy", scale_units="xy", scale=1, color="black", zorder=6)
-    ax.text(13, -4, "Sand vind", fontsize=15)
+    ax.text(13, -4, "True wind" if english else "Sand vind", fontsize=15)
     bar = fig.colorbar(image, ax=ax, orientation="horizontal", fraction=.04, pad=.025, shrink=.8,
                        ticks=np.linspace(norm.vmin, norm.vmax, 5))
-    bar.ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: ("0" if abs(v) < 1e-10 else f"{v:+.2f}").replace(".", ",")))
+    bar.ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: ("0" if abs(v) < 1e-10 else f"{v:+.2f}") if english else ("0" if abs(v) < 1e-10 else f"{v:+.2f}").replace(".", ",")))
     bar.ax.tick_params(labelsize=14, length=0, pad=8)
-    bar.set_label("Ændring i VMG [knob] · rød = dårligere · blå = bedre", fontsize=15, labelpad=10)
+    bar.set_label("Estimated change in VMG [%] · red = worse · blue = better" if percentage else "Estimated change in VMG [knots] · red = worse · blue = better" if english else "Ændring i VMG [knob] · rød = dårligere · blå = bedre", fontsize=15, labelpad=10)
     bar.outline.set_visible(False)
     ax.set(xlim=(-40, 30), ylim=(-50, 15), aspect="equal")
-    ax.set_title(f"{titles[field]} · vægtet over sejlhøjden", fontsize=22, pad=12)
+    ax.set_title(title or f"{titles[field]} · vægtet over sejlhøjden", fontsize=22, pad=12)
     ax.set_axis_off()
     fig.canvas.draw()
     fig.savefig(target, dpi=DPI)

@@ -4,7 +4,11 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
+import re
+import shutil
 from pathlib import Path
+from urllib.parse import quote
 
 import numpy as np
 
@@ -81,7 +85,7 @@ def iso_meshes(axes, scores, reference):
     spacing = [float(a[1] - a[0]) for a in axes]
     image = pv.ImageData(dimensions=(nx, ny, nz), spacing=spacing, origin=[a[0] for a in axes])
     limit = reference["maximum"]
-    magnitudes = sorted(set(v for v in (.025, .05, .1, .2, .4, limit) if v <= limit))
+    magnitudes = sorted(set(v for v in (*reference.get('contour_magnitudes', (.025, .05, .1, .2, .4)), limit) if v <= limit))
     levels = [-v for v in reversed(magnitudes)] + magnitudes
     result = {}
     for field, values in scores.items():
@@ -173,6 +177,47 @@ def encode(values, dtype="<f4"):
     return base64.b64encode(np.ascontiguousarray(values, dtype=dtype).tobytes()).decode("ascii")
 
 
+def backflow_payload(folder):
+    """Reuse extracted surfaces, or import the published legacy Plotly view."""
+    folder = Path(folder)
+    prefix = 'separation_3d_both_sides'
+    traces = []
+    if (folder / (prefix + '.npz')).exists():
+        info = json.loads((folder / (prefix + '.json')).read_text(encoding='utf-8'))
+        from cfd.separation_3d import BLOB_COLORS, WINDWARD_COLORS
+        with np.load(folder / (prefix + '.npz'), allow_pickle=False) as arrays:
+            for key, stats in info['sails'].items():
+                points, faces = arrays[key + '_points'], arrays[key + '_triangles']
+                side, sail = stats['side'], stats['sail']
+                traces.append(dict(type='mesh3d', **dict(zip(('x','y','z'), points.T.tolist())),
+                                   **dict(zip(('i','j','k'), faces.T.tolist())),
+                                   color=(BLOB_COLORS if side == 'leeward' else WINDWARD_COLORS)[sail],
+                                   meta={'side': side}, name=('Mainsail' if sail == 'main' else 'Jib') + ' · ' + side))
+        threshold = info['reverse_speed_m_s']
+    elif (folder / (prefix + '.html')).exists():
+        html = (folder / (prefix + '.html')).read_text(encoding='utf-8')
+        match = list(re.finditer(r'Plotly.newPlot\(\s*"[^"]+",\s*', html))[-1]
+        tail = html[match.end():]
+        data, end = json.JSONDecoder().raw_decode(tail)
+        layout, _ = json.JSONDecoder().raw_decode(tail[end:].lstrip()[1:].lstrip())
+        for trace in data:
+            key = trace.get('legendgroup', '')
+            if not key.startswith('reverse_'):
+                continue
+            side = 'windward' if key.endswith('_windward') else 'leeward'
+            trace.update(meta={'side': side}, name=('Mainsail' if key.startswith('reverse_main') else 'Jib') + ' · ' + side)
+            traces.append(trace)
+        note = ' '.join(a.get('text', '') for a in layout.get('annotations', []))
+        threshold_match = re.search(r'&lt;\s*[−-]([\d.]+)\s*m/s', note)
+        threshold = float(threshold_match[1]) if threshold_match else None
+    else:
+        return None
+    for trace in traces:
+        trace.update(visible=False, showlegend=False, opacity=.95, color='#df7026', name='Backflow',
+                     hovertemplate='Resolved backflow<br>x=%{x:.3f} m<br>y=%{y:.3f} m<br>z=%{z:.3f} m<extra></extra>')
+    return {'traces': traces, 'reverse_speed_m_s': threshold}
+
+
 def render(info, arrays, output):
     from plotly.offline import get_plotlyjs
     import plotly.io as pio
@@ -183,7 +228,7 @@ def render(info, arrays, output):
         trace["showlegend"] = False
         if trace["type"] == "mesh3d":
             trace["opacity"] = .24
-    payload = {"info": info, "geometry": geometry_traces,
+    payload = {"info": info, "geometry": geometry_traces, "backflow": backflow_payload(output),
                "axes": {key: arrays[key].tolist() for key in ("x", "y", "z")},
                "fields": {field: encode(arrays[field]) for field in FIELDS},
                "isosurfaces": {field: {"points": encode(arrays[field + "_iso_points"]),
@@ -192,11 +237,110 @@ def render(info, arrays, output):
                "planeFields": {field: encode(arrays["plane_" + field]) for field in FIELDS},
                "planePoints": encode(arrays["plane_points"]),
                "planeTriangles": encode(arrays["plane_triangles"], "<i4")}
-    template = (Path(__file__).parent / "viewer_templates" / "wind_3d.html").read_text()
+    template = (Path(__file__).parent / "viewer_templates" / "wind_3d.html").read_text(encoding="utf-8")
+    if info.get('display_units') == 'percent':
+        template = template.replace('ΔVMG [knots]', 'ΔVMG [%]').replace(' knots<br>', '%<br>').replace('estimated VMG in knots.', 'estimated change in VMG in percent.')
     html = template.replace("__PLOTLY_JS__", get_plotlyjs()).replace(
         "__PAYLOAD__", json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c"))
+    if (Path(output)/'wind_slices.js').exists():
+        html = html.replace('<script>\n\'use strict\';', '<script src="wind_slices.js"></script>\n<script>\n\'use strict\';')
     Path(output).mkdir(parents=True, exist_ok=True)
     (Path(output) / "wind_3d.html").write_text(html, encoding="utf-8")
+
+
+def update_dataset_selectors(root, current=None):
+    """Publish standalone datasets together with a fixed viewer entry point."""
+    root = Path(root)
+    shared = root / "visualizations"
+    viewers = set()
+    for folder in (Path(root) / "output", Path(root) / "results"):
+        viewers.update(path.resolve() for path in folder.glob("**/wind_3d.html"))
+    if current is not None:
+        viewers.add(Path(current).resolve())
+    published = []
+    for source in sorted(viewers):
+        relative = source.relative_to(root.resolve())
+        target = shared / "datasets" / relative.parts[0] / source.parent.parent.name / "wind_3d.html"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        html = source.read_text(encoding='utf-8')
+        payload = json.loads(re.search(r'const payload=(.*);', html)[1])
+        payload['backflow'] = backflow_payload(source.parent)
+        bundle = re.search(r'<script>(.*?)</script>', html, re.DOTALL)[1]
+        template = (root / 'viewer_templates/wind_3d.html').read_text(encoding='utf-8')
+        if (source.parent/'wind_slices.js').exists():
+            signature = json.loads((source.parent/'wind_slices.json').read_text(encoding='utf-8'))['signature']
+            if signature['source'] != payload['info']['source_sha256'] or signature['height_offsets'] != payload['info']['height_offsets']:
+                raise ValueError(f'Stale detailed slices in {source.parent}; rebuild with cfd.slice_cache')
+            shutil.copyfile(source.parent/'wind_slices.js', target.parent/'wind_slices.js')
+            template = template.replace('<script>\n\'use strict\';', '<script src="wind_slices.js"></script>\n<script>\n\'use strict\';')
+        target.write_text(template.replace('__PLOTLY_JS__', bundle).replace('__PAYLOAD__',
+                          json.dumps(payload, separators=(',', ':')).replace('<', '\\u003c')), encoding='utf-8')
+        published.append(target.resolve())
+    viewers = published
+    for viewer in viewers:
+        datasets = [{"name": path.parent.parent.name,
+                     "url": quote(Path(os.path.relpath(path, viewer.parent)).as_posix()),
+                     "selected": path == viewer} for path in viewers]
+        data = json.dumps(datasets, ensure_ascii=True).replace("<", "\\u003c")
+        block = '''<!-- DATASET_SELECTOR_START -->
+<script>
+{
+ const datasets=__DATASETS__;
+ const label=document.createElement('label');label.textContent='Dataset ';
+ const select=document.createElement('select');select.id='dataset';
+ for(const dataset of datasets){const option=document.createElement('option');
+  option.textContent=dataset.name;option.value=dataset.url;option.selected=dataset.selected;select.append(option);}
+ select.onchange=()=>{window.location.href=select.value;};
+ label.append(select);document.querySelector('.toolbar').prepend(label);
+}
+</script>
+<!-- DATASET_SELECTOR_END -->'''.replace('__DATASETS__', data)
+        html = viewer.read_text(encoding="utf-8")
+        html = re.sub(r"<!-- DATASET_SELECTOR_START -->.*?<!-- DATASET_SELECTOR_END -->\s*",
+                      "", html, flags=re.DOTALL)
+        html = html.replace("</head>", "<style>label:has(> #dataset){display:none}</style></head>")
+        viewer.write_text(html.replace("</body>", block + "\n</body>"), encoding="utf-8")
+    if viewers:
+        calibrations = []
+        for viewer in viewers:
+            match = re.search(r"const payload=(.*);", viewer.read_text(encoding="utf-8"))
+            calibrations.append(json.loads(match[1])["info"]["calibration"])
+        limit = max(max(abs(c["minimum"]), abs(c["maximum"])) for c in calibrations)
+        comparison_scale = {"minimum": -limit, "maximum": limit,
+                            "white_band": max(c["white_band"] for c in calibrations)}
+        comparison_scale["palette"] = palette(comparison_scale)
+        # A stable entry point; datasets stay alongside it, outside result folders.
+        entry = shared / "wind_3d.html"
+        options = [{"name": path.parent.name,
+                    "url": quote(Path(os.path.relpath(path, shared)).as_posix())}
+                   for path in viewers]
+        data = json.dumps(options, ensure_ascii=True).replace("<", "\\u003c")
+        entry.write_text('''<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>3D wind field</title>
+<style>body{margin:0;font:14px system-ui;background:#f6f8fa;color:#253b49}label{display:block;padding:12px 20px}select{font:inherit;padding:6px}iframe{width:100%;height:calc(100vh - 60px);border:0}</style>
+<label>Dataset <select id="dataset"></select></label><iframe title="3D wind field" id="viewer"></iframe>
+<script>
+const datasets=__DATASETS__,select=document.getElementById('dataset'),frame=document.getElementById('viewer');
+const scale=__SCALE__;
+let state=null,ready=false,pending=null;
+for(const dataset of datasets){const option=new Option(dataset.name,dataset.url);select.add(option);}
+select.onchange=()=>{
+ pending=select.value;
+ if(ready)frame.contentWindow.postMessage({type:'capture-view'},'*');
+ else{frame.src=pending;pending=null;}
+};
+window.addEventListener('message',event=>{
+ if(event.source!==frame.contentWindow)return;
+ if(event.data?.type==='captured-view'){
+  state=event.data.state;
+  if(pending){ready=false;frame.src=pending;pending=null;}
+ }
+ if(event.data?.type==='viewer-ready'){
+  ready=true;frame.contentWindow.postMessage({type:'restore-view',state,scale},'*');
+ }
+});
+select.onchange();
+</script></html>'''.replace('__DATASETS__', data).replace('__SCALE__', json.dumps(comparison_scale)), encoding="utf-8")
 
 
 def main():
@@ -216,7 +360,11 @@ def main():
     else:
         info, arrays = prepare(args.case, args.snapshot, args.output, args.spacing)
     render(info, arrays, args.output)
-    print(f"Viewer ready: {args.output / 'wind_3d.html'}", flush=True)
+    if not args.from_cache:
+        from cfd.slice_cache import prepare as prepare_slices
+        prepare_slices(args.case, args.output)
+    update_dataset_selectors(Path(__file__).parent, args.output / "wind_3d.html")
+    print(f"Viewer ready: {Path(__file__).parent / 'visualizations/wind_3d.html'}", flush=True)
 
 
 if __name__ == "__main__":

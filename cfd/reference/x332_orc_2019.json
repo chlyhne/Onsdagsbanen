@@ -1,0 +1,26 @@
+{
+  "class": "X-332",
+  "boat": "XPLORER",
+  "sail_number": "SWE 16532",
+  "certificate": "16532",
+  "orc_reference": "SWE20190353",
+  "issued": "2019-08-06",
+  "vpp_version": "2019 1.01",
+  "source_url": "https://matbrev.svensksegling.se/Files/ORCPdf/9bf397be-6679-4a24-94c9-f6c397e8d9b1.pdf",
+  "source_page": 1,
+  "data_note": "Transcribed from the certificate's velocity prediction table. Boat speeds and beat VMG are the printed rounded values, in knots; angles are degrees. These are VPP predictions for this certificate, not measurements or a class-wide polar.",
+  "true_wind_knots": [6, 8, 10, 12, 14, 16, 20],
+  "beat_angle_deg": [42.6, 41.2, 40.8, 39.4, 38.8, 38.7, 38.5],
+  "beat_vmg_knots": [3.31, 3.98, 4.52, 4.82, 4.92, 4.96, 5.03],
+  "true_wind_angle_deg": [52, 60, 75, 90, 110, 120, 135, 150],
+  "boat_speed_knots": [
+    [5.06, 5.98, 6.60, 6.87, 6.97, 7.02, 7.08],
+    [5.36, 6.27, 6.79, 7.04, 7.16, 7.22, 7.27],
+    [5.59, 6.49, 6.93, 7.20, 7.40, 7.55, 7.67],
+    [5.52, 6.53, 7.05, 7.30, 7.49, 7.75, 8.15],
+    [5.51, 6.60, 7.13, 7.50, 7.88, 8.16, 8.54],
+    [5.33, 6.45, 7.04, 7.42, 7.83, 8.25, 8.90],
+    [4.81, 5.89, 6.71, 7.15, 7.51, 7.93, 8.85],
+    [4.07, 5.12, 6.03, 6.74, 7.15, 7.49, 8.28]
+  ]
+}

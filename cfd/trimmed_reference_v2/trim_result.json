@@ -1,0 +1,86 @@
+{
+  "search_status": "ballpark_found",
+  "best": {
+    "parameters": [
+      12.1251296445924,
+      23.32070050007657
+    ],
+    "checks_passed": true,
+    "forces": {
+      "drive_N_per_m": 87.98576407161838,
+      "side_force_N_per_m": 238.90402983839505
+    },
+    "section_keys": [
+      "41b3c55780bd391dab06"
+    ],
+    "completed_at_utc": "2026-10-27T09:38:08.837542+00:00"
+  },
+  "study": {
+    "format_version": 3,
+    "created_at_utc": "2026-10-27T08:49:13.639283+00:00",
+    "parameters": [
+      "main_foot_deg",
+      "jib_foot_deg"
+    ],
+    "initial": [
+      10.6925124570924,
+      22.54140362507657
+    ],
+    "bounds": [
+      [
+        0.0,
+        30.0
+      ],
+      [
+        0.0,
+        30.0
+      ]
+    ],
+    "foot_angle_bounds_deg": [
+      0.0,
+      30.0
+    ],
+    "total_twist_deg": 2.0,
+    "initial_simplex": [
+      [
+        10.6925124570924,
+        22.54140362507657
+      ],
+      [
+        13.6925124570924,
+        22.54140362507657
+      ],
+      [
+        10.6925124570924,
+        25.54140362507657
+      ]
+    ],
+    "initial_trim_source": "cfd\\trimmed_reference",
+    "initial_jib_aoa_deg": null,
+    "initial_main_tighter_deg": null,
+    "aoa_reference": "Chord relative to undisturbed apparent wind at the selected section",
+    "angle_tolerance_deg": 1.0,
+    "relative_force_tolerance": 0.01,
+    "camber": 0.12,
+    "draft_position": 0.45,
+    "height_m": 4.521615814353244,
+    "iterations": 3500,
+    "continuations": 1,
+    "threads": 2,
+    "sail_size_m": 0.06,
+    "objective": "Maximise forward force per metre in one section at fixed speed and heading",
+    "search_method": "Bounded Nelder-Mead around the seeded trim; coarse local search, not a precise or global optimum",
+    "limitations": [
+      "2D sections have no spanwise induction or tip vortices.",
+      "No keel drag, heel equilibrium or speed/VMG optimisation.",
+      "One representative section is used; whole-rig forces are not estimated.",
+      "Published sail shapes are plausibility references, not validation."
+    ],
+    "implementation_sha256": "83f786539850e504e77a4e386a8659f5ae452f80668fe91ed7df431a4698cb45",
+    "inputs_sha256": "6785080165738d9670d73262ea863a8ebd2abef5203ca1b58a6b7cfab8d9eace",
+    "configuration_sha256": "e56622701fbfe02dbc1e3a20bef7066489e1acd2f3032ae232016b66e27f2ae7"
+  },
+  "exported_at_utc": "2026-10-27T10:04:17.423909+00:00",
+  "requires_3d_validation": true,
+  "solver_3d_run": false
+}

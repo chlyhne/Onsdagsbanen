@@ -1,5 +1,22 @@
 # Sejlbåd på kryds — version 1.0
 
+## Default PNG export: height average
+
+`python -m cfd.plot_wind --case <case>` now exports all three standard PNGs
+as sail-chord-weighted averages over the full sail height. Automatic PNG export
+after a future simulation uses the same default. The averaging integrates each
+layer's displayed score with weight `c_main(z) + c_jib(z)`; it does not average
+velocity vectors or image colours. Columns missing any required layer stay masked.
+
+This is post-processing of saved 3D data and never starts a solver. It requires
+the saved mesh/checkpoint and plot context, so a compact single-slice snapshot
+alone is insufficient for the default export. There is no fallback to a 4 m slice.
+For an explicitly requested single-height PNG, use `--slice`. Older instructions
+below describing the single-slice export apply to this explicit option.
+
+The HTML viewer's horizontal slices remain selectable single-height views.
+Changing this default does not regenerate any existing result files.
+
 Stationær, tredimensionel RANS med SU2 8.5.0 og SST V1994m. Båden bevæger
 sig med 6 knob, sand vind kommer 41° fra styrbord, og den seneste kørsel
 har 5 m/s sand vind ved 10 m. Sejlene har separat trim og twist.

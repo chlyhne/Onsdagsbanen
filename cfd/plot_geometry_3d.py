@@ -16,10 +16,10 @@ from cfd.rans_mesh import FOOT, section
 from cfd.storage import case_file, result_dir
 
 
-COLORS = {"Skrog": "#578ea9", "Mast": "#536774",
-          "Storsejl": "#60a4bb", "Forsejl": "#b49a68"}
-NOTE = ("Geometrivisning · ingen separationsblob. "
-        "Blobben kræver det oprindelige 3D-strømningsfelt.")
+COLORS = {"Hull": "#578ea9", "Mast": "#536774",
+          "Mainsail": "#60a4bb", "Jib": "#b49a68"}
+NOTE = ("Geometry preview · no separation volume. "
+        "The separation volume requires the original 3D flow field.")
 
 
 def grid_triangles(rows, columns):
@@ -45,7 +45,7 @@ def geometry_surfaces(geometry):
         faces.extend(((0, i + 1, i), (n, n + i, n + i + 1)))
     outlines = [np.vstack((points[:n], points[0])),
                 np.vstack((points[n:], points[n]))]
-    surfaces.append(("Skrog", points, np.asarray(faces), outlines))
+    surfaces.append(("Hull", points, np.asarray(faces), outlines))
 
     angle = np.linspace(0, 2 * np.pi, 33)
     mast = np.array([np.column_stack((.15 + .075 * np.cos(angle),
@@ -53,7 +53,7 @@ def geometry_surfaces(geometry):
                      for z in (.5, 12.)])
     surfaces.append(("Mast", mast.reshape(-1, 3), grid_triangles(*mast.shape[:2]), []))
 
-    names = {"main": "Storsejl", "jib": "Forsejl"}
+    names = {"main": "Mainsail", "jib": "Jib"}
     for sail, shape in zip(geometry["sail_definitions"], geometry["sail_shapes"], strict=True):
         # Average the exact two skins rather than inventing a planar triangle.
         # Thickness (~0.1% chord) is omitted only for transparent rendering.
@@ -86,26 +86,26 @@ def interactive_figure(surfaces):
                 line=dict(color=COLORS[name], width=3), opacity=.8,
                 legendgroup=name, showlegend=False, hoverinfo="skip"))
     cameras = {
-        "Skråt": dict(x=-1.5, y=2.2, z=.9),
-        "Fra siden": dict(x=0, y=2.7, z=.15),
-        "Agterfra": dict(x=-2.7, y=0, z=.15),
-        "Ovenfra": dict(x=0, y=0, z=2.7),
+        "Oblique view": dict(x=-1.5, y=2.2, z=.9),
+        "Side view": dict(x=0, y=2.7, z=.15),
+        "Stern view": dict(x=-2.7, y=0, z=.15),
+        "Top view": dict(x=0, y=0, z=2.7),
     }
     fig.update_layout(
-        title=dict(text="Gennemsigtig båd og sejl · eksisterende 3D-geometri", x=.04),
+        title=dict(text="Transparent boat and sails · saved 3D geometry", x=.04),
         font=dict(family="Arial", color="#253b49"), paper_bgcolor="#f6f8fa",
         margin=dict(l=0, r=0, t=100, b=80),
         scene=dict(aspectmode="data", bgcolor="#f6f8fa",
-                   xaxis=dict(title="x · mod stævnen [m]", range=[-5.7, 5.7]),
-                   yaxis=dict(title="y · bagbord [m]", range=[-2.7, 2.7]),
-                   zaxis=dict(title="Højde [m]", range=[-.6, 12.3]),
-                   camera=dict(eye=cameras["Skråt"], projection=dict(type="orthographic"))),
+                   xaxis=dict(title="x · toward bow [m]", range=[-5.7, 5.7]),
+                   yaxis=dict(title="y · port [m]", range=[-2.7, 2.7]),
+                   zaxis=dict(title="Height [m]", range=[-.6, 12.3]),
+                   camera=dict(eye=cameras["Oblique view"], projection=dict(type="orthographic"))),
         legend=dict(orientation="h", x=.04, y=1.02, groupclick="togglegroup"),
         updatemenus=[dict(type="buttons", direction="right", x=.54, y=1.06,
                          buttons=[dict(label=label, method="relayout",
                                        args=[{"scene.camera.eye": eye}])
                                   for label, eye in cameras.items()])],
-        annotations=[dict(text=NOTE + "<br>Træk for at dreje · rul for at zoome.",
+        annotations=[dict(text=NOTE + "<br>Drag to rotate · scroll to zoom.",
                           xref="paper", yref="paper", x=.02, y=-.07,
                           showarrow=False, align="left", font=dict(size=13))])
     return fig
@@ -126,19 +126,19 @@ def save_png(surfaces, target):
         for line in outlines:
             ax.plot(*line.T, color=COLORS[name], linewidth=.8, alpha=.85)
     ax.set(xlim=(-5.7, 5.7), ylim=(-2.7, 2.7), zlim=(-.6, 12.3),
-           xlabel="Mod stævnen [m]", ylabel="Bagbord [m]", zlabel="Højde [m]")
+           xlabel="Toward bow [m]", ylabel="Port [m]", zlabel="Height [m]")
     ax.set_box_aspect((11.4, 5.4, 12.9))
     ax.set_proj_type("ortho")
     ax.view_init(elev=15, azim=125)
     for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
         axis.pane.fill = False
         axis._axinfo["grid"]["color"] = (.6, .67, .72, .15)
-    fig.suptitle("Gennemsigtig båd og sejl", fontsize=20, color="#253b49", y=.95)
-    fig.text(.5, .90, "Sejlenes krumning og twist fra den gemte 3D-geometri",
+    fig.suptitle("Transparent boat and sails", fontsize=20, color="#253b49", y=.95)
+    fig.text(.5, .90, "Sail curvature and twist from the saved 3D geometry",
              ha="center", fontsize=11, color="#536774")
-    fig.text(.5, .065, "Geometrivisning · ingen separationsblob",
+    fig.text(.5, .065, "Geometry preview · no separation volume",
              ha="center", fontsize=11, color="#76542e")
-    fig.text(.5, .038, "En 3D-blob kræver det oprindelige 3D-strømningsfelt.",
+    fig.text(.5, .038, "A separation volume requires the original 3D flow field.",
              ha="center", fontsize=10, color="#536774")
     fig.savefig(target, dpi=180, facecolor=fig.get_facecolor())
     plt.close(fig)
