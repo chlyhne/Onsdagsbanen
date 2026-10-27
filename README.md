@@ -11,6 +11,16 @@ Python CLI project to:
 2. Combine class-group race rankings into one result
 3. Produce a combined PDF report
 
+## Omvendt respit
+
+Den selvstændige mappe `omvendt_respit/` beregner banelængde, GPH-starttider og PDF ud fra lokale CSV-filer, helt uden netværk:
+
+```bash
+python3 omvendt_respit/run.py
+```
+
+Se [brugsvejledning og de tre moduler](omvendt_respit/README.md).
+
 ## Architecture
 
 - API-first only: no browser automation

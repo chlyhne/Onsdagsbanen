@@ -259,6 +259,36 @@ def soft_match_competitors(frame: pd.DataFrame) -> pd.DataFrame:
     ])
 
 
+def complete_season_rosters(frame: pd.DataFrame) -> pd.DataFrame:
+    """Include each season's entrants in every race, even without a source row."""
+    missing_rows: list[dict[str, Any]] = []
+    for _, season in frame.groupby(["group", "year"], sort=False):
+        races = season.drop_duplicates("race").sort_values("race_date")
+        for _, entries in season.groupby("competitor", sort=False):
+            entries = entries.sort_values("race_date")
+            present = set(entries["race"])
+            for _, race in races.iterrows():
+                if race["race"] in present:
+                    continue
+                # Carry boat metadata from the last entry, or the first entry
+                # when the boat only appears later in this same season.
+                earlier = entries[entries["race_date"] <= race["race_date"]]
+                metadata = earlier.iloc[-1] if not earlier.empty else entries.iloc[0]
+                row = metadata.to_dict()
+                for column in ("race", "race_local", "race_date"):
+                    row[column] = race[column]
+                peers = season[(season["race"] == race["race"]) & (season["series"] == metadata["series"])]
+                lengths = peers["length_nm"].dropna().unique()
+                row["length_nm"] = lengths[0] if len(lengths) == 1 else np.nan
+                for column in ("sailed_seconds", "beregnet_seconds", "race_points", "race_rank_raw"):
+                    row[column] = np.nan
+                row["race_status_code"] = "DNC"
+                missing_rows.append(row)
+    if not missing_rows:
+        return frame.copy()
+    return pd.concat([frame, pd.DataFrame(missing_rows)], ignore_index=True)
+
+
 def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
     frames_by_group: dict[str, list[pd.DataFrame]] = {}
 
@@ -376,7 +406,9 @@ def build_group_data() -> tuple[list[dict[str, Any]], pd.DataFrame]:
     updated_groups: list[dict[str, Any]] = []
     for idx, group in enumerate(groups):
         updated = dict(group)
-        updated["combined"] = stacked[stacked["_group_idx"] == idx].drop(columns=["_group_idx"]).reset_index(drop=True)
+        updated["combined"] = complete_season_rosters(
+            stacked[stacked["_group_idx"] == idx].drop(columns=["_group_idx"]).reset_index(drop=True)
+        )
         updated_groups.append(updated)
 
     all_data = pd.concat([group["combined"] for group in updated_groups], ignore_index=True) if updated_groups else pd.DataFrame()

@@ -401,6 +401,15 @@ def run_pipeline(*, output_dir: Path, q_objective: str, run_q_diagnostics: bool 
         allowed_competitors=included_plot_competitors,
         output_dir=boat_plot_data_dir,
     )
+    # Keep the full model history, but align this comparison on 2026 races only.
+    export_boat_plot_data(
+        all_predictions.loc[all_predictions["year"] == 2026],
+        allowed_competitors={
+            name for name in included_plot_competitors
+            if name.casefold() in {"casper lyhne", "jens eskildsen"}
+        },
+        output_dir=boat_plot_data_dir / "2026",
+    )
     stor_bane_split_tex_path = export_stor_bane_split_recommendation(
         manifest_path=manifest_path,
         boat_plot_data_dir=boat_plot_data_dir,

@@ -1,0 +1,2 @@
+reportlab>=4.2.0
+geographiclib>=2.0,<3

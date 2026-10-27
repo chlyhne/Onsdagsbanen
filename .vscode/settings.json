@@ -1,59 +1,20 @@
 {
   "latex-workshop.latex.autoBuild.run": "never",
-  "latex-workshop.latex.outDir": "%DIR%",
+  "latex-workshop.latex.outDir": "%DIR%/build/latex",
   "latex-workshop.latex.tools": [
     {
-      "name": "pdflatex-external-list",
-      "command": "latexmk",
-      "args": [
-        "-pdf",
-        "-synctex=1",
-        "-interaction=nonstopmode",
-        "-file-line-error",
-        "-shell-escape",
-        "-cd",
-        "%DOC%"
-      ]
-    },
-    {
-      "name": "parallel-tikz-externalize",
+      "name": "build-paper",
       "command": "python3",
       "args": [
-        "%DIR%/build_external_plots.py",
-        "--tex-file",
-        "%DOC%",
-        "--jobs",
-        "0"
-      ]
-    },
-    {
-      "name": "latexmk-final",
-      "command": "latexmk",
-      "args": [
-        "-g",
-        "-synctex=1",
-        "-interaction=nonstopmode",
-        "-file-line-error",
-        "-shell-escape",
-        "-pdf",
-        "-cd",
-        "%DOC%"
+        "%DIR%/build.py"
       ]
     }
   ],
   "latex-workshop.latex.recipes": [
     {
-      "name": "Parallel externalized PGF build",
+      "name": "Build paper in separate folders",
       "tools": [
-        "pdflatex-external-list",
-        "parallel-tikz-externalize",
-        "latexmk-final"
-      ]
-    },
-    {
-      "name": "latexmk-final",
-      "tools": [
-        "latexmk-final"
+        "build-paper"
       ]
     }
   ],
