@@ -13,6 +13,10 @@ cfd/results/**/diagnostics/
 cfd/results/**/weighted_2d/*.npz
 .local/
 /build/
+# SQLite sidecars are runtime state, including beside the versioned seed copy.
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
 .ruff_cache/
 *.pyc
 *.pyo

@@ -18,7 +18,18 @@ Normal lokal opstart med rigtigt login:
 .venv/bin/python -m onsdagsbane
 ```
 
-Normal opstart bruger `build/onsdagsbane/app.sqlite3`. På første opstart indlæses de medfølgende offentlige Manage2Sail-data; efterfølgende er databasen autoritativ. Der foretages ikke automatisk genimport eller overskrivning fra Manage2Sail.
+Normal opstart bruger `build/onsdagsbane/app.sqlite3`. Første opstart kopierer `src/onsdagsbane/seed/onsdagsbane.sqlite3`, som indeholder de gemte bådprofiler, komplette TACIL/M/H-sæt, serier, løbsinddeling og resultater. Serveren skriver i sin egen kopi. En eksisterende driftsdatabase overskrives aldrig af en ny Git-version. Docker og Render bruger den vedvarende database `/data/onsdagsbane.sqlite3`; databasen sendes ikke til browseren.
+
+Startdatabasen i Git har ingen brugerkonti, sessioner eller OAuth-loginforsøg. Domænehistorik bevares uden brugeridentiteter og loginhemmeligheder. De oprindelige JSON-filer fra Manage2Sail beholdes som arkiv og reserveimport.
+
+Opdatér kopien til Git udtrykkeligt fra den ønskede driftsdatabase:
+
+```bash
+python -m onsdagsbane.snapshot --source build/onsdagsbane/app-v2-preview.sqlite3
+git add src/onsdagsbane/seed/onsdagsbane.sqlite3
+```
+
+Eksporten laver en separat, renset kopi med SQLite-backup og verificerer relationer og filens integritet. Driftsdatabasen ændres ikke. Til servereksport erstattes stien med serverens driftsdatabase; efterfølgende kodeudrulning bevarer fortsat serverens eksisterende data.
 
 Til et offentligt udseende lokalt preview med et midlertidigt administratorlogin:
 

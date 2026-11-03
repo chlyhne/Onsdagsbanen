@@ -24,7 +24,11 @@ LOG = logging.getLogger(__name__)
 
 class Application:
     def __init__(self, db_path=None, base_url=None, demo=False, initialize=True, preview_admin=False):
-        self.store = Store(db_path or os.getenv('ONSDAGSBANE_DB','build/onsdagsbane/app.sqlite3'))
+        path=db_path or os.getenv('ONSDAGSBANE_DB','build/onsdagsbane/app.sqlite3')
+        if initialize:
+            from .snapshot import bootstrap_database
+            bootstrap_database(path)
+        self.store = Store(path)
         self.base_url = (base_url or os.getenv('BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'http://localhost:8090').rstrip('/')
         if not re.fullmatch(r'https?://[^/]+',self.base_url):
             raise ValueError('BASE_URL skal være et origin, fx https://onsdagsbanen.dk')

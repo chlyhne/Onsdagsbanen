@@ -933,7 +933,8 @@ class ImportTests(unittest.TestCase):
             return read_text(path, *args, **kwargs)
 
         with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'read_text', windows_read):
-            app = Application(db_path=Path(tmp)/'db')
+            app = Application(db_path=Path(tmp)/'db',initialize=False)
+            seed(app.store)
             with app.store.connect(write=True) as db:
                 profile = db.execute('SELECT * FROM boat_profiles WHERE skipper=?', ('Oluf GRØNKJÆR',)).fetchone()
                 self.assertIsNotNone(profile)
@@ -954,8 +955,10 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual([tuple(row) for row in db.execute('SELECT * FROM finishes ORDER BY race_id,boat_id')], finishes)
 
     def test_real_source_results_preserved_and_repeat_safe(self):
+        from onsdagsbane.importer import seed
         with tempfile.TemporaryDirectory() as tmp:
-            app=Application(db_path=Path(tmp)/'db')
+            app=Application(db_path=Path(tmp)/'db',initialize=False)
+            seed(app.store)
             with app.store.connect() as db:
                 self.assertEqual(db.execute('SELECT count(*) FROM boats').fetchone()[0],31)
                 self.assertEqual(db.execute('SELECT count(*) FROM finishes').fetchone()[0],514)

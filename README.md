@@ -12,6 +12,8 @@ Den selvstændige webapp kan afprøves lokalt med:
 
 Arbejdet er organiseret omkring serier og ræs med egne adresser. Bådregisteret er fælles på tværs af serier, og **Både og løbsinddeling** er et stort arbejdsområde med automatisk gemning. Hvert ræs samler opsætning, startlister, måltagning, resultater og historik.
 
+Repoet indeholder også en database med de aktuelle båd- og løbsdata. Ved første opstart kopieres den til serverens egen driftsdatabase. Efterfølgende opstarter og kodeopdateringer bevarer serverens data. Loginoplysninger og sessioner indgår ikke i startdatabasen.
+
 
 Projektets mapper og de nye filstier er beskrevet i [docs/STRUCTURE.md](docs/STRUCTURE.md).
 

@@ -31,7 +31,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-onsdagsbane = ["static/*", "static/core/*.js", "static/features/*.js", "seed/*.json", "schema/*.sql"]
+onsdagsbane = ["static/*", "static/core/*.js", "static/features/*.js", "seed/*.json", "seed/*.sqlite3", "schema/*.sql"]
 
 [tool.ruff]
 cache-dir = "build/cache/ruff"

@@ -1,5 +1,9 @@
 # Startdata fra Manage2Sail
 
+`onsdagsbane.sqlite3` er en renset kopi af den aktuelle båd- og løbsdatabase med de supplerede TACIL/M/H-tal. Ved første serverstart kopieres den til den skrivbare driftsdatabase; filen i Git bruges aldrig som driftsdatabase. Eksisterende serverdata bevares ved senere opstart. Kopien omfatter ingen brugerkonti, sessioner eller OAuth-loginforsøg. Den opdateres udtrykkeligt med `python -m onsdagsbane.snapshot --source <driftsdatabase>`.
+
+JSON-filerne nedenfor er det oprindelige arkiv og en reserveimport, hvis databasekopien ikke er tilgængelig.
+
 De fire JSON-filer er offentlige API-svar hentet 2. november 2026 fra Onsdagsbanen 2026:
 
 `https://www.manage2sail.com/api/event/f72fb377-79d4-4b4b-8484-d6687df25441/regattaresult/<klasse-id>`
@@ -15,4 +19,4 @@ Importen bevarer oprindelige sejltider, beregnede tider, handicap, distancer og 
 
 WindSpeedType-mappingen 0 → let, 1 → mellem, 2 → hård er verificeret mod 514 sammenfald mellem API'ets anvendte Hdcp og de tre lokale TACIL/M/H-tal (90 let, 394 mellem, 30 hård). Det er en observation om dette datasæt.
 
-Første opstart importerer 31 både og 514 resultatregistreringer fordelt på 34 bane/sejlads-kombinationer. Senere opstarter ændrer ikke databasen fra startdata.
+Den oprindelige JSON-import indeholder 31 både og 514 resultatregistreringer fordelt på 34 bane/sejlads-kombinationer. Den aktuelle SQLite-kopi indeholder også de senere gemte ændringer. Senere opstarter overskriver ikke driftsdatabasen fra startdata.
