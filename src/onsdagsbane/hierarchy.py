@@ -1,5 +1,6 @@
 """Planned series rounds, courses and fleets, independently of race results."""
 import re
+from datetime import date, timedelta
 from uuid import uuid4
 from .store import audit, get
 
@@ -79,7 +80,14 @@ def create_rounds(db,series_id,value,user,fleets=None,start_times=None):
 
 def structure(db,series_id):
     rounds=[dict(r) for r in db.execute('SELECT * FROM rounds WHERE series_id=? ORDER BY position,id',(series_id,))]
+    previous_date=None
     for item in rounds:
+        item['suggested_date']=None
+        if item['race_date']:
+            previous_date=date.fromisoformat(item['race_date'])
+        elif previous_date is not None:
+            previous_date+=timedelta(days=7)
+            item['suggested_date']=previous_date.isoformat()
         item['courses']=[]
         for course in db.execute('SELECT c.*,r.id race_id FROM round_courses c LEFT JOIN races r ON r.round_course_id=c.id WHERE c.round_id=? ORDER BY c.course DESC',(item['id'],)):
             child=dict(course)

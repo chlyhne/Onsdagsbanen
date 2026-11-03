@@ -7,17 +7,18 @@ Version 1 er gemt i commit `8f4d797`. Refaktoreringen ændrer navigationen, modu
 | Adresse | Formål |
 | --- | --- |
 | `/results` | Offentlige resultater, delbare valg og PDF |
-| `/today` | Genvej til det aktuelle eller næste åbne ræs |
+| `/timing?series={id}&round={uid}` | Måltagning med synligt valg af serie og ræs |
+| `/today` | Gammelt link; åbner måltagning med eksplicit serie og ræs |
 | `/series` | Opret og vælg serie |
-| `/series/{id}` | Seriens ræs, datoer, fremdrift og offentliggørelse |
-| `/series/{id}/boats` | Serietilmeldinger og afmelding af tomme tilmeldinger |
+| `/series/{id}` | Serieindstillinger med knap til løbsinddeling og opsætning af hvert ræs |
+| `/series/{id}/boats` | Gammelt link; åbner serieindstillingerne |
 | `/series/{id}/assignments` | Både og løbsinddeling i et stort arbejdsområde |
-| `/series/{id}/results` | Seriens samlede resultater |
-| `/series/{id}/settings` | Seriens standarder og indstillinger |
+| `/series/{id}/results` | Gammelt link; åbner `/results` med serien valgt |
+| `/series/{id}/settings` | Gammelt link; åbner `/series/{id}` |
 | `/rounds/{uid}/setup` | Dato, starttider, bane og beregningsgrundlag |
 | `/rounds/{uid}/starts` | Ræsets startlister |
-| `/rounds/{uid}/timing` | Fælles måltagning for begge baner |
-| `/rounds/{uid}/results` | Resultater for netop dette ræs |
+| `/rounds/{uid}/timing` | Gammelt link; åbner `/timing` med serie og ræs valgt |
+| `/rounds/{uid}/results` | Gammelt link; åbner `/results` med sejladsen valgt |
 | `/rounds/{uid}/history` | Administratorens ændringshistorik for ræset |
 | `/boats` | Fælles bådregister og handicapsæt |
 | `/admin` | Brugeradgang og samlet ændringshistorik |
@@ -47,6 +48,8 @@ erDiagram
 
 Når banen indstilles, får deltagelsen start, distance og reference til et uforanderligt handicapsæt. Senere ændringer i bådregisteret omskriver ikke historikken. `entries` og `heat_boats` er SQL-views med skrivetriggere over `participations`, så eksisterende beregningskode bruger samme datagrundlag.
 
+Bådregisteret viser en responsiv liste med søgning og anvendelsesfilter. Anvendelsesdialogen er en ren liste, grupperet efter serie og uden links. Standardhandicap redigeres til nye ræs; handicap i gemte ræs rettes med en særskilt handling ved den konkrete båd. Antal anvendte ræs beregnes som foreningen af planlagte løbstilmeldinger og gemte deltagelser, så historik ikke overses.
+
 Sletning fra det fælles register blokeres af enhver deltagelse i alle serier, også planlagte ræs uden dato. Dialogen viser kun anvendelsen. Afmelding fra ræs kræver manuel navigation og fjernelse ét ræs ad gangen. Resultater slettes ikke gennem bådregisteret.
 
 ## Kodegrænser
@@ -60,7 +63,7 @@ Sletning fra det fælles register blokeres af enhver deltagelse i alle serier, o
 - `static/core/`: API-klient, routing, navigation, fælles visning og tilstand.
 - `static/features/`: selvstændige visninger for resultater, måltagning, serier, ræs, både, løbsinddeling og adgang.
 
-Frontend bruger browserens native ES-moduler uden et JavaScript-byggetrin. Tilstanden er adskilt for offentlige resultater, ræsresultater, måltagning, planlægning, bådregister og løbsinddeling.
+Frontend bruger browserens native ES-moduler uden et JavaScript-byggetrin. Resultater har én fælles visning og tilstand på `/results`, med serie, løb, visning og sejlads i filtrene. Måltagning har synlige Serie → Ræs-vælgere på samme måde som resultatfiltrene; begge valg står i adressen og genskabes ved genindlæsning og tilbage/frem. Måltagningens valgte serie huskes adskilt fra resultatvisningens valg. Der er kun én Serier-indgang, i hovedmenuen; arbejdsområderne har ingen ekstra Serier-link eller brødkrummesti. Måltagning, planlægning, bådregister og løbsinddeling har deres egne tilstande. Valg af en serie åbner direkte serieindstillingerne, uden underfaner. Her findes en knap til løbsinddeling samt opsætning af dato, starttider, baner og beregningsmål for hvert ræs. Der er ingen separat ræsoversigt eller side for tilmeldte både. Måltagning har ingen underfaner. Baner indstilles i dialogen **Indstil baner**. Historiske handicaprettelser åbnes kun fra Bådregister via **Handicap i ræs** ved den konkrete båd; den valgte båd og det valgte ræs er fastholdt under rettelsen. Hovedmenuens aktive punkt følger arbejdsområdet, også på undersider. Links fra måltagningen åbner den fælles resultatside med det aktuelle ræs valgt; der findes ikke særskilte resultatfaner i serie eller ræs.
 
 `unconfigured.py` gemmer faktiske måltider og statusser før baneopsætningen. Skemaversion 3 tilføjer `pending_finishes` med relation til deltagelsen og `round_captures` med relation til ræset. Når banen indstilles, knyttes observationerne til beregningsgrundlaget i samme transaktion. Måltid, straftid og registreringsnøgle bevares. Hvis opsætningen ikke kan anvendes på tiderne, rulles opsætningen tilbage, og observationerne bevares til rettelse. Der oprettes ingen kunstig dato, distance eller beregnet tid for at begynde måltagningen.
 

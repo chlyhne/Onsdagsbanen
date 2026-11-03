@@ -40,10 +40,11 @@ with sync_playwright() as p:
     data=api(f'/api/workspaces/rounds/{round["uid"]}')
     assert data['entries'][0]['instant']=='2026-05-06T15:01:00+02:00'
     assert data['entries'][1]['instant']=='2026-05-06T15:05:00+02:00'
-    page.locator('[data-configure-course=stor]').click()
+    page.get_by_role('button',name='Indstil baner',exact=True).click()
     page.locator('#race-form [name=race_date]').fill('06-05-2026');page.locator('#race-form [name=start_time]').fill('14:00:00')
     page.locator('#race-form [data-mark=A]').click();page.locator('#race-form [data-mark=D]').click()
-    page.locator('#race-form button.primary').click();page.locator('#dialog').wait_for(state='hidden')
+    expect(page.locator('#race-save-status')).to_have_text('Gemt automatisk')
+    page.locator('#race-form [data-action=close-dialog]').click();page.locator('#dialog').wait_for(state='hidden')
     page.locator('[data-action=complete-round]').click();page.locator('#round-completion-form button.primary').click();page.locator('#dialog').wait_for(state='hidden')
     assert api(f'/api/workspaces/rounds/{round["uid"]}')['round']['completed']
     assert not errors,errors

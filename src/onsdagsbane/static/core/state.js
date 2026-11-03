@@ -9,11 +9,8 @@ export const state = {
         course: 'stor', className: null, view: 'overall',
         raceId: null, draft: false, result: null
     },
-    roundResults: {
-        course: 'stor', className: null, view: 'daily',
-        raceId: null, draft: true, result: null
-    },
     timing: {
+        seriesId: null, roundUid: null,
         query: '', selected: null, race: null,
         timingRoundId: null, timingRaceId: null
     },
@@ -21,7 +18,7 @@ export const state = {
         course: 'stor', startRaceId: null,
         historicalRace: null, historicalSets: [], raceDrafts: {}
     },
-    boats: { boatSets: [], query: '', catalog: [] },
+    boats: { boatSets: [], query: '', usage: 'all', catalog: [] },
     assignments: null,
     assignmentsRoute: {
         heatId: null, scope: 'series', source: '',

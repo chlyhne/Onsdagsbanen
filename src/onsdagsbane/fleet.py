@@ -24,6 +24,17 @@ def profile(db,identity):
     return item
 
 
+def race_history(db,identity):
+    profile(db,identity)
+    return [dict(row) for row in db.execute('''
+        SELECT r.id race_id,r.label,r.start,r.course,r.rating_key,
+               e.boat_id,e.class_name,e.handicap_set_id,s.id series_id,s.name series_name
+        FROM entries e JOIN boats b ON b.id=e.boat_id
+        JOIN races r ON r.id=e.race_id JOIN series s ON s.id=r.series_id
+        WHERE b.profile_id=? ORDER BY s.year DESC,r.start DESC,r.id DESC
+    ''',(identity,))]
+
+
 def save_profile(db,data,user,identity=None):
     from .domain import RATINGS, number
     from .service import extra_handicap_value
@@ -113,6 +124,9 @@ def catalog(db,series_id):
         item=dict(row);item['ratings']=json.loads(item['ratings']);item['gph']=gph(item['ratings'])
         item['series']=[dict(r) for r in db.execute('SELECT s.id,s.name,b.class_name,b.course FROM boats b JOIN series s ON s.id=b.series_id WHERE b.profile_id=? ORDER BY s.year DESC,s.id DESC',(item['id'],))]
         item['assignments']=[dict(r) for r in db.execute('SELECT p.id round_id,p.uid round_uid,p.series_id,p.label,h.id heat_id,h.name heat_name,c.course FROM heat_boats m JOIN boats b ON b.id=m.boat_id JOIN heats h ON h.id=m.heat_id JOIN round_courses c ON c.id=h.round_course_id JOIN rounds p ON p.id=c.round_id WHERE b.profile_id=? ORDER BY p.id,h.id',(item['id'],))]
+        history=list(db.execute('SELECT c.round_id FROM entries e JOIN boats b ON b.id=e.boat_id JOIN races r ON r.id=e.race_id JOIN round_courses c ON c.id=r.round_course_id WHERE b.profile_id=?',(item['id'],)))
+        item['saved_race_count']=len(history)
+        item['round_count']=len({r['round_id'] for r in item['assignments']}|{r['round_id'] for r in history})
         result.append(item)
     return result
 

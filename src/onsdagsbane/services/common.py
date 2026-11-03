@@ -26,6 +26,25 @@ def geometry(route):
     course = calculate_course(read_marks(ROOT / 'omvendt_respit/resources/marks.csv'), route)
     return {'distance': float(course.distance_nm), 'legs': [{'from': leg.start.name, 'to': leg.end.name, 'distance': float(leg.distance_nm)} for leg in course.legs], 'rounding_marks': [{'name': mark.name, 'side': side} for mark, side in zip(course.rounding_marks, rounding_sides(course))]}
 
+
+def course_distance(route,value=None):
+    from ..domain import number
+    if not isinstance(route,list):raise ValueError('Vælg en mærkerækkefølge eller angiv en distance.')
+    return geometry(route)['distance'] if route else number(value)
+
+
+def rounding_conflicts(courses):
+    sides={'stor':{},'lille':{}}
+    for course in courses:
+        if course['course'] not in sides:continue
+        for mark in course.get('rounding_marks',[]):
+            if mark['side'] in ('port','starboard'):
+                sides[course['course']].setdefault(mark['name'],set()).add(mark['side'])
+    # Keep all visits to a repeated mark: a later opposite rounding matters too.
+    return [{'name':name,**{course:[side for side in ('port','starboard') if side in marks[name]] for course,marks in sides.items()}}
+            for name in sorted(sides['stor'].keys() & sides['lille'].keys())
+            if any(a!=b for a in sides['stor'][name] for b in sides['lille'][name])]
+
 def extra_handicap_value(value):
     try:
         result = float(str(value).replace(',', '.'))

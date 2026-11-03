@@ -26,6 +26,17 @@ with sync_playwright() as p:
         api('/api/heats/boats/move',{'heat_id':heat['id'],'scope':'round','action':'add','profile_ids':[boat]})
     registrations=api(f'/api/workspaces/series/{series}')['registrations']
     page.evaluate("async path=>(await import('/core/router.js')).navigate(path)",f'/rounds/{round["uid"]}/timing')
+    assert page.locator('#live-clock').evaluate("""clock=>{
+        const clockRect=clock.getBoundingClientRect(),raceRect=document.querySelector('#timing-race').getBoundingClientRect();
+        return clockRect.left>raceRect.right && clockRect.top>=raceRect.top-1 && clockRect.bottom<=raceRect.bottom+1;
+    }""")
+    assert 'Fælles måltagning for stor og lille bane.' not in page.locator('.timing-page').inner_text()
+    assert 'Synkronisér ved minuttets slag' not in page.locator('.timing-page').inner_text()
+    page.get_by_role('button',name='Hjælp til uret',exact=True).click()
+    expect(page.locator('#dialog')).to_be_visible()
+    expect(page.locator('#dialog')).to_contain_text('Synkronisér ved minuttets slag i tårnet.')
+    page.locator('#dialog .dialog-actions').get_by_role('button',name='Luk',exact=True).click()
+    expect(page.locator('#dialog')).not_to_be_visible()
     # A deterministic display twenty seconds before the next minute.
     page.evaluate("async()=>{const {state}=await import('/core/state.js');const instant=Date.parse('2026-05-06T14:20:40+02:00');Date.now=()=>instant;state.session.offset=0;}")
     page.locator(f'[data-measure="{registrations[0]["id"]}"]').click()
@@ -59,6 +70,13 @@ with sync_playwright() as p:
     assert detail()['entries'][1]['instant']==manual
     assert detail()['entries'][2]['instant']=='2026-05-06T14:30:00+02:00'
     page.screenshot(path='build/onsdagsbane/reference-clock.png',full_page=True)
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+    expect(page.get_by_role('button',name='Hjælp til uret',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Hjælp til uret',exact=True).click()
+    expect(page.locator('#dialog')).to_contain_text('manuelt indtastede tider bevares.')
+    page.locator('#dialog .dialog-actions').get_by_role('button',name='Luk',exact=True).click()
+    page.screenshot(path='build/onsdagsbane/reference-clock-mobile.png',full_page=True)
     assert not errors,errors
     browser.close()
     print('Clock UI OK: nearest minute, plus/minus, saved and active boat times, manual immunity, removed loose timing and reload')

@@ -44,9 +44,8 @@ def update_round(db,round_id,data,user):
     times=start_times(series,{**existing,**data.get('start_times',{})})
     day=data.get('race_date',before.get('race_date')) or None
     if day:
-        try:parsed=date.fromisoformat(day)
+        try:date.fromisoformat(day)
         except (ValueError,TypeError):raise ValueError('Angiv en gyldig dato.') from None
-        if parsed.year!=series['year']:raise ValueError('Datoen skal ligge i seriens årstal.')
     courses=list(db.execute('SELECT c.*,r.id race_id,r.published FROM round_courses c LEFT JOIN races r ON r.round_course_id=c.id WHERE c.round_id=?',(round_id,)))
     for course in courses:
         if not course['race_id']:continue

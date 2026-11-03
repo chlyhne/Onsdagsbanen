@@ -54,9 +54,10 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM boats WHERE id=?',(registration,)).fetchone()[0],0)
 
     def test_deep_links_and_module_resources_are_served(self):
-        for path in ('/series/1/assignments','/boats','/rounds/a-uid/setup','/core/state.js','/features/timing.js'):
+        for path in ('/series/1/assignments','/boats','/timing?series=1','/rounds/a-uid/setup','/core/state.js','/features/timing.js','/kbl-logo.png'):
             status,body=self.request(path)
             self.assertEqual(status,200,path)
+            if path.endswith('.png'):self.assertTrue(body.startswith(b'\x89PNG\r\n\x1a\n'))
         status,_=self.request('/../auth.py.js')
         self.assertEqual(status,404)
 

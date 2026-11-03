@@ -27,12 +27,12 @@ with sync_playwright() as p:
     expect(page.locator(f'#fleet-right-list [data-fleet-profile="{boat}"]')).to_be_checked()
     page.locator('[data-fleet-action=add]').click();expect(page.locator('#fleet-save-status')).to_contain_text('Gemt')
 
-    go(f'/rounds/{first["uid"]}/timing');page.locator('[data-configure-course=stor]').click()
+    go(f'/rounds/{first["uid"]}/timing');page.get_by_role('button',name='Indstil baner',exact=True).click()
     page.locator('#race-form [name=race_date]').fill('06-05-2026')
     page.locator('#race-form [name=start_time]').fill('14:00:00')
     page.locator('#race-wind').select_option('H')
     page.locator('#race-form [data-mark=A]').click();page.locator('#race-form [data-mark=D]').click()
-    page.locator('#race-form button.primary').click()
+    expect(page.locator('#race-save-status')).to_contain_text('ikke gemt')
     page.locator('.dialog-error [data-handicap-fix]').click()
     page.locator('#boat-profile-form [name=TACIH]').fill('500')
     page.locator('#boat-profile-form button[type=submit]').click()
@@ -41,7 +41,8 @@ with sync_playwright() as p:
     expect(page.locator('#race-form [name=race_date]')).to_have_value('06-05-2026')
     expect(page.locator('#race-wind')).to_have_value('H')
     assert page.evaluate("async()=>(await import('/core/state.js')).runtime.route")==['A','D']
-    page.locator('#race-form button.primary').click();page.locator('#dialog').wait_for(state='hidden')
+    expect(page.locator('#race-save-status')).to_have_text('Gemt automatisk')
+    page.locator('#race-form [data-action=close-dialog]').click();page.locator('#dialog').wait_for(state='hidden')
 
     # A later system change repairs the selected historical set, not other values.
     go(f'/rounds/{first["uid"]}/setup')

@@ -112,9 +112,8 @@ def create_race(db, data, user):
     planned = get(db, 'rounds', round_id)
     scheduled = db.execute('SELECT start_time FROM round_courses WHERE id=?', (course_id,)).fetchone()[0]
     start = common.instant(data.get('start') or (planned['race_date'] + 'T' + scheduled if planned['race_date'] else ''))
-    if start.year != series['year']:
-        raise ValueError('Datoen skal ligge i seriens årstal.')
-    distance = common.geometry(data['route'])['distance']
+    route = data.get('route',[])
+    distance = common.course_distance(route,data.get('distance'))
     if 'boat_ids' in data:
         selected_ids = data['boat_ids']
         if not isinstance(selected_ids, list) or not selected_ids or any((type(v) is not int for v in selected_ids)) or (len(set(selected_ids)) != len(selected_ids)):
@@ -130,7 +129,7 @@ def create_race(db, data, user):
             heat_id = db.execute('SELECT id FROM heats WHERE round_course_id=? AND name=?', (course_id, name)).fetchone()[0]
             db.execute('INSERT INTO heat_boats(heat_id,boat_id) VALUES(?,?)', (heat_id, boat['id']))
     reference = number(data.get('reference', series['reference']))
-    identity = db.execute('INSERT INTO races(series_id,label,course,mode,start,route,distance,rating_key,reference,round_course_id) VALUES(?,?,?,?,?,?,?,?,?,?)', (series['id'], label, course, mode, start.isoformat(), json.dumps(data['route']), distance, key, reference, course_id)).lastrowid
+    identity = db.execute('INSERT INTO races(series_id,label,course,mode,start,route,distance,rating_key,reference,round_course_id) VALUES(?,?,?,?,?,?,?,?,?,?)', (series['id'], label, course, mode, start.isoformat(), json.dumps(route), distance, key, reference, course_id)).lastrowid
     replace_roster(db, identity)
     from ..unconfigured import apply
     apply(db, round_id, identity, user)

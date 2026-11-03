@@ -1,5 +1,6 @@
 """One timing session and one completion state for both courses in a round."""
 from datetime import datetime
+import json
 from .store import get, audit
 from . import service
 
@@ -19,6 +20,9 @@ def detail(db,round_id):
     from .reference_clock import offset
     planned['clock_offset']=offset(db,round_id)
     courses=course_races(db,round_id)
+    for race in courses:
+        route=json.loads(race['route'])
+        race['rounding_marks']=service.geometry(route)['rounding_marks'] if route else []
     entries,captures=[],[]
     for race in courses:
         entries.extend({**row,'race_id':race['id'],'race_mode':race['mode'],'race_revision':race['revision'],'published':race['published']} for row in service.rows(db,race['id']))
@@ -43,7 +47,7 @@ def detail(db,round_id):
     race={**base,'round_id':round_id,'label':planned['label'],'completed':planned['completed'],
           'published':bool(courses) and all(r['published'] for r in courses),'course':'begge',
           'start':min((r['start'] for r in courses),default=None)}
-    return {'round':planned,'race':race,'courses':courses,'entries':entries,'captures':sorted(captures,key=lambda c:(c['instant'],c['id'])),'unconfigured_courses':missing}
+    return {'round':planned,'race':race,'courses':courses,'entries':entries,'captures':sorted(captures,key=lambda c:(c['instant'],c['id'])),'unconfigured_courses':missing,'rounding_conflicts':service.rounding_conflicts(courses)}
 
 
 def check_revisions(courses,revisions):

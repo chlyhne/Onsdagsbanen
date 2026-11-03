@@ -14,6 +14,7 @@ Denne fil er kravlisten for erstatningen til Manage2Sail. Den opdateres ved nye 
 ## Både og handicap
 
 - Både ligger i én fælles bådliste, som kan genbruges på tværs af serier. Bådens identitet og handicapobjekter deles; tilmelding, bane og løb tilhører den enkelte serie og det enkelte ræs. En eksisterende båd kan tilføjes fra den fælles liste uden at kopiere stamdata eller handicapværdier.
+- Bådregisteret skal understøtte søgning/redigering af stamdata og fremtidige handicaptal, visning af anvendelse, rettelse af handicap i konkrete gemte ræs samt sletning af ubrugte både. Anvendelse er en liste grupperet efter serie uden navigationslinks. Et filter skal kunne finde både med og uden ræs; både planlagte og historiske deltagelser tæller som anvendelse. Søgning og filter bevares under arbejdet og ved genindlæsning.
 - Understøt seks selvstændige, valgfrie DH-tal: TACIL, TACIM, TACIH, TAUDL, TAUDM og TAUDH.
 - Beregn og vis **GPH** i stamdata som `(3 × TACIL + 12 × TACIM + 5 × TACIH) / 20`, afrundet til én decimal i sekunder pr. sømil efter [DH 6.1.1](https://dh.websejler.dk/da/somiletiderne). GPH kræver alle tre cirkeltal; manglende tal må ikke erstattes med TAUD-tal eller nul. GPH udledes af de relevante DH-tal og må ikke påvirkes af ekstra handicap eller straftid. Historisk GPH kan kun udledes af de kendte historiske cirkeltal.
 - Manglende DH-tal må ikke automatisk erstattes med andre tal. Den konkrete beregning kræver sit valgte DH-tal.
@@ -41,14 +42,14 @@ Denne fil er kravlisten for erstatningen til Manage2Sail. Den opdateres ved nye 
 - Redress skal anvende et ensartet internt referencegrundlag og derefter omregnes til sejladsens valgte reference.
 - Vis en advarsel, hvis løb på samme bane på samme sejladsdag har forskellige distancer.
 - Vis en advarsel, hvis dagens vindkategori er forskellig mellem løb, også på tværs af lille og stor bane.
-- Gør det muligt at ensrette dagens distance for alle løb på en bane og vindkategori for alle løb på begge baner med én handling.
+- Måltagning skal have én **Indstil baner**-knap øverst, som erstatter **Dato og starttider** og de separate knapper for stor/lille bane. Begge baner vælges i samme dialog. Baneindstilling skal gemme gyldige ændringer automatisk uden Gem-knap. Den samme formular skal kunne åbnes fra Måltagning til både nye og allerede indstillede baner. Mærker og vind ændres her, uden en særskilt »Ret bane og vind«-arbejdsgang.
 
 ## Serier og sejladser
 
 - Hierarkiet er **serie → ræs (fx R1–R18) → stor/lille bane → løb → både**.
 - Ved oprettelse af en serie udfyldes rækken af ræs og løbene på hver bane. Hvert ræs oprettes med begge baner og deres løb, også før dato, bane, handicapvalg eller resultater er kendt.
 - **Serier** skal være et selvstændigt arbejdsområde med alle serier og Opret serie. Administration bruges til adgang og samlet historik. Serie og ræs har egne adresser og kontekst, som bevares ved genindlæsning og tilbage/frem.
-- Seriens egne faner samler ræsoversigt, serietilmeldinger, **Både og løbsinddeling**, resultater og indstillinger. Tilføj ræs findes i ræsoversigten. Hvert ræs samler opsætning, startlister, måltagning, resultater og historik.
+- Navigationen skal have én fælles resultatside med serie og sejlads som filtre. Serie- og ræsarbejdsrum må ikke have separate resultatvisninger. Valg af en serie åbner indstillinger med en knap til løbsinddeling og opsætning af hvert ræs, uden separate faner for Ræs, Tilmeldte både, Løbsinddeling eller Indstillinger; måltagning har ingen underfaner for Måltagning, Opsætning, Startlister eller Historik. Historiske handicaprettelser findes udelukkende under den konkrete båd i Bådregister. Hovedmenuen markerer det aktuelle arbejdsområde. Tilføj ræs ligger under serieindstillingerne. Serier har kun én indgang i hovedmenuen, uden en ekstra Serier-fane eller brødkrummelink i arbejdsområderne. Måltagning skal have synlige Serie → Ræs-vælgere ligesom resultatfiltrene. Begge valg skal fremgå af adressen og genskabes ved genindlæsning og tilbage/frem. Et serieskift skal blive i måltagningen og kun vise den valgte series ræs.
 - Serienavn, fratræk og standardreference skal kunne ændres for en eksisterende serie. Årstallet kan ændres, før der er indstillet sejladser; eksisterende sejladser må ikke flyttes mellem år ved en almindelig indstillingsændring. Standardreferenceændring påvirker kun nye sejladser.
 - Administrator kan planlægge hele serien i løbsinddelingen. Standardintervallet er hele serien; fremover, bagudrettet og ét ræs kan vælges. En båd kan kun tilhøre ét løb i samme ræs i en serie, kontrolleret med backend-identitet uden afhængighed af dato eller navn. Andre serier spærrer ikke for genbrug. Historiske flytninger på samme bane bevarer tids- og handicapgrundlag og gør berørte resultater til kladder. Fjernelse kræver manuel behandling ét ræs ad gangen. Stor og lille bane har hver sin pointstilling; skift af løb på samme bane giver ikke dubletter i en kombineret stilling.
 - Dato, startform, rundingsmærker og DH-valg indstilles for en bane i et eksisterende ræs. Planlagte ræs uden resultater må ikke optræde som gennemførte ræs eller ændre pointstillingen.
@@ -61,6 +62,10 @@ Denne fil er kravlisten for erstatningen til Manage2Sail. Den opdateres ved nye 
 - Serien har separate standardstarttider for stor og lille bane. De nye ræs arver hver deres egne tider; standardforslaget er 18:30:00 og 18:35:00, men forskellen er ikke en regel. Ved Tilføj ræs angives begge tider, og dato/tider kan rettes under Rediger ræs. Ændring af seriens standard påvirker kun nye ræs.
 - Ræsindstillinger og baneforløb skal kunne gemmes uden deltagere. Både kan tilføjes bagefter, og beregninger udskydes, til der findes nødvendige handicaptal. Rækkefølgen af opsætning og tilmelding må ikke blokere arbejdet.
 - Når dagens bane indtastes som mærkerækkefølge, beregnes distancen automatisk fra repoets mærkekoordinater.
+- En bane kan også indstilles med kun en positiv distance i sømil. Baneforløbet vises da som **N/A**. Manuel ændring af distancen fjerner mærkerækkefølgen; valg eller ændring af mærker lader igen den beregnede bane bestemme distancen. Begge former gemmes automatisk og bevarer registrerede måltider.
+- Dato vælges i en kalender med mandag–søndag som kolonner, også ved rettelse af måltagningsdatoen. Datoen vises fortsat som DD-MM-ÅÅÅÅ.
+- Serier kan strække sig over flere kalenderår. Seriens årstal er en betegnelse og begrænser ikke datoer i ræs eller baneindstillinger. Årstallet kan rettes uden at flytte eksisterende datoer, starttider eller resultater.
+- Ræs uden fastsat dato foreslår det foregående ræss dato plus en uge, også når den foregående dato kun er foreslået. Forslag kædes fremad fra en fastsat dato, aldrig bagud. Allerede fastsatte datoer bevares og bliver udgangspunkt for de efterfølgende forslag. Forslag vises som forslag og bliver først fastsat, når de gemmes.
 - Opret jagtstarter og beregn bådenes startrækkefølge og starttidspunkter.
 - Gem deltagerliste, reference til det anvendte handicapsæt, distance og starttid pr. deltagelse. Gem straftid på resultatet.
 
@@ -114,10 +119,12 @@ Denne fil er kravlisten for erstatningen til Manage2Sail. Den opdateres ved nye 
 
 ## Offentlige resultater
 
-- Alle kan se resultater uden login.
+- Alle kan se resultater uden login. Serievælgeren skal stå sammen med resultatfiltrene for løb, visning og sejlads, og et serieskift skal blive i resultatvisningen.
 - Hold hjemmesiden så simpel som muligt. Resultater skal stå i centrum uden statistikwidgets, kort, infokort eller salgsagtige tekster omkring tabellen.
 - Prioritér læsbarhed for ældre sejlere: stor, mørk tekst, høj kontrast, tydelige tabeloverskrifter og kompakt afstand. Undgå svag grå tekst og store dekorative luftområder.
 - Kolonnerne skal følge indholdets bredde. Point og andre tal må ikke strækkes unødigt for at fylde skærmen.
+- Bådnavn og skipper skal have hver sin kolonne, så resultatrækkerne er kompakte og står på én linje. Ved samlet visning for en bane vises løbet i sin egen kolonne.
+- Resultattabeller må ikke have intern scroll. Hvis tabellen er bredere end skærmen, rulles hele siden vandret.
 - En tabelkolonne må aldrig være smallere end højden af et af dens felter, heller ikke ved et enkelt tegn. Bredden skal tilpasses ved ændret indhold og skærmstørrelse.
 - Gennemgå visningen efter gængse principper for design og læsbarhed, herunder kontrast, linjeføring, ensartede afstande og tabelstruktur. Gennemgangen er dokumenteret i [ONSDAGSBANE_DESIGN.md](ONSDAGSBANE_DESIGN.md).
 - Besøgende uden login skal kun præsenteres for resultatvisning og muligheden for at logge ind. Arbejdsnavigation vises først for godkendte brugere.
@@ -129,6 +136,7 @@ Denne fil er kravlisten for erstatningen til Manage2Sail. Den opdateres ved nye 
 - Se hvert enkelt løb separat eller alle løb på den valgte bane kombineret.
 - Begge visninger skal findes for dagens tider og for seriens samlede pointstilling.
 - Ved dagens tider skal distance og vindkategori stå tydeligt over tabellen for den valgte sejlads og det valgte løb. Ved kombineret visning vises flere værdier, hvis løbene bruger forskellige distancer eller vindkategorier.
+- Måltagningens infolinje skal vise både stor og lille banes rundingsbogstaver sammen med deres distance og starttid. Hvis et fælles mærke rundes på modsatte sider, skal en advarsel vises både i Indstil baner og i måltagningen. Alle forekomster af gentagne mærker skal medtages. Advarslen blokerer ikke automatisk gemning og fjernes, når konflikten er rettet.
 - Vis den valgte bane som mærkernes bogstaver i rækkefølge, røde for bagbordsrunding og grønne for styrbordsrunding. Genbrug `rounding_sides` fra `omvendt_respit`, som PDF-startlisten gør. Manglende mærkerækkefølge i importerede data skal markeres som ikke registreret.
 - Vis handicapberegning, tider, placeringer, status og point, hvor oplysningerne findes.
 - Understøt seriens fratræk og lige point.

@@ -1,9 +1,16 @@
-import { workspaceNavigation, link } from './navigation.js';
+import { workspaceNavigation, link, timingURL } from './navigation.js';
 import { runtime, state } from './state.js';
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 export const escapeHTML = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const e = escapeHTML;
+export function courseMarks(marks = []) {
+    return marks.length ? `<span class="course-sequence">${marks.map(mark => `<span class="course-mark course-${mark.side === 'starboard' ? 'starboard' : 'port'}" title="${e(mark.name)}: ${mark.side === 'starboard' ? 'styrbord (grøn)' : 'bagbord (rød)'}" aria-label="${e(mark.name)}: ${mark.side === 'starboard' ? 'styrbord, grøn' : 'bagbord, rød'}">${e(mark.name)}</span>`).join('')}</span>` : 'N/A';
+}
+export function roundingWarning(conflicts = []) {
+    const sides = values => values.map(side => side === 'starboard' ? 'styrbord' : 'bagbord').join(' / ');
+    return conflicts.length ? `<div class="notice course-rounding-warning" role="alert"><strong>Advarsel: Stor og lille bane har forskellige rundinger ved fælles mærker.</strong><ul>${conflicts.map(mark => `<li><strong>${e(mark.name)}:</strong> Stor bane ${sides(mark.stor)}; lille bane ${sides(mark.lille)}.</li>`).join('')}</ul></div>` : '';
+}
 export const keys = ['TACIL', 'TACIM', 'TACIH', 'TAUDL', 'TAUDM', 'TAUDH'];
 export const keyNames = ['Cirkel · let', 'Cirkel · mellem', 'Cirkel · hård', 'Op/ned · let', 'Op/ned · mellem', 'Op/ned · hård'];
 export const dialog = $('#dialog');
@@ -43,29 +50,13 @@ export const raceOptions = (list, value) => list.map(r => `<option value="${r.id
 export function markMap(routeValues = []) { const marks = state.session.data.marks; const minX = Math.min(...marks.map(m => m.longitude)), maxX = Math.max(...marks.map(m => m.longitude)); const minY = Math.min(...marks.map(m => m.latitude)), maxY = Math.max(...marks.map(m => m.latitude)); const p = m => [22 + (m.longitude - minX) / (maxX - minX) * 212, 140 - (m.latitude - minY) / (maxY - minY) * 120]; const selected = routeValues.length ? ['J', ...routeValues, 'X'] : []; return `<svg class="course-map" viewBox="0 0 260 160" role="img" aria-label="Banemærker ved Kaløvig"><path d="M0 0 L35 0 17 30 25 48 3 89 0 160Z" fill="#d7e2d7"/><path d="M55 0V160M105 0V160M155 0V160M205 0V160M0 35H260M0 85H260M0 135H260" stroke="#dce8e0" stroke-width=".5"/>${selected.length ? `<polyline class="route" points="${selected.map(n => marks.find(m => m.name === n)).filter(Boolean).map(p).map(p => p.join(',')).join(' ')}"/>` : ''}${marks.map(m => { const [x, y] = p(m); return `<circle cx="${x}" cy="${y}" r="3.5" ${selected.includes(m.name) ? 'class="active"' : ''}/><text x="${x + 7}" y="${y + 3}">${e(m.name)}</text>`; }).join('')}</svg>`; }
 export function shell(content) {
     const user = state.session.data.user, page = state.session.page;
-    const menu = [['/results', 'Resultater'], ['/today', 'Dagens ræs'], ['/series', 'Serier'], ...(admin() ? [['/boats', 'Bådregister'], ['/admin', 'Administration']] : [])];
-    const contextual = ['series', 'assignments', 'registrations', 'settings', 'series-results', 'round'].includes(page);
-    const selector = contextual || page === 'results' ? `<select id="series-select" aria-label="Vælg serie">${state.session.data.series.map(s => `<option value="${s.id}" ${s.id === state.session.seriesId ? 'selected' : ''}>${e(s.name)}</option>`).join('')}</select>` : '';
-    $('#app').innerHTML = `<div class="app-shell ${page === 'assignments' ? 'is-assignments' : ''}"><header class="topbar"><a class="brand" href="/results" data-nav>Onsdagsbanen<small>Kaløvig Bådelaug</small></a><div class="toptools">${selector}${user ? `<span class="person">${e(user.name)}</span><button data-action="logout" class="small" ${state.session.data.demo ? 'disabled' : ''}>Log ud</button>` : '<button data-action="login">Log ind</button>'}</div></header>${staff() ? `<nav class="nav app-nav" aria-label="Hovedmenu">${menu.map(([url, name]) => link(url, name, location.pathname === url)).join('')}</nav>` : ''}<main>${workspaceNavigation()}${state.session.data.demo ? '<p class="demo-banner">Lokal demonstration</p>' : ''}${content}</main></div>`;
+    const menu = [['/results', 'Resultater'], ['/timing', 'Måltagning'], ['/series', 'Serier'], ...(admin() ? [['/boats', 'Bådregister'], ['/admin', 'Administration']] : [])];
+    const activeArea = ['round', 'timing'].includes(page) ? '/timing' : ['series-list', 'series', 'assignments', 'registrations', 'settings'].includes(page) ? '/series' : page === 'registry' ? '/boats' : page === 'admin' ? '/admin' : '/results';
+    $('#app').innerHTML = `<div class="app-shell ${page === 'assignments' ? 'is-assignments' : ''}"><header class="topbar"><a class="brand" href="/results" data-nav><img class="brand-logo" src="/kbl-logo.png" width="44" height="44" alt="Kaløvig Bådelaugs logo"><span>Onsdagsbanen<small>Kaløvig Bådelaug</small></span></a><div class="toptools">${user ? `<span class="person">${e(user.name)}</span><button data-action="logout" class="small" ${state.session.data.demo ? 'disabled' : ''}>Log ud</button>` : '<button data-action="login">Log ind</button>'}</div></header>${staff() ? `<nav class="nav app-nav" aria-label="Hovedmenu">${menu.map(([url, name]) => link(url === '/timing' ? timingURL() : url, name, activeArea === url)).join('')}</nav>` : ''}<main>${workspaceNavigation()}${state.session.data.demo ? '<p class="demo-banner">Lokal demonstration</p>' : ''}${content}</main></div>`;
     fitTableColumns();
 }
 export function intro(title, description, action = '') { return `<div class="intro"><div><h1>${title}</h1><p>${description}</p></div>${action}</div>`; }
 export function selectors(course = state.results.course) { return `<div class="segmented" aria-label="Vælg bane"><button data-course="stor" class="${course === 'stor' ? 'active' : ''}">Stor bane</button><button data-course="lille" class="${course === 'lille' ? 'active' : ''}">Lille bane</button></div>`; }
-export function configureResultScroll() {
-    const scroller = $('.results-table .table-scroll');
-    if (!scroller)
-        return;
-    if (scroller.scrollWidth > scroller.clientWidth + 1) {
-        scroller.tabIndex = 0;
-        scroller.setAttribute('role', 'region');
-        scroller.setAttribute('aria-label', 'Resultattabel. Rul vandret for at se flere kolonner.');
-    }
-    else {
-        scroller.removeAttribute('tabindex');
-        scroller.removeAttribute('role');
-        scroller.removeAttribute('aria-label');
-    }
-}
 export function fitTableColumns() {
     for (const table of $$('table')) {
         if (!table.getClientRects().length)
@@ -96,7 +87,6 @@ export function fitTableColumns() {
             }
         }
     }
-    configureResultScroll();
 }
 new MutationObserver(changes => {
     if (changes.some(change => change.target.nodeType === 1 && change.target.closest('table') || [...change.addedNodes].some(node => node.nodeType === 1 && (node.matches('table') || node.querySelector('table'))))) {

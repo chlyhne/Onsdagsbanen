@@ -1,8 +1,8 @@
 import { inTimingWorkspace } from '../core/state.js';
-import { $, $$, admin, clock, date, e, intro, localInput, normalize, now, number, openDialog, options, shell, staff, statusText, toast, uid } from '../core/ui.js';
-import { danishDay } from './series.js';
+import { $, $$, admin, clock, courseMarks, date, e, intro, localInput, normalize, now, number, openDialog, options, roundingWarning, shell, staff, statusText, toast, uid } from '../core/ui.js';
 import { api } from '../core/api.js';
 import { showResults } from './results.js';
+import { link, roundSelectors } from '../core/navigation.js';
 import { runtime, state } from '../core/state.js';
 export const timingWorkByRace = new Map();
 export const timingNow = () => new Date(now().getTime() + Number(state.timing.race?.round.clock_offset || 0) * 1000);
@@ -55,7 +55,6 @@ export function chooseTimingRound(rounds = state.session.data.rounds || [], race
     const open = items.filter(item => !item.round.completed), ascending = (a, b) => (a.day || '9999').localeCompare(b.day || '9999') || a.round.position - b.round.position;
     return open.filter(item => item.day === today).sort((a, b) => b.round.position - a.round.position || b.round.id - a.round.id)[0]?.round || open.filter(item => item.day > today).sort(ascending)[0]?.round || open.filter(item => item.day && item.day < today).sort((a, b) => b.day.localeCompare(a.day) || a.round.position - b.round.position)[0]?.round || open.filter(item => !item.day).sort(ascending)[0]?.round || items.filter(item => item.day === today)[0]?.round || items.filter(item => item.day).sort((a, b) => b.day.localeCompare(a.day))[0]?.round || items[0]?.round;
 }
-export function timingRoundOptions() { return (state.session.data.rounds || []).map(round => { const ids = new Set(round.courses.map(c => c.race_id)), races = state.session.data.races.filter(r => ids.has(r.id)), start = races.length ? races.reduce((a, b) => Date.parse(a.start) < Date.parse(b.start) ? a : b).start : null; return `<option value="${round.id}" ${round.id === state.timing.timingRoundId ? 'selected' : ''}>${e(round.label)} · ${round.race_date ? danishDay(round.race_date) : start ? date(start) : 'Ikke indstillet'}${round.completed ? ' · afsluttet' : ''}</option>`; }).join(''); }
 export function timingStorageKey(roundId) { return `ob_timing_round:${state.session.seriesId}:${roundId}`; }
 export function timingWork(roundId = state.timing.timingRoundId) {
     if (!timingWorkByRace.has(roundId)) {
@@ -182,7 +181,7 @@ export function renderActiveTiming() {
     const row = state.timing.race.entries.find(r => r.boat_id === draft.boatId);
     if (!row) { container.innerHTML = ''; return; }
     const locked = timingLocked(), disabled = locked || draft.saving, fields = timingInputValues(draft);
-    container.innerHTML = `<section class="active-measurement" aria-label="Aktiv måltagning"><div class="active-heading"><h2>${e(row.name) + ' · ' + e(row.sail_number)}</h2><button class="square-button" data-timing-action="cancel" aria-label="Annuller aktiv måltagning" ${draft.saving ? 'disabled' : ''}>×</button></div>${row ? `<p>${e(row.skipper)} · ${row.course === 'stor' ? 'Stor' : 'Lille'} bane · ${e(row.class_name)}${draft.mode === 'edit' ? ' · Ret registrering' : ''}</p>` : ''}<form id="active-measure-form"><div class="active-time-row"><label class="field timing-time-field">Måltid (HH:MM:SS)<input id="finish-time" name="time" type="text" inputmode="numeric" autocomplete="off" maxlength="8" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" placeholder="HH:MM:SS" value="${e(fields.time)}" ${disabled ? 'disabled' : ''} ${draft.status === 'FIN' ? 'required' : ''}></label><label class="field timing-date-field">Dato (dd-mm-åååå)<input id="finish-date" name="date" type="text" inputmode="numeric" autocomplete="off" maxlength="10" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" placeholder="DD-MM-ÅÅÅÅ" value="${e(fields.date)}" ${disabled ? 'disabled' : ''} ${draft.status === 'FIN' ? 'required' : ''}></label>${row ? `<button type="button" data-timing-action="duty" ${disabled ? 'disabled' : ''}>Dommertjans</button>` : ''}<button class="primary" type="submit" ${disabled ? 'disabled' : ''}>${draft.saving ? 'Gemmer…' : 'Bekræft'}</button>${draft.mode === 'edit' ? `<button type="button" data-timing-action="return" ${disabled ? 'disabled' : ''}>Flyt tilbage til ikke måltaget</button>` : ''}${row?.race_mode === 'pursuit' && row && draft.mode === 'new' ? `<button type="button" data-timing-action="order" ${disabled ? 'disabled' : ''}>Kun rækkefølge</button>` : ''}</div><details class="timing-extra" ${draft.status !== 'FIN' || Number(draft.penalty) ? 'open' : ''}><summary>Status og straftid</summary><div class="row"><label class="field">Status<select name="status" id="finish-status" ${disabled ? 'disabled' : ''}>${options(['FIN', 'DNC', 'DNS', 'DNF', 'RET', 'DSQ', 'DNE', ...(staff() || draft.status === 'DUTY' ? ['DUTY'] : []), ...(draft.status === 'RDG' ? ['RDG'] : [])], draft.status, ['FIN', 'DNC', 'DNS', 'DNF', 'RET', 'DSQ', 'DNE', ...(staff() || draft.status === 'DUTY' ? ['Dommertjans – afventer beregning'] : []), ...(draft.status === 'RDG' ? ['RDG'] : [])])}</select></label><label class="field">Straftid (sekunder)<input id="finish-penalty" name="penalty" type="text" inputmode="decimal" data-number="true" value="${e(draft.penalty)}" ${disabled ? 'disabled' : ''}></label></div></details><p id="duty-notice" ${draft.status === 'DUTY' ? '' : 'hidden'}>Dommertjans registreres nu. Tiden beregnes først efter endt sejlads, når de øvrige deltageres resultater er indtastet.</p>${draft.error ? `<p class="error" role="alert">${e(draft.error)} Den indtastede tid er bevaret.</p>` : ''}</form></section>`;
+    container.innerHTML = `<section class="active-measurement" aria-label="Aktiv måltagning"><div class="active-heading"><h2>${e(row.name) + ' · ' + e(row.sail_number)}</h2><button class="square-button" data-timing-action="cancel" aria-label="Annuller aktiv måltagning" ${draft.saving ? 'disabled' : ''}>×</button></div>${row ? `<p>${e(row.skipper)} · ${row.course === 'stor' ? 'Stor' : 'Lille'} bane · ${e(row.class_name)}${draft.mode === 'edit' ? ' · Ret registrering' : ''}</p>` : ''}<form id="active-measure-form"><div class="active-time-row"><label class="field timing-time-field">Måltid (HH:MM:SS)<input id="finish-time" name="time" type="text" inputmode="numeric" autocomplete="off" maxlength="8" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" placeholder="HH:MM:SS" value="${e(fields.time)}" ${disabled ? 'disabled' : ''} ${draft.status === 'FIN' ? 'required' : ''}></label><label class="field timing-date-field">Dato<input id="finish-date" name="date" type="text" data-calendar inputmode="numeric" autocomplete="off" maxlength="10" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" placeholder="Vælg dato" value="${e(fields.date)}" ${disabled ? 'disabled' : ''} ${draft.status === 'FIN' ? 'required' : ''}></label>${row ? `<button type="button" data-timing-action="duty" ${disabled ? 'disabled' : ''}>Dommertjans</button>` : ''}<button class="primary" type="submit" ${disabled ? 'disabled' : ''}>${draft.saving ? 'Gemmer…' : 'Bekræft'}</button>${draft.mode === 'edit' ? `<button type="button" data-timing-action="return" ${disabled ? 'disabled' : ''}>Flyt tilbage til ikke måltaget</button>` : ''}${row?.race_mode === 'pursuit' && row && draft.mode === 'new' ? `<button type="button" data-timing-action="order" ${disabled ? 'disabled' : ''}>Kun rækkefølge</button>` : ''}</div><details class="timing-extra" ${draft.status !== 'FIN' || Number(draft.penalty) ? 'open' : ''}><summary>Status og straftid</summary><div class="row"><label class="field">Status<select name="status" id="finish-status" ${disabled ? 'disabled' : ''}>${options(['FIN', 'DNC', 'DNS', 'DNF', 'RET', 'DSQ', 'DNE', ...(staff() || draft.status === 'DUTY' ? ['DUTY'] : []), ...(draft.status === 'RDG' ? ['RDG'] : [])], draft.status, ['FIN', 'DNC', 'DNS', 'DNF', 'RET', 'DSQ', 'DNE', ...(staff() || draft.status === 'DUTY' ? ['Dommertjans – afventer beregning'] : []), ...(draft.status === 'RDG' ? ['RDG'] : [])])}</select></label><label class="field">Straftid (sekunder)<input id="finish-penalty" name="penalty" type="text" inputmode="decimal" data-number="true" value="${e(draft.penalty)}" ${disabled ? 'disabled' : ''}></label></div></details><p id="duty-notice" ${draft.status === 'DUTY' ? '' : 'hidden'}>Dommertjans registreres nu. Tiden beregnes først efter endt sejlads, når de øvrige deltageres resultater er indtastet.</p>${draft.error ? `<p class="error" role="alert">${e(draft.error)} Den indtastede tid er bevaret.</p>` : ''}</form></section>`;
 }
 export function activateTimingBoat(boatId, editing = false) {
     if (timingLocked())
@@ -361,8 +360,11 @@ export function updateTimingContext() {
     const planned = state.session.data.rounds.find(r => r.id === state.timing.timingRoundId);
     context.innerHTML = planned.courses.map(course => {
         const race = state.timing.race.courses.find(r => r.course === course.course);
-        return `<span><strong>${course.course === 'stor' ? 'Stor' : 'Lille'} bane:</strong> ${race ? `${number(race.distance,3)} sm · start ${clock(race.start)} · ${race.mode === 'pursuit' ? 'Jagtstart' : 'Almindelig respit'}` : `Ikke indstillet ${admin() ? `<button class="small" data-configure-round="${planned.id}" data-configure-course="${course.course}">Indstil ${course.course === 'stor' ? 'stor' : 'lille'} bane</button>` : ''}`}</span>`;
+        return `<span data-timing-course="${course.course}"><strong>${course.course === 'stor' ? 'Stor' : 'Lille'} bane:</strong> ${race ? `${courseMarks(race.rounding_marks)} · ${number(race.distance,3)} sm · start ${clock(race.start)} · ${race.mode === 'pursuit' ? 'Jagtstart' : 'Almindelig respit'}` : 'Ikke indstillet'}</span>`;
     }).join('');
+    const warning = $('#timing-rounding-warning'), markup = roundingWarning(state.timing.race.rounding_conflicts);
+    if (warning.innerHTML !== markup) warning.innerHTML = markup;
+    warning.hidden = !markup;
     const locked = timingLocked();
     for (const button of $$('[data-timing-action^="clock-"]'))
         button.disabled = locked;
@@ -371,7 +373,9 @@ export function updateTimingContext() {
         finish.dataset.action = locked ? 'reopen-round' : 'complete-round';
         finish.textContent = locked ? 'Genåbn ræs' : 'Afslut ræs';
     }
-    $('#timing-status').textContent = state.timing.race.race.completed ? 'Ræset er afsluttet for begge baner. Resterende både har fået DNC.' : (state.timing.race.unconfigured_courses.length ? 'Tider gemmes nu. Indstil banen her inden afslutning; beregnede tider vises derefter.' : 'Fælles måltagning for stor og lille bane.');
+    const status = $('#timing-status');
+    status.textContent = state.timing.race.race.completed ? 'Ræset er afsluttet for begge baner. Resterende både har fået DNC.' : (state.timing.race.unconfigured_courses.length ? 'Tider gemmes nu. Indstil banen her inden afslutning; beregnede tider vises derefter.' : '');
+    status.hidden = !status.textContent;
 }
 export async function showTiming() {
     if (!staff()) {
@@ -383,7 +387,7 @@ export async function showTiming() {
     if (!(state.session.data.rounds || []).some(r => r.id === state.timing.timingRoundId))
         state.timing.timingRoundId = chooseTimingRound()?.id;
     if (!state.timing.timingRoundId) {
-        shell(`${intro('Måltagning', 'Serien har endnu ingen ræs.')}<button data-page="series">Åbn serien</button>`);
+        shell(`${intro('Måltagning', '')}${roundSelectors()}<p class="empty">Der er ingen ræs i denne serie.</p>`);
         return;
     }
     state.timing.race = await api(`/api/rounds/${state.timing.timingRoundId}/timing`);
@@ -391,21 +395,26 @@ export async function showTiming() {
     state.timing.timingRaceId = state.timing.race.race.id;
     buildTimingSearch();
     const race = state.timing.race.race, locked = timingLocked();
+    const resultCourse = state.timing.race.courses.find(c => c.course === state.results.course) || state.timing.race.courses[0];
+    const resultURL = resultCourse ? '/results?' + new URLSearchParams({ series: String(state.session.seriesId), course: resultCourse.course, class: 'all', view: 'daily', race: String(resultCourse.id), ...(!race.published ? { drafts: '1' } : {}) }) : null;
     shell(`<section class="timing-page">
       <div class="timing-header"><h1>Måltagning</h1><div class="row">
-        ${admin() ? `<button data-round-starts="${state.timing.timingRoundId}">Dato og starttider</button>` : ''}
-        ${admin() && state.timing.race.courses.length ? '<button data-action="day-settings">Ret bane og vind</button><button data-action="historical-calculation">Beregningsgrundlag</button>' : ''}
+        ${admin() ? `<button data-configure-round="${state.timing.timingRoundId}" data-configure-course="stor">Indstil baner</button>` : ''}
         <button data-action="${locked ? 'reopen-round' : 'complete-round'}">${locked ? 'Genåbn ræs' : 'Afslut ræs'}</button>
         ${!race.published ? '<button data-action="publish">Offentliggør resultater →</button>' : ''}
+        ${resultURL ? link(resultURL, 'Se resultater') : ''}
       </div></div>
-      <label class="field timing-race-label">Ræs · begge baner<select id="timing-race">${timingRoundOptions()}</select></label>
-      <div id="timing-context" class="timing-context"></div><p id="timing-status"></p>
-      <div class="time-tools"><strong id="live-clock">${clock(timingNow())}</strong>
-        <button data-timing-action="clock-snap" ${locked ? 'disabled' : ''}>Synkronisér ur</button>
-        <button data-timing-action="clock-minus" aria-label="Stil uret ét minut tilbage" ${locked ? 'disabled' : ''}>−1 minut</button>
-        <button data-timing-action="clock-plus" aria-label="Stil uret ét minut frem" ${locked ? 'disabled' : ''}>+1 minut</button>
-        <span id="connection">Forbundet</span>
-      </div><p class="subtle">Synkronisér ved minuttets slag i tårnet. Automatisk tagne tider korrigeres også; manuelt indtastede tider bevares.</p><div id="active-timing"></div>
+      <div class="timing-toolbar">${roundSelectors()}
+        <div class="time-tools"><strong id="live-clock">${clock(timingNow())}</strong>
+          <button data-timing-action="clock-snap" ${locked ? 'disabled' : ''}>Synkronisér ur</button>
+          <button data-timing-action="clock-minus" aria-label="Stil uret ét minut tilbage" ${locked ? 'disabled' : ''}>−1 minut</button>
+          <button data-timing-action="clock-plus" aria-label="Stil uret ét minut frem" ${locked ? 'disabled' : ''}>+1 minut</button>
+          <button type="button" class="clock-help" data-action="clock-help" aria-label="Hjælp til uret" aria-haspopup="dialog" title="Hjælp til uret">?</button>
+          <span id="connection">Forbundet</span>
+        </div>
+      </div>
+      <div id="timing-context" class="timing-context"></div><div id="timing-rounding-warning" hidden></div><p id="timing-status" hidden></p>
+      <div id="active-timing"></div>
       <label class="field timing-search-label">Søg i begge lister<input id="boat-search" class="search-input" type="search" placeholder="Sejlnummer, bådnavn, skipper…" autocomplete="off" value="${e(state.timing.query)}"></label>
       <div class="timing-lists"><section><h2>Ikke måltaget <span id="unmeasured-count"></span></h2><div id="unmeasured-boats"></div></section>
       <section><h2>Måltaget / registreret <span id="measured-count"></span></h2><div id="measured-boats"></div></section></div>
@@ -421,7 +430,7 @@ export async function completionDialog(reopen = false) {
     }
     await refreshTiming();
     if (!reopen && (!state.timing.race.courses.length || state.timing.race.unconfigured_courses.length)) {
-        toast('Indstil banerne med tilmeldte både, før ræset afsluttes. Brug Indstil bane ovenfor.');
+        toast('Indstil banerne med tilmeldte både, før ræset afsluttes. Brug Indstil baner ovenfor.');
         return;
     }
     const missing = state.timing.race.entries.filter(row => row.sequence === null);

@@ -29,8 +29,6 @@ def update_series(db, identity, data, user):
         raise ValueError('Angiv serienavn og et gyldigt årstal.')
     if not isinstance(thresholds, list) or any((type(t) is not int or t < 2 for t in thresholds)) or len(set(thresholds)) != len(thresholds):
         raise ValueError('Fratræk skal være forskellige antal sejladser, mindst 2.')
-    if year != before['year'] and db.execute('SELECT 1 FROM races WHERE series_id=?', (identity,)).fetchone():
-        raise ValueError('Seriens årstal kan kun ændres, før der er indstillet sejladser. Eksisterende datoer flyttes ikke automatisk.')
     reference = number(data.get('reference', before['reference']))
     times = planning.defaults(before, data)
     db.execute('UPDATE series SET name=?,year=?,discards=?,reference=?,default_start_stor=?,default_start_lille=? WHERE id=?', (name, year, json.dumps(sorted(thresholds)), reference, times['stor'], times['lille'], identity))

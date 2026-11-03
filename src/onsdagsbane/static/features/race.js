@@ -1,10 +1,100 @@
 import { render } from '../core/router.js';
-import { api, currentSeries } from '../core/api.js';
-import { $, admin, clock, date, dialog, e, errorMarkup, intro, keys, markMap, number, openDialog, options, raceOptions, seconds, selectors, shell, toast } from '../core/ui.js';
+import { api, currentSeries, load } from '../core/api.js';
+import { $, admin, clock, date, dialog, e, errorMarkup, intro, keys, markMap, number, openDialog, options, raceOptions, roundingWarning, seconds, selectors, shell, toast } from '../core/ui.js';
 import { openFleetCommander } from './assignments.js';
-import { danishDay } from './series.js';
-import { refreshTiming, timingDay } from './timing.js';
+import { danishDay, isoDay } from './series.js';
+import { timingDay } from './timing.js';
 import { runtime, state } from '../core/state.js';
+let routeSerial = 0, raceAutosave = null;
+
+export function scheduleRaceSetup() {
+    if (!$('#race-form') || !raceAutosave) return;
+    rememberRaceSetup();
+    clearTimeout(raceAutosave.timer);
+    $('#race-save-status').textContent = 'Afventer automatisk gemning…';
+    raceAutosave.timer = setTimeout(saveRaceSetup, 500);
+}
+
+export function saveRaceSetup() {
+    const form = $('#race-form'), session = raceAutosave;
+    if (!form || !session) return Promise.resolve(true);
+    clearTimeout(session.timer);
+    rememberRaceSetup();
+    const data = state.session.data;
+    const status = $('#race-save-status', form);
+    const fields = Object.fromEntries(['race_date', 'start_time', 'mode', 'handicap_system', 'wind_category', 'reference', 'distance'].map(name => [name, $(`[name="${name}"]`, form).value]));
+    const roundId = Number(form.dataset.roundId), course = form.dataset.course;
+    let start;
+    try { start = isoDay(fields.race_date) + 'T' + fields.start_time; }
+    catch { status.textContent = 'Angiv en gyldig dato for at gemme automatisk.'; return session.queue; }
+    const distance = $('[name="distance"]', form);
+    distance.required = !runtime.route.length;
+    const manualDistance = Number(distance.value);
+    distance.setCustomValidity(!runtime.route.length && (!/^\d+(?:\.\d+)?$/.test(distance.value) || !Number.isFinite(manualDistance) || manualDistance <= 0) ? 'Angiv en positiv distance i sømil.' : '');
+    if (!form.checkValidity()) {
+        status.textContent = 'Udfyld dato, starttid og en distance eller bane. Ændringen er ikke gemt.';
+        return session.queue;
+    }
+    const payload = { ...fields, round_id: roundId, course, series_id: state.session.seriesId, start, route: [...runtime.route] };
+    const signature = JSON.stringify(payload), key = roundId + ':' + course;
+    session.queue = session.queue.then(async () => {
+        if (session.saved.get(key) === signature) {
+            if (form.isConnected) status.textContent = 'Gemt automatisk';
+            return true;
+        }
+        const child = data.rounds.find(r => r.id === roundId).courses.find(c => c.course === course);
+        const existing = data.races.find(r => r.id === child.race_id);
+        if (form.isConnected) status.textContent = 'Gemmer…';
+        try {
+            const { race } = await api('/api/course-settings', { ...payload, revision: existing?.revision ?? null });
+            const index = data.races.findIndex(r => r.id === race.id);
+            if (index < 0) data.races.push(race);
+            else data.races[index] = race;
+            child.race_id = race.id;
+            child.start_time = clock(race.start);
+            const round = data.rounds.find(r => r.id === roundId);
+            round.race_date ||= timingDay(race.start);
+            round.handicap_system = payload.handicap_system;
+            session.saved.set(key, signature);
+            if (form.isConnected && form.dataset.roundId === String(roundId) && form.dataset.course === course) {
+                status.textContent = 'Gemt automatisk';
+                $('.dialog-error', dialog)?.replaceChildren();
+                for (const name of ['race_date', 'start_time', 'mode', 'reference', 'handicap_system'])
+                    $(`[name="${name}"]`, form).disabled = true;
+            }
+            return true;
+        } catch (error) {
+            if (form.isConnected) {
+                status.textContent = 'Ændringen er ikke gemt. Ret fejlen, eller prøv igen.';
+                dialogError(error);
+            } else toast(error);
+            return false;
+        }
+    });
+    return session.queue;
+}
+
+export async function closeRaceSetup() {
+    if (!await saveRaceSetup()) return;
+    dialog.close();
+    await load();
+    await render();
+}
+
+dialog.addEventListener('cancel', event => {
+    if ($('#race-form')) {
+        event.preventDefault();
+        closeRaceSetup().catch(toast);
+    }
+});
+
+document.addEventListener('submit', event => {
+    if (event.target.id === 'race-form') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        saveRaceSetup();
+    }
+}, true);
 export async function showStarts() {
     let races = state.session.data.races.filter(r => r.course === state.planning.course && r.mode === 'pursuit' && (!state.session.roundId || state.session.data.rounds.find(p => p.id === state.session.roundId)?.courses.some(c => c.race_id === r.id)));
     if (!races.some(r => r.id === state.planning.startRaceId))
@@ -12,28 +102,27 @@ export async function showStarts() {
     const detail = state.planning.startRaceId ? await api(`/api/races/${state.planning.startRaceId}?startlist=1`) : null;
     const race = detail?.race;
     const entries = (detail?.entries || []).sort((a, b) => new Date(a.start) - new Date(b.start) || a.sail_number.localeCompare(b.sail_number));
-    shell(`${intro('Startlister', 'Starttider og rækkefølge for omvendt respit.', admin() ? '<button class="primary" data-action="new-race">Indstil bane</button>' : '')}<div class="filters">${selectors(state.planning.course)}${races.length ? `<select id="start-race" aria-label="Vælg startliste">${raceOptions(races, state.planning.startRaceId)}</select>` : ''}</div>${race ? `<div class="workspace"><section class="panel"><div class="panel-head"><div><h2>${e(race.label)} · Omvendt respit</h2><p>${date(race.start)} · ${number(race.distance, 3)} sm · ${e(race.rating_key === 'import' ? 'Importerede målebrevstal' : race.rating_key)}</p></div><button class="small" data-action="print">Udskriv ↗</button></div>${!race.published ? '<div class="notice info">Foreløbig startliste · sejladsen er endnu ikke offentliggjort.</div>' : ''}<div class="table-scroll"><table><thead><tr><th>Nr.</th><th>Starttid</th><th>Båd / skipper</th><th>Sejlnr.</th><th>Løb</th><th class="numeric">Hdcp.</th><th class="numeric">Ekstra handicap</th></tr></thead><tbody>${entries.map((b, i) => `<tr><td>${i + 1}</td><td><strong>${b.start ? clock(b.start) : 'Afventer handicap'}</strong></td><td><div class="boatname">${e(b.name)}</div><div class="boatdetail">${e(b.skipper)}</div></td><td>${e(b.sail_number)}</td><td>${e(b.class_name)}</td><td class="numeric">${number(b.rating, 1)}</td><td class="numeric">+${number(b.extra_handicap)} s</td></tr>`).join('')}</tbody></table></div></section><aside class="side"><section class="panel"><h3>Banen</h3>${markMap(JSON.parse(race.route))}<p>${JSON.parse(race.route).length ? `J–X → ${JSON.parse(race.route).map(e).join(' → ')} → X` : 'Distancen er importeret fra Manage2Sail.'}</p><span class="distance">${number(race.distance, 3)} sm</span></section><section class="panel"><h3>DH og jagtstart</h3><p>Langsomste båd starter først. Startforskellene beregnes ud fra det valgte DH-tal og distancen. Ekstra handicap lægges til starttidspunktet.</p><p>Reference til præmietider: ${number(race.reference, 1)} s/sm.</p></section></aside></div>` : '<div class="panel empty">Der er ingen omvendt respit-sejladser på den valgte bane.</div>'}`);
+    shell(`${intro('Startlister', 'Starttider og rækkefølge for omvendt respit.', admin() ? '<button class="primary" data-action="new-race">Indstil bane</button>' : '')}<div class="filters">${selectors(state.planning.course)}${races.length ? `<select id="start-race" aria-label="Vælg startliste">${raceOptions(races, state.planning.startRaceId)}</select>` : ''}</div>${race ? `<div class="workspace"><section class="panel"><div class="panel-head"><div><h2>${e(race.label)} · Omvendt respit</h2><p>${date(race.start)} · ${number(race.distance, 3)} sm · ${e(race.rating_key === 'import' ? 'Importerede målebrevstal' : race.rating_key)}</p></div><button class="small" data-action="print">Udskriv ↗</button></div>${!race.published ? '<div class="notice info">Foreløbig startliste · sejladsen er endnu ikke offentliggjort.</div>' : ''}<div class="table-scroll"><table><thead><tr><th>Nr.</th><th>Starttid</th><th>Båd / skipper</th><th>Sejlnr.</th><th>Løb</th><th class="numeric">Hdcp.</th><th class="numeric">Ekstra handicap</th></tr></thead><tbody>${entries.map((b, i) => `<tr><td>${i + 1}</td><td><strong>${b.start ? clock(b.start) : 'Afventer handicap'}</strong></td><td><div class="boatname">${e(b.name)}</div><div class="boatdetail">${e(b.skipper)}</div></td><td>${e(b.sail_number)}</td><td>${e(b.class_name)}</td><td class="numeric">${number(b.rating, 1)}</td><td class="numeric">+${number(b.extra_handicap)} s</td></tr>`).join('')}</tbody></table></div></section><aside class="side"><section class="panel"><h3>Banen</h3>${markMap(JSON.parse(race.route))}<p>${JSON.parse(race.route).length ? `J–X → ${JSON.parse(race.route).map(e).join(' → ')} → X` : 'N/A'}</p><span class="distance">${number(race.distance, 3)} sm</span></section><section class="panel"><h3>DH og jagtstart</h3><p>Langsomste båd starter først. Startforskellene beregnes ud fra det valgte DH-tal og distancen. Ekstra handicap lægges til starttidspunktet.</p><p>Reference til præmietider: ${number(race.reference, 1)} s/sm.</p></section></aside></div>` : '<div class="panel empty">Der er ingen omvendt respit-sejladser på den valgte bane.</div>'}`);
 }
 export function dialogError(error) { $('.dialog-error', dialog).innerHTML = errorMarkup(error); }
 export async function catalogDialog() { await openFleetCommander(); }
 export async function heatDialog(id) { await openFleetCommander(id); }
 export async function raceDialog(roundId = null, course = state.results.course) {
     roundId = roundId || state.session.roundId;
-    const available = (state.session.data.rounds || []).filter(r => (!roundId || r.id === Number(roundId)) && r.courses.some(c => !c.race_id));
+    const available = (state.session.data.rounds || []).filter(r => !roundId || r.id === Number(roundId));
     if (!available.length) {
         state.session.page = 'series';
         await render();
-        toast('Alle planlagte baner er indstillet. Tilføj ræs på seriens side.');
+        toast('Serien har ingen ræs. Tilføj ræs på seriens side.');
         return;
     }
     const planned = available.find(r => r.id === Number(roundId)) || available.find(r => r.courses.some(c => c.course === course && !c.race_id)) || available[0];
-    if (planned.courses.find(c => c.course === course)?.race_id)
-        course = planned.courses.find(c => !c.race_id).course;
     const sibling = state.session.data.races.find(r => planned.courses.some(c => c.race_id === r.id));
-    const day = planned.race_date || (sibling ? timingDay(sibling.start) : '');
+    const day = planned.race_date || planned.suggested_date || (sibling ? timingDay(sibling.start) : '');
     const plannedTime = planned.courses.find(c => c.course === course)?.start_time || currentSeries()['default_start_' + course];
     runtime.route = [];
-    openDialog('Indstil bane i et ræs', `<form id="race-form" class="stack"><div class="form-grid"><label class="field">Ræs<select id="race-round" name="round_id">${options(available.map(r => r.id), planned.id, available.map(r => r.label))}</select></label><label class="field">Bane<select name="course" id="race-course">${options(['stor', 'lille'], course, ['Stor bane', 'Lille bane'])}</select></label><label class="field">Startform<select name="mode">${options(['normal', 'pursuit'], 'normal', ['Almindelig respit', 'Jagtstart / omvendt respit'])}</select></label><label class="field">Dato (dd-mm-åååå)<input name="race_date" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-ÅÅÅÅ" value="${danishDay(day)}" required></label><label class="field">Første start (HH:MM:SS)<input name="start_time" type="text" data-start-time inputmode="numeric" maxlength="8" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" value="${e(plannedTime)}" required></label><label class="field">Beregningsmål · hele ræset<select name="handicap_system" id="race-system">${options(['circle', 'gph', 'updown'], planned.handicap_system || 'circle', ['Cirkelmål', 'GPH', 'Op/ned-mål'])}</select></label><label class="field">Vindkategori<select name="wind_category" id="race-wind"><option value="" disabled>Ikke relevant ved GPH</option>${options(['L', 'M', 'H'], 'M', ['Let', 'Mellem', 'Hård'])}</select></label><label class="field">Referencehandicap (s/sm)<input name="reference" type="text" inputmode="decimal" data-number="true" value="${currentSeries().reference}" required></label></div><div><h3>Rundingsmærker i rækkefølge</h3><p class="subtle">Start på linjen J–X. Mål ved X. Tryk på mærkerne, også ved gentagelser.</p><div class="row">${state.session.data.marks.filter(m => !['J', 'X'].includes(m.name)).map(m => `<button type="button" data-mark="${e(m.name)}">${e(m.name)}</button>`).join('')}<button type="button" class="small" data-action="route-undo">↶</button></div><div id="route-preview" class="route-builder">Vælg mindst ét rundingsmærke.</div><p id="route-distance" class="distance">– sm</p></div><div><h3>Løb og deltagere</h3><div id="race-boats"></div><p class="subtle">Deltagere tilføjes til løbene på siden Serie.</p></div><div class="dialog-actions"><button type="button" data-action="close-dialog">Annuller</button><button class="primary">Gem bane og gå til måltagning</button></div></form>`);
+    openDialog('Indstil baner', `<form id="race-form" class="stack"><div class="form-grid"><label class="field">Ræs<select id="race-round" name="round_id">${options(available.map(r => r.id), planned.id, available.map(r => r.label))}</select></label><label class="field">Bane<select name="course" id="race-course">${options(['stor', 'lille'], course, ['Stor bane', 'Lille bane'])}</select></label><label class="field">Startform<select name="mode">${options(['normal', 'pursuit'], 'normal', ['Almindelig respit', 'Jagtstart / omvendt respit'])}</select></label><label class="field">Dato<input name="race_date" type="text" data-calendar data-calendar-year="${currentSeries().year}" inputmode="numeric" maxlength="10" placeholder="Vælg dato" value="${danishDay(day)}" required></label><label class="field">Første start (HH:MM:SS)<input name="start_time" type="text" data-start-time inputmode="numeric" maxlength="8" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" value="${e(plannedTime)}" required></label><label class="field">Beregningsmål · hele ræset<select name="handicap_system" id="race-system">${options(['circle', 'gph', 'updown'], planned.handicap_system || 'circle', ['Cirkelmål', 'GPH', 'Op/ned-mål'])}</select></label><label class="field">Vindkategori<select name="wind_category" id="race-wind"><option value="" disabled>Ikke relevant ved GPH</option>${options(['L', 'M', 'H'], 'M', ['Let', 'Mellem', 'Hård'])}</select></label><label class="field">Referencehandicap (s/sm)<input name="reference" type="text" inputmode="decimal" data-number="true" value="${currentSeries().reference}" required></label></div><div><h3>Rundingsmærker i rækkefølge</h3><p class="subtle">Start på linjen J–X. Mål ved X. Tryk på mærkerne, også ved gentagelser.</p><div class="row">${state.session.data.marks.filter(m => !['J', 'X'].includes(m.name)).map(m => `<button type="button" data-mark="${e(m.name)}">${e(m.name)}</button>`).join('')}<button type="button" class="small" data-action="route-undo">↶</button></div><div id="route-preview" class="route-builder">N/A</div><label class="field route-distance-field">Distance (sømil)<input id="route-distance" name="distance" type="text" inputmode="decimal" data-number required></label><p class="subtle">Angiv en distance, eller vælg mærker. En manuel distance sætter banen til N/A.</p><div id="race-rounding-warning" hidden></div></div><div><h3>Løb og deltagere</h3><div id="race-boats"></div><p class="subtle">Deltagere tilføjes til løbene på siden Serie.</p></div><div class="dialog-actions"><span id="race-save-status" role="status">Gyldige ændringer gemmes automatisk.</span><button type="button" data-action="close-dialog">Luk</button></div></form>`);
+    raceAutosave = { queue: Promise.resolve(true), saved: new Map(), timer: null };
     await fillPlannedStart(false);
 }
 export function rememberRaceSetup() {
@@ -44,45 +133,46 @@ export function rememberRaceSetup() {
     record.race_date = $('[name="race_date"]', form).value;
     record.handicap_system = $('#race-system').value;
     record.courses[form.dataset.course] = {
-        ...Object.fromEntries(['start_time', 'mode', 'wind_category', 'reference'].map(name => [name, $(`[name="${name}"]`, form).value])),
+        ...Object.fromEntries(['start_time', 'mode', 'wind_category', 'reference', 'distance'].map(name => [name, $(`[name="${name}"]`, form).value])),
         route: [...runtime.route]
     };
-}
-export function raceSetupSaved(form) {
-    const record = state.planning.raceDrafts[form.dataset.roundId];
-    if (record) {
-        delete record.courses[form.dataset.course];
-        if (!Object.keys(record.courses).length)
-            delete state.planning.raceDrafts[form.dataset.roundId];
-    }
-    form.dataset.saved = 'true';
 }
 export async function fillPlannedStart(remember = true) {
     if (remember)
         rememberRaceSetup();
     const form = $('#race-form'), round = state.session.data.rounds.find(r => r.id === Number($('#race-round').value)), course = $('#race-course').value;
+    const existing = state.session.data.races.find(r => r.id === round.courses.find(c => c.course === course)?.race_id);
     const sibling = state.session.data.races.find(r => round.courses.some(c => c.race_id === r.id));
     const record = state.planning.raceDrafts[round.id], draft = record?.courses[course];
     form.dataset.roundId = String(round.id);
     form.dataset.course = course;
     const values = {
-        race_date: record?.race_date ?? danishDay(round.race_date || (sibling ? timingDay(sibling.start) : '')),
+        race_date: record?.race_date ?? danishDay(existing ? timingDay(existing.start) : round.race_date || round.suggested_date || (sibling ? timingDay(sibling.start) : '')),
         handicap_system: record?.handicap_system ?? round.handicap_system ?? 'circle',
-        start_time: draft?.start_time ?? round.courses.find(c => c.course === course)?.start_time ?? currentSeries()['default_start_' + course],
-        mode: draft?.mode ?? 'normal', wind_category: draft?.wind_category ?? 'M',
-        reference: draft?.reference ?? currentSeries().reference
+        start_time: draft?.start_time ?? (existing ? clock(existing.start) : null) ?? round.courses.find(c => c.course === course)?.start_time ?? currentSeries()['default_start_' + course],
+        mode: draft?.mode ?? existing?.mode ?? 'normal', wind_category: draft?.wind_category ?? (existing?.rating_key === 'GPH' ? '' : existing?.rating_key.slice(-1)) ?? 'M',
+        reference: draft?.reference ?? existing?.reference ?? currentSeries().reference,
+        distance: draft?.distance ?? existing?.distance ?? ''
     };
     for (const [name, value] of Object.entries(values))
         $(`[name="${name}"]`, form).value = value;
-    runtime.route = [...(draft?.route || [])];
+    for (const name of ['race_date', 'start_time', 'mode', 'reference'])
+        $(`[name="${name}"]`, form).disabled = !!existing;
+    $('#race-system').disabled = !!sibling;
+    runtime.route = [...(draft?.route || (existing ? JSON.parse(existing.route) : []))];
+    clearTimeout(raceAutosave?.timer);
+    $('#race-save-status').textContent = existing ? 'Gemt automatisk' : 'Gyldige ændringer gemmes automatisk.';
     updateRaceBoats();
     await updateRoute();
 }
 
 dialog.addEventListener('close', () => {
     const form = $('#race-form');
-    if (form && form.dataset.saved !== 'true')
+    if (form) {
+        clearTimeout(raceAutosave?.timer);
+        raceAutosave = null;
         delete state.planning.raceDrafts[form.dataset.roundId];
+    }
 });
 export function updateRaceBoats() {
     const round = state.session.data.rounds.find(r => r.id === Number($('#race-round').value)), courseField = $('#race-course'), system = $('#race-system').value, wind = $('#race-wind');
@@ -92,34 +182,46 @@ export function updateRaceBoats() {
     else if (!wind.value)
         wind.value = 'M';
     const key = system === 'gph' ? 'GPH' : (system === 'circle' ? 'TACI' : 'TAUD') + wind.value;
-    for (const option of courseField.options)
-        option.disabled = !!round.courses.find(c => c.course === option.value)?.race_id;
-    if (courseField.selectedOptions[0]?.disabled)
-        courseField.value = round.courses.find(c => !c.race_id)?.course;
     const child = round.courses.find(c => c.course === courseField.value);
     $('#race-boats').innerHTML = child.heats.map(heat => `<div class="race-fleet"><strong>${e(heat.name)}</strong><p>${heat.boat_ids.map(id => { const b = state.session.data.boats.find(b => b.id === id); return b ? e(b.name) + ((key === 'GPH' ? b.gph : b.ratings[key]) == null ? ` (${e(key)} mangler)` : '') : ''; }).filter(Boolean).join(', ') || 'Ingen tilmeldte både'}</p></div>`).join('');
 }
 export async function updateRoute() {
-    const serial = ++runtime.requestSerial;
-    $('#route-preview').innerHTML = runtime.route.length ? `<span>J–X → </span>${runtime.route.map((r, i) => `<button class="route-token" type="button" data-remove-mark="${i}" title="Fjern mærke">${e(r)} ×</button>`).join('')}<span> → X</span>` : 'Vælg mindst ét rundingsmærke.';
+    const serial = ++routeSerial;
+    $('#route-preview').innerHTML = runtime.route.length ? `<span>J–X → </span>${runtime.route.map((r, i) => `<button class="route-token" type="button" data-remove-mark="${i}" title="Fjern mærke">${e(r)} ×</button>`).join('')}<span> → X</span>` : 'N/A';
     if (!runtime.route.length) {
-        $('#route-distance').textContent = '– sm';
+        const distance = $('#race-form [name=distance]');
+        if (distance) { distance.required = true; distance.setCustomValidity(''); }
+        else $('#route-distance').textContent = '– sm';
+        const warning = $('#race-rounding-warning');
+        if (warning) { warning.replaceChildren(); warning.hidden = true; }
         return;
     }
-    const result = await api('/api/geometry', { route: runtime.route });
-    if (serial === runtime.requestSerial)
-        $('#route-distance').textContent = number(result.distance, 3) + ' sm';
+    const form = $('#race-form');
+    if (form) { $('[name=distance]', form).required = false; $('[name=distance]', form).setCustomValidity(''); }
+    const result = await api('/api/geometry', { route: runtime.route, ...(form ? { round_id: Number(form.dataset.roundId), course: form.dataset.course } : {}) });
+    if (serial === routeSerial && $('#route-distance')) {
+        if (form) {
+            $('[name=distance]', form).value = result.distance.toFixed(3);
+            rememberRaceSetup();
+        } else $('#route-distance').textContent = number(result.distance, 3) + ' sm';
+        const warning = $('#race-rounding-warning');
+        if (warning) {
+            warning.innerHTML = roundingWarning(result.rounding_conflicts);
+            warning.hidden = !result.rounding_conflicts?.length;
+        }
+    }
 }
 export function referenceDialog() { openDialog('Referencehandicap', `<form id="reference-form" class="stack"><p class="subtle">Seriens værdi bruges ved oprettelse af nye sejladser. Du kan også ensrette alle eksisterende sejladser. På samme distance får alle både samme tidsforskydning, og stillingen bevares.</p><label class="field">Seriens reference (s/sm)<input type="text" inputmode="decimal" data-number="true" name="reference" min="0.1" step="0.1" value="${currentSeries().reference}" required></label><label class="check"><input type="checkbox" name="apply_all">Sæt også denne reference på alle sejladser i serien</label><div class="dialog-actions"><button type="button" data-action="close-dialog">Annuller</button><button class="primary">Gem seriens reference</button></div></form><hr><h3>Indstil én sejlads</h3><form id="race-reference-form" class="stack"><label class="field">Sejlads<select name="race_id">${raceOptions(state.session.data.races, state.session.data.races[0]?.id)}</select></label><label class="field">Reference (s/sm)<input name="reference" type="text" inputmode="decimal" data-number="true" step="0.1" min="0.1" required value="${state.session.data.races[0]?.reference || currentSeries().reference}"></label><button>Gem for denne sejlads</button></form>`); }
-export async function historicalCalculationDialog(raceId = null) {
-    if (!raceId)
-        await refreshTiming();
-    if (!raceId && state.timing.race.courses.length > 1) {
-        openDialog('Vælg bane for historisk beregning', `<form id="course-action-form" class="stack"><label class="field">Bane<select name="race_id">${state.timing.race.courses.map(r => `<option value="${r.id}">${r.course === 'stor' ? 'Stor' : 'Lille'} bane · ${e(r.label)}</option>`).join('')}</select></label><div class="dialog-actions"><button type="button" data-action="close-dialog">Annuller</button><button class="primary">Åbn beregningsgrundlag</button></div></form>`);
-        return;
-    }
-    state.planning.historicalRace = await api(`/api/races/${raceId || state.timing.timingRaceId}`);
-    openDialog('Historisk beregningsgrundlag', `<form id="calculation-form" class="stack"><p><strong>${e(state.planning.historicalRace.race.label)} · ${state.planning.historicalRace.race.course === 'stor' ? 'Stor' : 'Lille'} bane</strong>. Genberegningen bruger sejladsens gemte deltagere, handicaptal, distancer og faktiske start- og måltider.</p><label class="field">Ret en deltagers historiske handicap<select id="calculation-boat" name="boat_id"><option value="">Bevar alle gemte handicaptal</option>${state.planning.historicalRace.entries.map(row => `<option value="${row.boat_id}">${e(row.name)} · ${e(row.sail_number)} · ${e(row.class_name)}</option>`).join('')}</select></label><div id="calculation-boat-fields"></div><label class="field">Årsag til genberegning<input name="note" required maxlength="500" placeholder="Fx fejl i målebrev anvendt ved R4"></label><p class="subtle">Nutidens stamdata og deltagelse bruges ikke som erstatning. Kun denne sejlads ændres og skal derefter offentliggøres igen. Dommertid skal beregnes på ny.</p><button type="button" data-action="historical-preview">Forhåndsvis genberegning</button><div id="calculation-preview"></div><input type="hidden" name="token" id="calculation-token"><div class="dialog-actions"><button type="button" data-action="close-dialog">Annuller</button><button class="primary" disabled>Genberegn kun denne sejlads</button></div></form>`);
+export async function historicalCalculationDialog(raceId, boatId) {
+    if (state.session.page !== 'registry')
+        throw new Error('Ret tidligere handicaptal fra bådregisteret.');
+    state.planning.historicalRace = await api(`/api/races/${raceId}`);
+    const row = state.planning.historicalRace.entries.find(entry => entry.boat_id === boatId);
+    if (!row) throw new Error('Båden deltog ikke i det valgte ræs.');
+    const race = state.planning.historicalRace.race;
+    const series = state.session.data.series.find(s => s.id === race.series_id);
+    openDialog('Ret handicap i tidligere ræs', `<form id="calculation-form" class="stack"><p><strong>${e(row.name)} · ${e(row.sail_number)}</strong></p><p>${e(series?.name || '')} · ${e(race.label)} · ${date(race.start)} · ${race.course === 'stor' ? 'Stor' : 'Lille'} bane</p><input type="hidden" id="calculation-boat" name="boat_id" value="${row.boat_id}"><div id="calculation-boat-fields"></div><label class="field">Årsag til rettelsen<input name="note" required maxlength="500" placeholder="Fx fejl i målebrev anvendt ved R4"></label><p class="subtle">Rettelsen gælder kun bådens handicap i dette ræs. Gemte starttider og måltider bevares. Resultaterne skal kontrolleres og offentliggøres igen.</p><button type="button" data-action="historical-preview">Forhåndsvis rettelsen</button><div id="calculation-preview"></div><input type="hidden" name="token" id="calculation-token"><div class="dialog-actions"><button type="button" data-action="close-dialog">Annuller</button><button class="primary" disabled>Gem handicap for dette ræs</button></div></form>`);
+    await updateHistoricalBoat();
 }
 export async function updateHistoricalBoat() {
     const row = state.planning.historicalRace.entries.find(r => r.boat_id === Number($('#calculation-boat').value));

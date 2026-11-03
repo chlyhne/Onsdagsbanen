@@ -54,6 +54,10 @@ def dispatch(app,db,user,can_approve,path,method,params,data,env):
             auth.authorize(user)
         return app.json(service.result_view(db,int(params['series_id']),params['course'],params.get('class_name',''),drafts))
     if path=='/api/geometry' and method=='POST':
+        if data.get('round_id'):
+            auth.authorize(user,admin=True)
+            from .course_settings import preview
+            return app.json(preview(db,data))
         return app.json(service.geometry(data['route']))
     if path=='/api/logout' and method=='POST':
         db.execute('DELETE FROM sessions WHERE token=?',(auth.digest(auth.cookie_value(env,'ob_session')),))
@@ -112,6 +116,9 @@ def dispatch(app,db,user,can_approve,path,method,params,data,env):
     if path=='/api/heats/members' and method=='POST':
         auth.authorize(user,admin=True)
         return app.json({'saved':True,**hierarchy.members(db,int(data['heat_id']),data,user)})
+    if path=='/api/boat-profiles/history' and method=='GET':
+        auth.authorize(user,admin=True)
+        return app.json(fleet.race_history(db,int(params['id'])))
     if path in ('/api/boat-profiles','/api/boat-profiles/delete-preview','/api/boat-profiles/delete'):
         auth.authorize(user,admin=True)
         if method=='GET' and path=='/api/boat-profiles':
@@ -140,6 +147,10 @@ def dispatch(app,db,user,can_approve,path,method,params,data,env):
     if path=='/api/races' and method=='POST':
         auth.authorize(user,admin=True)
         return app.json({'id':service.create_race(db,data,user)})
+    if path=='/api/course-settings' and method=='POST':
+        auth.authorize(user,admin=True)
+        from .course_settings import save
+        return app.json(save(db,data,user))
     if path=='/api/series/reference' and method=='POST':
         auth.authorize(user,admin=True)
         service.series_reference(db,int(data['series_id']),data,user)

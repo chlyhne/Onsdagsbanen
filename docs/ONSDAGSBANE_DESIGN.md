@@ -1,6 +1,6 @@
 # Gennemgang af resultatvisningen
 
-Kontrolleret 2. november 2026. Gennemgangen dækker den offentlige resultatvisning og de valgte indstillinger på mobil og større skærme.
+Kontrolleret 2. november 2026, opdateret 3. november 2026 med separate kolonner og uden intern tabelscroll. Gennemgangen dækker den offentlige resultatvisning og de valgte indstillinger på mobil og større skærme.
 
 ## Fund og rettelser
 
@@ -13,9 +13,10 @@ Kontrolleret 2. november 2026. Gennemgangen dækker den offentlige resultatvisni
 | Sammenhæng | Flere lag af stilrettelser gav modstridende regler. | Resultatvisningens regler er samlet i én blok med ensartede afstande. |
 | Informationsrækkefølge | Administrative oplysninger tog plads fra resultaterne. | Løb, visning og sejlads står først. Bane, distance og vindkategori står på en kompakt linje over tabellen. |
 | Tabelstruktur | Kolonner skulle være entydige for hjælpemidler. | Tabelbeskrivelse og kolonneoverskrifter med `scope="col"`. |
-| Tastatur | En bred tabel skal kunne rulles uden mus. | Tabelområdet kan få tastaturfokus, når indholdet er bredere end området. Fokus har en tydelig blå kant. |
-| Farvede banemærker | Rød/grøn alene er ikke tilstrækkeligt for alle. | Bogstaverne har også et lille B eller S for bagbord/styrbord samt en fuld tekstbeskrivelse. Rundingsretningerne kommer fra repoets PDF-algoritme. |
-| Smalle skærme | Den brede tabel skal ikke skubbe hele siden ud over skærmen. | Kontrolelementerne ombrydes; tabellen ruller vandret i sit eget område. |
+| Rækkehøjde | Bådnavn og skipper stod over hinanden og gjorde alle felter højere og dermed også bredere efter feltreglen. | Bådnavn og skipper har hver sin kolonne på én linje. Ved samlet visning har løbet også sin egen kolonne. |
+| Tastatur | En bred tabel skal kunne rulles uden mus. | Brede tabeller følger dokumentets almindelige rulning uden et særskilt fokusområde. |
+| Farvede banemærker | Banemærkerne skal stå enkelt i resultatlisten. | Bogstaverne vises med rød/grøn rundingsfarve uden sænket B/S. Tooltip og tekst til hjælpemidler angiver fortsat rundingsretningen. Rundingsretningerne kommer fra repoets PDF-algoritme. |
+| Smalle skærme | Resultattabeller må ikke have intern scroll. | Kontrolelementerne ombrydes; brede tabeller vises i fuld bredde, og hele siden rulles vandret. |
 
 ## Kontrol
 
@@ -23,7 +24,7 @@ Kontrolleret 2. november 2026. Gennemgangen dækker den offentlige resultatvisni
 - De kontrollerede tabeltekster, labels og noter har mindst **12,12:1** i kontrast. Normal tekst kræver mindst **4,5:1** efter WCAG 1.4.3.
 - Banemærkernes røde og grønne tekst er kontrolleret separat mod hvid baggrund; begge har over 4,5:1.
 - Sammenlignelige tal er højrestillede. Kolonneoverskrifterne har `scope="col"`.
-- Der er ingen vandret rulning af hele siden ved de kontrollerede bredder. Brede tabeller kan rulles inden i tabelområdet og betjenes med tastaturet.
+- Brede tabeller rulles med hele siden. Der er ingen interne scrollområder eller beskæring omkring resultattabellen.
 - Der er også foretaget visuel kontrol med 200 % forstørrelse af siden.
 - Cookie, delte links og browserhistorik er fortsat afprøvet i browseren.
 

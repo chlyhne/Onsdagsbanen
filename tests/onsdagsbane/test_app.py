@@ -346,9 +346,12 @@ class WebTests(unittest.TestCase):
             self.assertEqual(service.rows(db,race),entries)
         second=self.race(label='R2')
         with self.app.store.connect() as db:self.assertEqual(get(db,'races',second)['reference'],1100)
-        status,_=self.request('/api/series/settings',{'series_id':self.series,'name':'Wrong year','year':2027})
-        self.assertEqual(status,400)
-        with self.app.store.connect() as db:self.assertEqual(get(db,'series',self.series)['name'],'Renamed')
+        status,body=self.request('/api/series/settings',{'series_id':self.series,'year':2027})
+        self.assertEqual(status,200,body)
+        with self.app.store.connect() as db:
+            self.assertEqual(get(db,'series',self.series)['year'],2027)
+            self.assertEqual(get(db,'races',race),basis)
+            self.assertEqual(service.rows(db,race),entries)
 
     def test_series_settings_validate_values_and_require_admin(self):
         for data in ({'name':''},{'discards':[3,3]},{'discards':[1]},{'reference':'abc'},{'year':999}):

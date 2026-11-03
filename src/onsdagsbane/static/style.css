@@ -30,7 +30,7 @@ label.field,.check{font-size:16px}.panel-head p,.boat-option .detail{font-size:1
 .results-controls .field{gap:4px;font-size:16px;font-weight:700}
 .results-controls select{font-size:17px;min-height:40px;min-width:200px}
 .results-controls .check{padding-bottom:7px}
-.results-table{width:fit-content;max-width:100%;border:1px solid #647e93;border-radius:0;box-shadow:none}
+.results-table{width:max-content;max-width:none;overflow:visible;border:1px solid #647e93;border-radius:0;box-shadow:none}
 .results-table table{width:max-content;table-layout:auto;font-size:17px;line-height:1.3}
 .results-table th{padding:8px 7px;font-size:15px;font-weight:700;text-align:left;background:#123858;color:#fff;border-bottom:2px solid #123858}
 .results-table td{padding:6px 7px;border-bottom:1px solid #bbc9d3}
@@ -38,23 +38,22 @@ label.field,.check{font-size:16px}.panel-head p,.boat-option .detail{font-size:1
 .results-table .rank{font-size:17px;text-align:center;width:auto;color:#111}
 .results-table th.rank{color:#fff}
 .results-table .boatname{font-size:18px;font-weight:700;color:#111}
-.results-table .boatdetail{font-size:16px;color:#111;margin-top:2px;line-height:1.3}
+.results-table .skipper{font-size:16px;color:#111}
 .results-table .sail{font-size:16px;color:#111;letter-spacing:0}
 .results-table .total{font-size:17px;font-weight:700;color:#111;background:transparent}
 .results-table .points{width:auto;white-space:nowrap}
 .results-table .standings .numeric,.results-table .daily-results .points{text-align:center}
 .results-table .discarded{color:#111;text-decoration-thickness:2px;font-style:italic}
 .results-table tbody tr:nth-child(even){background:#f0f6fc}.results-table tbody tr:hover{background:#d6e8fb}
-.results-table .daily-results td:nth-child(2) .boatdetail{min-width:0;max-width:none;white-space:nowrap}
-.results-table .standings th:last-child,.results-table .standings td:last-child{position:sticky;right:0;box-shadow:none;border-left:1px solid #647e93}
+.results-table .standings th:last-child,.results-table .standings td:last-child{border-left:1px solid #647e93}
 .results-table .standings th:last-child{background:#123858;color:#fff}
 .results-table .standings td:last-child{background:#dfeefb;color:#111}
 .race-conditions{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0 0 8px;font-size:17px;color:#111;line-height:1.35}
 .course-sequence{display:inline-flex;gap:3px;flex-wrap:wrap;vertical-align:baseline}
 .course-mark{font-size:21px;font-weight:700;line-height:1}.course-port{color:#d00000}.course-starboard{color:#008000}
-.rounding-side{font-size:13px;font-weight:700;color:#111;margin-left:1px}
 .results-warning{font-size:16px;color:#543300;border-left:2px solid #b98b39;padding:6px 10px;margin-bottom:10px}
 .results-warning summary{cursor:pointer}.results-warning p{margin:6px 0 0}
+.course-rounding-warning{font-size:16px;line-height:1.4;margin:8px 0;color:#543300}.course-rounding-warning ul{margin:6px 0 0;padding-left:22px}
 .results-note{font-size:15px;color:#111;margin:8px 0 0;line-height:1.4;max-width:75ch}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:520px){
@@ -62,21 +61,20 @@ label.field,.check{font-size:16px}.panel-head p,.boat-option .detail{font-size:1
   .toptools{gap:6px}.toptools select{max-width:95px;font-size:16px;padding:7px}.toptools button{font-size:16px;padding:7px 9px}
   main{padding:10px 8px}.results-heading h1{font-size:24px}.results-heading button{font-size:15px}
   .results-controls{gap:8px;margin-bottom:10px}.results-controls .field{flex:1 1 150px}.results-controls select{min-width:0;width:100%}
-  .results-table .daily-results td:nth-child(2) .boatdetail{min-width:115px;max-width:150px;white-space:normal}
   .nav{gap:18px}.nav button{font-size:16px}
 }
 @media print{
   .results-controls,.results-heading .row,.results-warning{display:none!important}
   .results-table th,.results-table .standings th:last-child{color:#111;background:#fff}
-  .results-table .standings th:last-child,.results-table .standings td:last-child{position:static;box-shadow:none}
   .results-table .total,.results-table .standings td:last-child{color:#111;background:#fff}
 }
 .login-options a{font-size:17px;padding:10px}.login-options a.preview-login{background:#123858;color:#fff;font-weight:700;border-color:#123858}
+.date-input-control{position:relative;display:block;min-width:0}.date-input-control input{width:100%;padding-right:40px;cursor:pointer}.date-input-icon{position:absolute;right:11px;top:50%;transform:translateY(-50%);width:20px;height:20px;pointer-events:none;color:#123858}.date-input-icon svg{display:block;width:100%;height:100%}.date-input-control:has(input:disabled) .date-input-icon{opacity:.45}.date-calendar{position:fixed;inset:auto;margin:0;width:340px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:8px;border:1px solid #647e93;border-radius:5px;background:#fff;color:#111;box-shadow:0 8px 28px #12385833;font-family:Arial,Helvetica,sans-serif}.calendar-heading{display:flex;align-items:center;gap:5px;margin-bottom:6px}.calendar-heading button{width:32px;padding:2px;font-size:25px;line-height:1.2}.calendar-heading select{font-size:15px;padding:6px;flex:1;min-width:0}.calendar-grid{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:1px;white-space:normal}.calendar-grid th{padding:5px 0;text-align:center;font-size:13px;font-weight:700;color:#123858;background:#fff;border:0}.calendar-grid td{padding:0;height:38px;text-align:center;border:0}.calendar-grid tbody tr:hover{background:transparent}.calendar-grid button{display:flex;align-items:center;justify-content:center;width:100%;height:38px;padding:0;border:0;border-radius:3px;font-size:16px;font-weight:400;background:#fff;color:#111}.calendar-grid button:hover{background:#dfeefb}.calendar-grid [aria-selected=true] button{background:#07528a;color:#fff;font-weight:700}.calendar-grid button[aria-current=date]{box-shadow:inset 0 0 0 1px #07528a}.calendar-footer{display:flex;justify-content:space-between;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid #dfe5e0}.calendar-footer button{padding:5px 8px;font-size:14px}
 
 /* Finish recording: one active measurement and two locally filtered lists. */
 .timing-page{max-width:1500px}.timing-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.timing-header h1{margin:0}
-.timing-race-label{max-width:540px}.timing-context{margin:7px 0 10px;font-size:16px}
-.time-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0}.time-tools #live-clock{font-size:24px;font-variant-numeric:tabular-nums}.time-tools #connection{font-size:15px}
+.workspace-series{margin:0 0 10px;font-size:18px;font-weight:700}.timing-page>.round-tabs{margin-bottom:14px}.timing-context{margin:7px 0 10px;font-size:16px}
+.timing-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:12px 20px;margin-bottom:12px}.timing-toolbar>.workspace-selectors{margin:0;max-width:100%}.time-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px}.clock-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:700}.time-tools #live-clock{font-size:24px;font-variant-numeric:tabular-nums}.time-tools #connection{font-size:15px}
 .timing-captures{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:7px 0}.timing-captures:empty{display:none}.selected-time{background:#dfeefb;border-width:2px}
 .active-measurement{border:2px solid #123858;padding:12px;margin:12px 0;background:#f0f6fc}.active-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.active-measurement p{margin:5px 0 9px}.active-heading h2{margin:0}
 .active-time-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.active-time-row input{font-size:20px;font-variant-numeric:tabular-nums}.timing-extra{margin-top:10px}.timing-extra summary{cursor:pointer}.timing-extra .row{align-items:end;margin-top:8px}
@@ -139,3 +137,5 @@ dialog:has(.fleet-commander) .dialog-error{flex-shrink:0;max-height:18dvh;overfl
 .fleet-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;flex-shrink:0;margin-top:7px;font-size:13px;min-height:21px}.fleet-footer-help{color:#647880;font-size:12px}
 @media(min-width:721px) and (max-width:1150px){.fleet-columns{grid-template-columns:180px minmax(0,1fr) 58px minmax(0,1fr);gap:7px}.fleet-panel,.fleet-navigation{padding:7px}.fleet-list-head,.fleet-boat>span{grid-template-columns:minmax(0,1fr) 65px minmax(0,1fr);gap:5px}.fleet-boat,.fleet-boat strong{font-size:14px}.fleet-skipper,.fleet-sail{font-size:13px}}
 @media(max-width:720px){dialog:has(.fleet-commander) .dialog-head{padding:10px 12px}dialog:has(.fleet-commander) .body{padding:8px;overflow:auto;display:block}.fleet-commander{display:block}.fleet-columns{grid-template-columns:minmax(0,1fr);gap:8px}.fleet-navigation{height:190px}.fleet-panel{padding:8px}.fleet-boat-list{height:310px;flex:auto;min-height:180px}.fleet-arrows{flex-direction:row}.fleet-arrows button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px}.fleet-arrows button>span{transform:rotate(90deg)}.fleet-arrows small{font-size:15px}.fleet-list-head,.fleet-boat>span{grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);gap:5px}.fleet-boat strong{font-size:14px}.fleet-skipper,.fleet-sail{font-size:12px}.fleet-footer-help{display:none}}
+
+.route-distance-field{max-width:220px;margin-top:12px}

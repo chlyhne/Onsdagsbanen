@@ -1,14 +1,14 @@
 import { editBoatProfile } from '../features/boats.js';
 function profileFromRegistration(id) { return state.session.data.boats.find(b => b.id === id)?.profile_id; }
 import { inTimingWorkspace } from './state.js';
-import { resultState } from '../features/results.js';
+import { resultState, resultURL } from '../features/results.js';
 import { routeUrl } from './router.js';
-import { $, clock, dialog, e, keys, normalizeNumberInput, now, number, toast, uid } from './ui.js';
+import { $, clock, dialog, e, keys, normalizeNumberInput, now, number, openDialog, toast, uid } from './ui.js';
 import { activateTimingBoat, activeTimingDraft, chooseTimingRound, completionDialog, confirmActiveTiming, editFinishDialog, publishDialog, redressDialog, refreshTiming, rememberActiveTiming, removeTimingDraft, renderActiveTiming, renderTimingLists, returnActiveTiming, roundForRace, saveTimingWork, searchBoats, showTiming, synchronizeClock, timingNow, timingCourseForBoat, timingRevisions, timingWork, updateRedressReadiness } from '../features/timing.js';
 import { api, load } from './api.js';
 import { discardsInput, isoDay, normalizeStartTime, roundStartsDialog, roundsDialog, seriesDialog, setRaceToday } from '../features/series.js';
-import { catalogDialog, dayFormData, daySettingsDialog, dialogError, fillPlannedStart, heatDialog, historicalCalculationDialog, historicalData, previewHistorical, raceDialog, raceSetupSaved, rememberRaceSetup, referenceDialog, showStarts, updateDayWind, updateHistoricalBoat, updateRaceBoats, updateRoute } from '../features/race.js';
-import { afterSaved, render, selectSeries } from './router.js';
+import { catalogDialog, dayFormData, daySettingsDialog, dialogError, fillPlannedStart, heatDialog, historicalData, previewHistorical, raceDialog, saveRaceSetup, scheduleRaceSetup, closeRaceSetup, referenceDialog, showStarts, updateDayWind, updateHistoricalBoat, updateRaceBoats, updateRoute } from '../features/race.js';
+import { afterSaved, navigate, render, selectSeries } from './router.js';
 import { copyResultLink, showResults } from '../features/results.js';
 import { showLogin } from '../features/access.js';
 import { runtime, state } from './state.js';
@@ -104,6 +104,10 @@ document.addEventListener('input', ev => {
     }
     if (ev.target.closest('#day-settings-form') && ev.target.id !== 'day-token')
         $('#day-token').value = '';
+    if (ev.target.closest('#race-form')) {
+        if (ev.target.name === 'distance') { runtime.route = []; updateRoute(); }
+        scheduleRaceSetup();
+    }
     if (ev.target.id === 'boat-search') {
         state.timing.query = ev.target.value;
         searchBoats();
@@ -116,6 +120,34 @@ document.addEventListener('change', async (ev) => {
         return;
     try {
         const t = ev.target;
+        if (t.closest('#race-form')) {
+            if (['race-round', 'race-course'].includes(t.id)) {
+                const form = $('#race-form');
+                form.inert = true;
+                const saving = saveRaceSetup();
+                const controls = [...form.querySelectorAll('input,select,button')].map(control => [control, control.disabled]);
+                for (const [control] of controls) control.disabled = true;
+                let switched = false;
+                try {
+                    if (!await saving) {
+                        $('#race-round').value = form.dataset.roundId;
+                        $('#race-course').value = form.dataset.course;
+                        return;
+                    }
+                    for (const [control, disabled] of controls) control.disabled = disabled;
+                    await fillPlannedStart(false);
+                    switched = true;
+                } finally {
+                    if (!switched)
+                        for (const [control, disabled] of controls) control.disabled = disabled;
+                    form.inert = false;
+                }
+            } else {
+                updateRaceBoats();
+                scheduleRaceSetup();
+            }
+            return;
+        }
         if (t.name === 'date' && t.closest('#day-settings-form')) {
             updateDayWind();
             return;
@@ -158,8 +190,10 @@ document.addEventListener('change', async (ev) => {
             updateRedressReadiness();
             return;
         }
-        if (t.id === 'series-select') {
-            await selectSeries(t.value);
+        if (t.id === 'result-series') {
+            state.session.seriesId = Number(t.value);
+            resultState().raceId = null;
+            await navigate(resultURL());
         }
         else if (t.id === 'class-select') {
             const previousCourse = resultState().course;
@@ -190,25 +224,9 @@ document.addEventListener('change', async (ev) => {
             resultState().raceId = Number(t.value);
             await showResults('push');
         }
-        else if (t.id === 'timing-race') {
-            state.timing.timingRoundId = Number(t.value);
-            state.timing.timingRaceId = null;
-            state.timing.selected = null;
-            state.timing.query = '';
-            await showTiming();
-        }
         else if (t.id === 'start-race') {
             state.planning.startRaceId = Number(t.value);
             await showStarts();
-        }
-        else if (['race-round', 'race-course', 'race-system', 'race-wind'].includes(t.id)) {
-            if (['race-round', 'race-course'].includes(t.id))
-                rememberRaceSetup();
-            if (t.id === 'race-round')
-                $('#race-system').value = state.session.data.rounds.find(r => r.id === Number(t.value)).handicap_system || 'circle';
-            updateRaceBoats();
-            if (['race-round', 'race-course'].includes(t.id))
-                await fillPlannedStart(false);
         }
         else if (t.name === 'race_id' && t.closest('#race-reference-form'))
             $('[name="reference"]', t.form).value = state.session.data.races.find(r => r.id === Number(t.value)).reference;
@@ -219,7 +237,7 @@ document.addEventListener('change', async (ev) => {
 });
 document.addEventListener('click', async (ev) => {
     const target = ev.target.closest('button,[data-page]');
-    if (!target || target.disabled || runtime.busy || target.closest('#fleet-commander-form') || target.matches('[data-profile-edit],[data-profile-delete]'))
+    if (!target || target.disabled || runtime.busy || target.closest('#fleet-commander-form') || target.matches('[data-profile-edit],[data-profile-delete],[data-profile-history]'))
         return;
     try {
         if (target.dataset.roundStarts) {
@@ -282,11 +300,13 @@ document.addEventListener('click', async (ev) => {
         }
         if (target.dataset.mark) {
             runtime.route.push(target.dataset.mark);
+            if ($('#race-form')) scheduleRaceSetup();
             await updateRoute();
             return;
         }
         if (target.dataset.removeMark) {
             runtime.route.splice(Number(target.dataset.removeMark), 1);
+            if ($('#race-form')) scheduleRaceSetup();
             await updateRoute();
             return;
         }
@@ -307,11 +327,16 @@ document.addEventListener('click', async (ev) => {
             await copyResultLink();
             return;
         }
+        if (action === 'clock-help') {
+            openDialog('Hjælp til uret', '<p>Synkronisér ved minuttets slag i tårnet. Automatisk tagne tider korrigeres også; manuelt indtastede tider bevares.</p><div class="dialog-actions"><button type="button" data-action="close-dialog">Luk</button></div>');
+            return;
+        }
         if (action === 'login') {
             showLogin();
             return;
         }
         if (action === 'close-dialog') {
+            if ($('#race-form')) { await closeRaceSetup(); return; }
             dialog.close();
             return;
         }
@@ -345,6 +370,7 @@ document.addEventListener('click', async (ev) => {
         }
         if (action === 'route-undo') {
             runtime.route.pop();
+            if ($('#race-form')) scheduleRaceSetup();
             await updateRoute();
             return;
         }
@@ -354,10 +380,6 @@ document.addEventListener('click', async (ev) => {
         }
         if (action === 'pdf') {
             window.location.href = `/api/pdf?series_id=${state.session.seriesId}&course=${resultState().course}&class_name=${encodeURIComponent(resultState().className)}${resultState().view === 'daily' && resultState().raceId ? '&race_id=' + resultState().raceId : ''}`;
-            return;
-        }
-        if (action === 'historical-calculation') {
-            await historicalCalculationDialog();
             return;
         }
         if (action === 'historical-preview') {
@@ -437,7 +459,7 @@ document.addEventListener('click', async (ev) => {
     }
 });
 document.addEventListener('submit', async (ev) => {
-    if (['fleet-commander-form', 'boat-profile-form', 'boat-delete-form'].includes(ev.target.id))
+    if (['fleet-commander-form', 'boat-profile-form', 'boat-delete-form', 'boat-history-form'].includes(ev.target.id))
         return;
     ev.preventDefault();
     if (runtime.busy)
@@ -456,9 +478,6 @@ document.addEventListener('submit', async (ev) => {
             await api('/api/rounds/starts', { round_id: Number(data.round_id), race_date: isoDay(data.race_date), start_times: { stor: data.start_stor, lille: data.start_lille } });
             await afterSaved('Ræsets dato og starttider er gemt.');
         }
-        else if (form.id === 'course-action-form') {
-            await historicalCalculationDialog(Number(data.race_id));
-        }
         else if (form.id === 'round-completion-form') {
             const finished = await api(`/api/rounds/${state.timing.timingRoundId}/${form.dataset.reopen === 'true' ? 'reopen' : 'complete'}`, { revisions: timingRevisions() });
             await afterSaved(form.dataset.reopen === 'true' ? 'Ræset er genåbnet for begge baner.' : `Ræset er afsluttet for begge baner. ${finished.redress?.length || 0} dommertider er beregnet. Resterende både har fået DNC.`);
@@ -468,8 +487,6 @@ document.addEventListener('submit', async (ev) => {
             await afterSaved('Indstillingerne for den valgte serie er gemt.');
         }
         else if (form.id === 'calculation-form') {
-            if (Object.keys(timingWork().drafts).length)
-                throw new Error('Bekræft eller annullér aktive måltider før historisk genberegning.');
             await api(`/api/races/${state.planning.historicalRace.race.id}/recalculate`, historicalData());
             await afterSaved('Kun den valgte sejlads er genberegnet ud fra det historiske grundlag. Gennemgå og offentliggør igen.');
         }
@@ -487,15 +504,6 @@ document.addEventListener('submit', async (ev) => {
         else if (form.id === 'day-settings-form') {
             const result = await api('/api/day-settings', dayFormData(true));
             await afterSaved('Dagens opsætning er ensrettet. Resultaterne skal gennemgås og offentliggøres igen.');
-        }
-        else if (form.id === 'race-form') {
-            rememberRaceSetup();
-            const result = await api('/api/races', { ...data, start: isoDay(data.race_date) + 'T' + data.start_time, series_id: state.session.seriesId, route: runtime.route });
-            raceSetupSaved(form);
-            state.timing.timingRaceId = result.id;
-            state.timing.timingRoundId = null;
-            state.session.page = 'timing';
-            await afterSaved('Sejladsen er oprettet. Startlisten er klar.');
         }
         else if (form.id === 'reference-form') {
             await api('/api/series/reference', { series_id: state.session.seriesId, reference: data.reference, apply_all: !!data.apply_all, revisions: Object.fromEntries(state.session.data.races.map(r => [String(r.id), r.revision])) });

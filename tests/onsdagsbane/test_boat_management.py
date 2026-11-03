@@ -37,6 +37,36 @@ class BoatManagementTests(unittest.TestCase):
             self.assertEqual(before_entries,[tuple(r) for r in db.execute('SELECT * FROM entries')])
             self.assertEqual(before_finishes,[tuple(r) for r in db.execute('SELECT * FROM finishes')])
 
+    def test_profile_race_history_spans_series_and_requires_admin(self):
+        first=self.race()
+        identity=self.profile_id()
+        with self.app.store.connect(write=True) as db:
+            other=service.create_series(db,{'name':'Other','year':2027,'round_labels':'R1'},self.user)
+            alias=fleet.enroll(db,other,{'profile_ids':[identity],'course':'stor','class_name':'Stor bane 1'},self.user)[0]
+            second=service.create_race(db,{'series_id':other,'course':'stor','mode':'normal','label':'R1','rating_key':'TACIM','start':'2027-05-05T18:30:00+02:00','route':['A','D'],'boat_ids':[alias]},self.user)
+        status,history=self.request(f'/api/boat-profiles/history?id={identity}')
+        self.assertEqual(status,200,history)
+        self.assertEqual([r['race_id'] for r in history],[second,first])
+        self.assertEqual([r['boat_id'] for r in history],[alias,self.boats[0]])
+        self.assertEqual({r['series_id'] for r in history},{self.series,other})
+        self.assertEqual(self.request(f'/api/boat-profiles/history?id={identity}',role='recorder')[0],403)
+
+    def test_catalog_distinguishes_unused_planned_and_saved_usage(self):
+        identity=self.profile_id()
+        with self.app.store.connect() as db:
+            boat=next(b for b in fleet.catalog(db,-1) if b['id']==identity)
+            self.assertEqual(boat['round_count'],18)
+            self.assertEqual(boat['saved_race_count'],0)
+        self.race()
+        status,created=self.request('/api/boat-profiles',{'name':'Unused','skipper':'S','sail_number':'U1','boat_type':'X','ratings':{}})
+        self.assertEqual(status,200,created)
+        with self.app.store.connect() as db:
+            catalog={b['id']:b for b in fleet.catalog(db,-1)}
+            self.assertEqual(catalog[identity]['saved_race_count'],1)
+            self.assertEqual(catalog[identity]['round_count'],18)
+            self.assertEqual(catalog[created['id']]['round_count'],0)
+            self.assertEqual(catalog[created['id']]['saved_race_count'],0)
+
     def test_delete_only_after_explicit_removal_from_every_round(self):
         race=self.race();identity=self.profile_id()
         with self.app.store.connect(write=True) as db:

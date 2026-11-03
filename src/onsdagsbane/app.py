@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 import time
 import hmac
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 from urllib.error import URLError, HTTPError
 
 from . import auth, service
@@ -66,6 +66,22 @@ class Application:
     def json(data,status=200):
         return status,[('Content-Type','application/json; charset=utf-8')],json.dumps(data,ensure_ascii=False,allow_nan=False).encode()
 
+    def local_preview_origin(self, env, origin):
+        """Allow same-origin loopback aliases only in an explicit local preview."""
+        if not (self.demo or self.preview_admin) or env.get('REMOTE_ADDR') not in ('127.0.0.1', '::1'):
+            return False
+        base = urlsplit(self.base_url)
+        if base.hostname not in ('localhost', '127.0.0.1', '::1'):
+            return False
+        default_port = 443 if base.scheme == 'https' else 80
+        port = base.port or default_port
+        hosts = ('localhost', '127.0.0.1', '[::1]')
+        authorities = {f'{host}:{port}' for host in hosts}
+        if port == default_port:
+            authorities.update(hosts)
+        request_origin = f"{env.get('wsgi.url_scheme', '')}://{env.get('HTTP_HOST', '')}"
+        return origin == request_origin and origin in {f'{base.scheme}://{host}' for host in authorities}
+
     def dispatch(self,env):
         path,method = env.get('PATH_INFO','/'),env.get('REQUEST_METHOD','GET')
         params = {k:v[-1] for k,v in parse_qs(env.get('QUERY_STRING','')).items()}
@@ -73,8 +89,8 @@ class Application:
             with self.store.connect() as db:
                 db.execute('SELECT 1')
             return self.json({'ok':True})
-        page_route=bool(re.fullmatch(r'/(?:results|today|series(?:/\d+(?:/(?:assignments|boats|results|settings))?)?|rounds/[\w-]+(?:/(?:setup|starts|timing|results|history))?|boats|admin)?',path))
-        if method=='GET' and (page_route or path.endswith(('.js','.css'))):
+        page_route=bool(re.fullmatch(r'/(?:results|timing|today|series(?:/\d+(?:/(?:assignments|boats|results|settings))?)?|rounds/[\w-]+(?:/(?:setup|starts|timing|results|history))?|boats|admin)?',path))
+        if method=='GET' and (page_route or path.endswith(('.js','.css','.png'))):
             filename = (STATIC / ('index.html' if page_route else path.lstrip('/'))).resolve()
             if not filename.is_relative_to(STATIC.resolve()) or not filename.is_file():
                 return self.json({'error':'Filen findes ikke.'},404)
@@ -86,7 +102,7 @@ class Application:
         data = {}
         if method=='POST':
             origin = env.get('HTTP_ORIGIN')
-            if origin and origin != self.base_url:
+            if origin and origin != self.base_url and not self.local_preview_origin(env, origin):
                 raise PermissionError('Ugyldig forespørgselsoprindelse.')
             if 'application/json' not in env.get('CONTENT_TYPE',''):
                 raise ValueError('Forventede JSON.')

@@ -1,3 +1,4 @@
+import './core/calendar.js';
 import './core/events.js';
 import './features/assignments.js';
 import './features/boats.js';

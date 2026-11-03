@@ -19,7 +19,7 @@ def set_reference(db, race_id, value, user, revision):
     db.execute('UPDATE races SET reference=?,revision=revision+1 WHERE id=?', (value, race_id))
     audit(db, user, 'race.reference', {'race_id': race_id, 'old': race['reference'], 'new': value})
 
-def day_settings(db, data, user):
+def day_settings(db, data, user, *, race_id=None, distance_override=None):
     """Preview, then explicitly align course distance and the day's wind category."""
     import hashlib
     day = str(data['date'])
@@ -29,10 +29,12 @@ def day_settings(db, data, user):
     if wind not in ('', 'L', 'M', 'H'):
         raise ValueError('Ukendt vindkategori.')
     route = data.get('route', [])
-    distance = common.geometry(route)['distance'] if route else None
+    distance = common.geometry(route)['distance'] if route else number(distance_override) if distance_override is not None else None
     if not wind and distance is None:
         raise ValueError('Vælg en vindkategori eller en mærkerækkefølge.')
     races = [dict(r) for r in db.execute('SELECT * FROM races WHERE series_id=? AND substr(start,1,10)=? ORDER BY id', (int(data['series_id']), day))]
+    if race_id is not None:
+        races = [r for r in races if r['id'] == race_id]
     if data.get('round_uid'):
         course_ids={r[0] for r in db.execute('SELECT c.id FROM round_courses c JOIN rounds p ON p.id=c.round_id WHERE p.uid=? AND p.series_id=?',(data['round_uid'],int(data['series_id'])))}
         if not course_ids:raise ValueError('Ræset tilhører ikke den valgte serie.')
@@ -91,7 +93,7 @@ def day_settings(db, data, user):
                     for start in calculate_starts(fleet_for_start, Decimal(str(new_distance)), common.instant(race['start'])):
                         extra_handicap = next((r['extra_handicap'] for r in entries if r['boat_id'] == int(start.boat.identity)))
                         db.execute('UPDATE entries SET start=? WHERE race_id=? AND boat_id=?', ((start.time + timedelta(seconds=extra_handicap)).isoformat(), race_id, int(start.boat.identity)))
-            new_route = json.dumps(route) if route and race['course'] == data['course'] else race['route']
+            new_route = json.dumps(route) if (route or distance_override is not None) and race['course'] == data['course'] else race['route']
             new_distance = change['updates'][0]['distance'] if change['updates'] else change['distance']
             warning = '' if len({r['start'] for r in participation.rows(db, race_id)}) == 1 else 'Løbene har forskellige starttider; samlet visning er vejledende.'
             db.execute('UPDATE races SET rating_key=?,distance=?,route=?,published=0,revision=revision+1,warning=? WHERE id=?', (change['rating_key'], new_distance, new_route, warning, race_id))
