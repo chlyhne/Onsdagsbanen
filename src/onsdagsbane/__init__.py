@@ -1,0 +1,1 @@
+"""Onsdagsbanens selvstændige webapp."""

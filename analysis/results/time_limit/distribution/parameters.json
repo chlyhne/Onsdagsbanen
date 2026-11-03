@@ -1,0 +1,24 @@
+{
+  "year": 2026,
+  "available_minutes": [
+    130,
+    140,
+    150
+  ],
+  "schedule": null,
+  "target_minutes": [
+    75,
+    90,
+    105
+  ],
+  "extra_minutes": 15,
+  "deadline_extension": 20,
+  "dnf_weights": [
+    0,
+    0.5,
+    1
+  ],
+  "output_dir": "/home/casper/Documents/sejlrelateret/m2s scraper/Onsdagsbanen/analysis/results/time_limit/distribution",
+  "source_sha256": "888f22d2705215d25133aff5d1ec663ccc7348e432e2190a79ba78df2ea4f08c",
+  "schedule_sha256": null
+}

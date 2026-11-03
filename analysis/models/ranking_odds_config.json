@@ -1,0 +1,28 @@
+{
+  "prior_sd": 2,
+  "tuning_years": [
+    2025
+  ],
+  "evaluation_years": [
+    2026
+  ],
+  "selection_metric": "mean per-race pairwise log loss on tuning years",
+  "candidates": [
+    {
+      "prior_sd": 0.5,
+      "mean_race_log_loss": 0.48057538221765617
+    },
+    {
+      "prior_sd": 1,
+      "mean_race_log_loss": 0.40272572882381247
+    },
+    {
+      "prior_sd": 2,
+      "mean_race_log_loss": 0.38105356813030195
+    },
+    {
+      "prior_sd": 4,
+      "mean_race_log_loss": 0.3813808749416775
+    }
+  ]
+}

@@ -12,18 +12,26 @@ dependencies = [
   "numpy>=2.0.0",
   "pandas>=2.2.0",
   "scipy>=1.14.0",
-  "reportlab>=4.2.0"
+  "reportlab>=4.2.0",
+  "geographiclib>=2.0"
 ]
+
+[project.optional-dependencies]
+web = ["gunicorn>=23.0.0"]
 
 [project.scripts]
 m2s-combine = "m2s_combiner.cli:main"
 m2s-redress = "m2s_combiner.redress.cli:main"
+onsdagsbane = "onsdagsbane.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+onsdagsbane = ["static/*", "seed/*.json"]
 
 [tool.ruff]
 cache-dir = "build/cache/ruff"

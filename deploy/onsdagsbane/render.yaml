@@ -1,0 +1,27 @@
+# In Render, create a Blueprint and select this file's path.
+services:
+  - type: web
+    name: onsdagsbanen
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./deploy/onsdagsbane/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    disk:
+      name: onsdagsbane-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: ONSDAGSBANE_DB
+        value: /data/onsdagsbane.sqlite3
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FACEBOOK_CLIENT_ID
+        sync: false
+      - key: FACEBOOK_CLIENT_SECRET
+        sync: false
+      - key: FACEBOOK_GRAPH_VERSION
+        value: v25.0

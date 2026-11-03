@@ -1,0 +1,23 @@
+{
+  "year": 2026,
+  "available_minutes": [
+    120.0
+  ],
+  "schedule": null,
+  "target_minutes": [
+    75.0,
+    90.0,
+    105.0
+  ],
+  "extra_minutes": 15,
+  "deadline_extension": 20,
+  "dnf_weights": [
+    0,
+    0.5,
+    1
+  ],
+  "allow_late_finishers": true,
+  "output_dir": "analysis/results/time_limit/two_hours",
+  "source_sha256": "888f22d2705215d25133aff5d1ec663ccc7348e432e2190a79ba78df2ea4f08c",
+  "schedule_sha256": null
+}

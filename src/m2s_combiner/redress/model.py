@@ -4,7 +4,7 @@ import json
 import math
 import os
 from multiprocessing import Pool
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -59,6 +59,18 @@ class BoatState:
 
 
 @dataclass
+class RacePrior:
+    """State before seeing this race, optionally retained for masked validation."""
+
+    race: str
+    competitors: list[str]
+    mean: np.ndarray
+    covariance: np.ndarray
+    gamma_mean: np.ndarray
+    gamma_covariance: np.ndarray
+
+
+@dataclass
 class GroupFilterResult:
     history: pd.DataFrame
     nll_sum: float
@@ -68,6 +80,7 @@ class GroupFilterResult:
     loo_sq_error_sum: float
     loo_error_count: int
     terminal_state_by_competitor: dict[str, BoatState]
+    priors: list[RacePrior] = field(default_factory=list)
 
 
 @dataclass
@@ -846,6 +859,7 @@ def run_group_filter(
     initial_state_by_competitor: dict[str, BoatState] | None = None,
     compute_loo_predictions: bool = False,
     collect_history: bool = True,
+    collect_priors: bool = False,
 ) -> GroupFilterResult:
     runtime = prepare_group_runtime(group)
     selected_races: list[str] = list(group["selected_races"])
@@ -869,6 +883,7 @@ def run_group_filter(
     last_state_date_by_competitor = {competitor: None for competitor in competitors}
 
     history_rows: list[dict[str, Any]] = []
+    priors: list[RacePrior] = []
     nll_sum = 0.0
     observed_count = 0
     informed_sq_error_sum = 0.0
@@ -939,6 +954,12 @@ def run_group_filter(
             prior_mean[int(idx)] = float(initial_x0 if initial_state is None else initial_state.x)
             if initial_state is not None:
                 prior_gamma_mean[int(idx)] = float(initial_state.gamma)
+        if collect_priors:
+            priors.append(RacePrior(
+                race=str(race_label), competitors=list(competitors),
+                mean=prior_mean.copy(), covariance=prior_cov.copy(),
+                gamma_mean=prior_gamma_mean.copy(), gamma_covariance=prior_gamma_cov.copy(),
+            ))
         obs_mask = race_rows["beregnet_seconds"].notna() & (~race_rows["status_upper"].isin(NON_OBS_STATUSES))
         observed = race_rows.loc[obs_mask, ["competitor", "beregnet_seconds"]].copy()
         observed_step = compute_observation_step(
@@ -1116,6 +1137,7 @@ def run_group_filter(
         loo_sq_error_sum=loo_sq_error_sum,
         loo_error_count=loo_error_count,
         terminal_state_by_competitor=terminal_state_by_competitor,
+        priors=priors,
     )
 
 

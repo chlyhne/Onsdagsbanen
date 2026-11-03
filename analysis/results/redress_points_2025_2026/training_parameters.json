@@ -1,0 +1,35 @@
+{
+  "fingerprint": {
+    "schema": 1,
+    "data": "6c45042919f6db5a008d13350169a5d70be0ed11c931645ec9e6e7e5affa2110",
+    "model": "16e713c505b36aa2c90e2af9e8f4d499e4cc65398bd45c72c69e18cc802c1e6d"
+  },
+  "parameters": {
+    "Stor Bane": {
+      "q": 6.353469693795907e-06,
+      "q_gamma": 0.004322758292991639,
+      "k": 96.72717374445104,
+      "p0": 0.0006145531669519009,
+      "initial_x0": 0.0,
+      "training_nll": -340.5408224935708,
+      "evaluations": 752,
+      "global_converged": true,
+      "local_converged": true,
+      "global_message": "Optimization terminated successfully.",
+      "local_message": "Optimization terminated successfully."
+    },
+    "Lille Bane": {
+      "q": 1.7723957284970082e-06,
+      "q_gamma": 0.0008596866621962911,
+      "k": 742.8140546658757,
+      "p0": 0.0013165604575573412,
+      "initial_x0": 0.0,
+      "training_nll": -287.1311164385521,
+      "evaluations": 1058,
+      "global_converged": true,
+      "local_converged": true,
+      "global_message": "Optimization terminated successfully.",
+      "local_message": "Optimization terminated successfully."
+    }
+  }
+}

@@ -18,6 +18,7 @@ cfd/results/**/weighted_2d/*.npz
 *.pyo
 *.pyd
 .venv/
+deploy/onsdagsbane/.env
 .vscode/
 output/
 .playwright/

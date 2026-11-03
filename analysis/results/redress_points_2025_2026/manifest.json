@@ -1,0 +1,46 @@
+{
+  "source": "/home/casper/Documents/sejlrelateret/m2s scraper/sailing-in-unnecessary-detail/_data/odds/results.csv",
+  "source_sha256": "6532347e72a2596eca6775b8d6e9787062f415f75164c25fab2b2eda46186c4f",
+  "time_model_sha256": "16e713c505b36aa2c90e2af9e8f4d499e4cc65398bd45c72c69e18cc802c1e6d",
+  "evaluator_sha256": "8fd09464d4c708defd1135203315438a0fd28c1b87792421330470af1bcaf080",
+  "ranking_model_sha256": "79d964cd2ce356d6a29e68f4762f4db807ff20a59e2399846640435d2a7d569e",
+  "ranking_config_sha256": "47546a0bacd6fd1e0acfb9eec3a47d00001ea9cffa52487ea60780a83cbbfcda",
+  "training_years": [
+    2025
+  ],
+  "evaluation_years": [
+    2026
+  ],
+  "assumed_finish": true,
+  "ranking_prior_sd": 2,
+  "sobol_power": 12,
+  "minimum_prior_finishes": 3,
+  "time_parameters": {
+    "Stor Bane": {
+      "q": 6.353469693795907e-06,
+      "q_gamma": 0.004322758292991639,
+      "k": 96.72717374445104,
+      "p0": 0.0006145531669519009,
+      "initial_x0": 0.0,
+      "training_nll": -340.5408224935708,
+      "evaluations": 752,
+      "global_converged": true,
+      "local_converged": true,
+      "global_message": "Optimization terminated successfully.",
+      "local_message": "Optimization terminated successfully."
+    },
+    "Lille Bane": {
+      "q": 1.7723957284970082e-06,
+      "q_gamma": 0.0008596866621962911,
+      "k": 742.8140546658757,
+      "p0": 0.0013165604575573412,
+      "initial_x0": 0.0,
+      "training_nll": -287.1311164385521,
+      "evaluations": 1058,
+      "global_converged": true,
+      "local_converged": true,
+      "global_message": "Optimization terminated successfully.",
+      "local_message": "Optimization terminated successfully."
+    }
+  }
+}

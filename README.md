@@ -1,5 +1,15 @@
 # m2s-combiner
 
+## Onsdagsbanens hjemmeside
+
+Den selvstændige webapp kan afprøves lokalt med:
+
+```bash
+.venv/bin/python -m onsdagsbane --demo
+```
+
+Åbn `http://127.0.0.1:8090`. Se [kravlisten](docs/ONSDAGSBANE_KRAV.md) og [brug og drift](docs/ONSDAGSBANE_DRIFT.md). Demoen har sin egen database. Google/Facebook-login på driftssiden kræver udbydernes appnøgler.
+
 
 Projektets mapper og de nye filstier er beskrevet i [docs/STRUCTURE.md](docs/STRUCTURE.md).
 
@@ -212,6 +222,29 @@ python -m m2s_combiner.redress --q-objective rmse --output-dir analysis/results
 ```
 
 Generated artifacts are written to `analysis/results/`, including state history, prediction tables, boat plot CSVs, q diagnostics, and the LaTeX fragment consumed by `redress-algorithm-paper/`.
+
+### Redress points comparison (2025–2026)
+
+The offline comparison in `scripts/evaluate_redress_points.py` assumes the duty
+boat finishes. It compares inserting one predicted corrected time, converting
+the time distribution to expected points, and conditioning the dashboard's
+ranking model on the other boats' results that evening. Each target's current
+result is hidden, and 2026 is evaluated with settings fitted on 2025 only.
+
+```bash
+OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/evaluate_redress_points.py
+.venv/bin/python -m unittest discover -s tests -p 'test_redress_points.py'
+```
+
+See [results and validation protocol](analysis/results/redress_points_2025_2026/README.md).
+The script uses this repository's saved 2025–2026 results in
+`data/odds_results_2025_2026.csv`, ranking model in `scripts/ranking_odds.py`,
+and fitted configuration in `analysis/models/ranking_odds_config.json`;
+it neither fetches Manage2Sail nor changes duty assignments or published scores.
+Predictions, per-boat errors, paired comparisons and fitted settings are saved
+alongside the report. The production time filter can optionally retain its full
+state immediately before each race for this validation; its normal output and
+scoring behaviour are unchanged.
 
 ## Email Results (Gmail)
 

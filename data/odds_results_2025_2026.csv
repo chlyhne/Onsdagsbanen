@@ -1,0 +1,1140 @@
+year,group,race_date,race_local,competitor,observed,status,beregnet_seconds
+2025,Lille Bane,2025-04-30,R1,Christian Løvgren Persson,True,,7126.0
+2025,Lille Bane,2025-04-30,R1,Esben HARDER,True,,5932.0
+2025,Lille Bane,2025-04-30,R1,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-04-30,R1,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-04-30,R1,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-04-30,R1,Horacio Bulacio,False,DNC,
+2025,Lille Bane,2025-04-30,R1,Ilan HURVITZ,True,,6345.0
+2025,Lille Bane,2025-04-30,R1,Inger STOKKINK,True,,6103.0
+2025,Lille Bane,2025-04-30,R1,Jens Due OLSEN,True,,6454.0
+2025,Lille Bane,2025-04-30,R1,Jesper THYGESEN,True,,6469.0
+2025,Lille Bane,2025-04-30,R1,John AMBY,True,,6152.0
+2025,Lille Bane,2025-04-30,R1,Lotte MARKERT,True,,5595.0
+2025,Lille Bane,2025-04-30,R1,Martin Rasmussen,True,,7315.0
+2025,Lille Bane,2025-04-30,R1,Ole RASMUSSEN,True,,5956.0
+2025,Lille Bane,2025-04-30,R1,Oluf GRØNKJÆR,True,,5645.0
+2025,Lille Bane,2025-04-30,R1,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-04-30,R1,Peder FLARUP,True,,7400.0
+2025,Lille Bane,2025-04-30,R1,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-05-07,R2,Christian Løvgren Persson,False,DNF,
+2025,Lille Bane,2025-05-07,R2,Esben HARDER,True,,6054.0
+2025,Lille Bane,2025-05-07,R2,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-05-07,R2,Harpelunde Senior,True,,6286.0
+2025,Lille Bane,2025-05-07,R2,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-05-07,R2,Horacio Bulacio,False,DNC,
+2025,Lille Bane,2025-05-07,R2,Ilan HURVITZ,True,,6125.0
+2025,Lille Bane,2025-05-07,R2,Inger STOKKINK,True,,5385.0
+2025,Lille Bane,2025-05-07,R2,Jens Due OLSEN,False,DNF,
+2025,Lille Bane,2025-05-07,R2,Jesper THYGESEN,True,,7367.0
+2025,Lille Bane,2025-05-07,R2,John AMBY,True,,5798.0
+2025,Lille Bane,2025-05-07,R2,Lotte MARKERT,True,,4646.0
+2025,Lille Bane,2025-05-07,R2,Martin Rasmussen,True,,6987.0
+2025,Lille Bane,2025-05-07,R2,Ole RASMUSSEN,True,,5856.0
+2025,Lille Bane,2025-05-07,R2,Oluf GRØNKJÆR,True,,6090.0
+2025,Lille Bane,2025-05-07,R2,Oskar Hansen,True,,6128.0
+2025,Lille Bane,2025-05-07,R2,Peder FLARUP,False,DNF,
+2025,Lille Bane,2025-05-07,R2,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-05-14,R3,Christian Løvgren Persson,True,,4291.0
+2025,Lille Bane,2025-05-14,R3,Esben HARDER,True,,3680.0
+2025,Lille Bane,2025-05-14,R3,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-05-14,R3,Harpelunde Senior,True,,3890.0
+2025,Lille Bane,2025-05-14,R3,Henrik AXELSEN,True,,3652.0
+2025,Lille Bane,2025-05-14,R3,Horacio Bulacio,False,DNC,
+2025,Lille Bane,2025-05-14,R3,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-05-14,R3,Inger STOKKINK,True,,3606.0
+2025,Lille Bane,2025-05-14,R3,Jens Due OLSEN,True,,3880.0
+2025,Lille Bane,2025-05-14,R3,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-05-14,R3,John AMBY,True,,3545.0
+2025,Lille Bane,2025-05-14,R3,Lotte MARKERT,False,DNC,
+2025,Lille Bane,2025-05-14,R3,Martin Rasmussen,True,,4052.0
+2025,Lille Bane,2025-05-14,R3,Ole RASMUSSEN,True,,3484.0
+2025,Lille Bane,2025-05-14,R3,Oluf GRØNKJÆR,False,DNF,
+2025,Lille Bane,2025-05-14,R3,Oskar Hansen,True,,3866.0
+2025,Lille Bane,2025-05-14,R3,Peder FLARUP,True,,4550.0
+2025,Lille Bane,2025-05-14,R3,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-05-21,R4,Christian Løvgren Persson,True,,7242.0
+2025,Lille Bane,2025-05-21,R4,Esben HARDER,True,,6911.0
+2025,Lille Bane,2025-05-21,R4,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-05-21,R4,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-05-21,R4,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-05-21,R4,Horacio Bulacio,True,,6903.0
+2025,Lille Bane,2025-05-21,R4,Ilan HURVITZ,True,,7239.0
+2025,Lille Bane,2025-05-21,R4,Inger STOKKINK,True,,6643.0
+2025,Lille Bane,2025-05-21,R4,Jens Due OLSEN,True,,7586.0
+2025,Lille Bane,2025-05-21,R4,Jesper THYGESEN,True,,7261.0
+2025,Lille Bane,2025-05-21,R4,John AMBY,True,,7182.0
+2025,Lille Bane,2025-05-21,R4,Lotte MARKERT,True,,6765.0
+2025,Lille Bane,2025-05-21,R4,Martin Rasmussen,True,,7776.0
+2025,Lille Bane,2025-05-21,R4,Ole RASMUSSEN,True,,6769.0
+2025,Lille Bane,2025-05-21,R4,Oluf GRØNKJÆR,True,,6507.0
+2025,Lille Bane,2025-05-21,R4,Oskar Hansen,True,,7051.0
+2025,Lille Bane,2025-05-21,R4,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-05-21,R4,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-05-28,R5,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-05-28,R5,Esben HARDER,True,,7574.0
+2025,Lille Bane,2025-05-28,R5,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-05-28,R5,Harpelunde Senior,True,,7577.0
+2025,Lille Bane,2025-05-28,R5,Henrik AXELSEN,True,,7478.0
+2025,Lille Bane,2025-05-28,R5,Horacio Bulacio,True,,7639.0
+2025,Lille Bane,2025-05-28,R5,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-05-28,R5,Inger STOKKINK,True,,7510.0
+2025,Lille Bane,2025-05-28,R5,Jens Due OLSEN,True,,8293.0
+2025,Lille Bane,2025-05-28,R5,Jesper THYGESEN,True,,7994.0
+2025,Lille Bane,2025-05-28,R5,John AMBY,True,,7734.0
+2025,Lille Bane,2025-05-28,R5,Lotte MARKERT,True,,7231.0
+2025,Lille Bane,2025-05-28,R5,Martin Rasmussen,True,,8626.0
+2025,Lille Bane,2025-05-28,R5,Ole RASMUSSEN,True,,7309.0
+2025,Lille Bane,2025-05-28,R5,Oluf GRØNKJÆR,True,,7465.0
+2025,Lille Bane,2025-05-28,R5,Oskar Hansen,True,,7710.0
+2025,Lille Bane,2025-05-28,R5,Peder FLARUP,True,,8233.0
+2025,Lille Bane,2025-05-28,R5,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-06-04,R6,Christian Løvgren Persson,True,,5306.0
+2025,Lille Bane,2025-06-04,R6,Esben HARDER,True,,4889.0
+2025,Lille Bane,2025-06-04,R6,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-06-04,R6,Harpelunde Senior,False,DNF,
+2025,Lille Bane,2025-06-04,R6,Henrik AXELSEN,True,,4985.0
+2025,Lille Bane,2025-06-04,R6,Horacio Bulacio,False,DNC,
+2025,Lille Bane,2025-06-04,R6,Ilan HURVITZ,True,,5171.0
+2025,Lille Bane,2025-06-04,R6,Inger STOKKINK,True,,4959.0
+2025,Lille Bane,2025-06-04,R6,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-06-04,R6,Jesper THYGESEN,True,,5379.0
+2025,Lille Bane,2025-06-04,R6,John AMBY,False,DNF,
+2025,Lille Bane,2025-06-04,R6,Lotte MARKERT,True,,4684.0
+2025,Lille Bane,2025-06-04,R6,Martin Rasmussen,True,,5502.0
+2025,Lille Bane,2025-06-04,R6,Ole RASMUSSEN,True,,4798.0
+2025,Lille Bane,2025-06-04,R6,Oluf GRØNKJÆR,True,,5215.0
+2025,Lille Bane,2025-06-04,R6,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-06-04,R6,Peder FLARUP,True,,5579.0
+2025,Lille Bane,2025-06-04,R6,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Christian Løvgren Persson,True,,6489.0
+2025,Lille Bane,2025-06-11,R7,Esben HARDER,True,,5894.0
+2025,Lille Bane,2025-06-11,R7,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Horacio Bulacio,True,,6043.0
+2025,Lille Bane,2025-06-11,R7,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Inger STOKKINK,True,,5719.0
+2025,Lille Bane,2025-06-11,R7,Jens Due OLSEN,True,,6374.0
+2025,Lille Bane,2025-06-11,R7,Jesper THYGESEN,True,,6329.0
+2025,Lille Bane,2025-06-11,R7,John AMBY,True,,5972.0
+2025,Lille Bane,2025-06-11,R7,Lotte MARKERT,True,,5729.0
+2025,Lille Bane,2025-06-11,R7,Martin Rasmussen,True,,7042.0
+2025,Lille Bane,2025-06-11,R7,Ole RASMUSSEN,True,,5738.0
+2025,Lille Bane,2025-06-11,R7,Oluf GRØNKJÆR,True,,5758.0
+2025,Lille Bane,2025-06-11,R7,Oskar Hansen,True,,6564.0
+2025,Lille Bane,2025-06-11,R7,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-06-11,R7,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Christian Løvgren Persson,True,,8634.0
+2025,Lille Bane,2025-06-18,R8,Esben HARDER,True,,8236.0
+2025,Lille Bane,2025-06-18,R8,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Horacio Bulacio,True,,8405.0
+2025,Lille Bane,2025-06-18,R8,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Inger STOKKINK,True,,8531.0
+2025,Lille Bane,2025-06-18,R8,Jens Due OLSEN,True,,9000.0
+2025,Lille Bane,2025-06-18,R8,Jesper THYGESEN,True,,8569.0
+2025,Lille Bane,2025-06-18,R8,John AMBY,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Lotte MARKERT,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Ole RASMUSSEN,True,,8300.0
+2025,Lille Bane,2025-06-18,R8,Oluf GRØNKJÆR,True,,8348.0
+2025,Lille Bane,2025-06-18,R8,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-06-18,R8,Peder FLARUP,False,DNF,
+2025,Lille Bane,2025-06-18,R8,Tonni GADGAARD,True,,8020.0
+2025,Lille Bane,2025-06-25,R9,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Esben HARDER,True,,4890.0
+2025,Lille Bane,2025-06-25,R9,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Henrik AXELSEN,True,,4987.0
+2025,Lille Bane,2025-06-25,R9,Horacio Bulacio,True,,4888.0
+2025,Lille Bane,2025-06-25,R9,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Inger STOKKINK,True,,4954.0
+2025,Lille Bane,2025-06-25,R9,Jens Due OLSEN,True,,5248.0
+2025,Lille Bane,2025-06-25,R9,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-06-25,R9,John AMBY,True,,5101.0
+2025,Lille Bane,2025-06-25,R9,Lotte MARKERT,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Martin Rasmussen,True,,5081.0
+2025,Lille Bane,2025-06-25,R9,Ole RASMUSSEN,True,,4686.0
+2025,Lille Bane,2025-06-25,R9,Oluf GRØNKJÆR,True,,4759.0
+2025,Lille Bane,2025-06-25,R9,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-06-25,R9,Peder FLARUP,True,,5801.0
+2025,Lille Bane,2025-06-25,R9,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Esben HARDER,True,,4721.0
+2025,Lille Bane,2025-08-06,R10,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Horacio Bulacio,True,,5344.0
+2025,Lille Bane,2025-08-06,R10,Ilan HURVITZ,True,,5014.0
+2025,Lille Bane,2025-08-06,R10,Inger STOKKINK,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-08-06,R10,John AMBY,True,,5143.0
+2025,Lille Bane,2025-08-06,R10,Lotte MARKERT,True,,4707.0
+2025,Lille Bane,2025-08-06,R10,Martin Rasmussen,True,,5942.0
+2025,Lille Bane,2025-08-06,R10,Ole RASMUSSEN,True,,4877.0
+2025,Lille Bane,2025-08-06,R10,Oluf GRØNKJÆR,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-08-06,R10,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Esben HARDER,True,,5665.0
+2025,Lille Bane,2025-08-13,R11,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Horacio Bulacio,True,,5285.0
+2025,Lille Bane,2025-08-13,R11,Ilan HURVITZ,True,,6629.0
+2025,Lille Bane,2025-08-13,R11,Inger STOKKINK,True,,5901.0
+2025,Lille Bane,2025-08-13,R11,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-08-13,R11,John AMBY,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Lotte MARKERT,True,,5123.0
+2025,Lille Bane,2025-08-13,R11,Martin Rasmussen,True,,5817.0
+2025,Lille Bane,2025-08-13,R11,Ole RASMUSSEN,True,,5850.0
+2025,Lille Bane,2025-08-13,R11,Oluf GRØNKJÆR,True,,5698.0
+2025,Lille Bane,2025-08-13,R11,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-08-13,R11,Peder FLARUP,True,,6901.0
+2025,Lille Bane,2025-08-13,R11,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Esben HARDER,True,,3505.0
+2025,Lille Bane,2025-08-20,R12,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Horacio Bulacio,True,,3800.0
+2025,Lille Bane,2025-08-20,R12,Ilan HURVITZ,True,,3689.0
+2025,Lille Bane,2025-08-20,R12,Inger STOKKINK,True,,3941.0
+2025,Lille Bane,2025-08-20,R12,Jens Due OLSEN,True,,4499.0
+2025,Lille Bane,2025-08-20,R12,Jesper THYGESEN,True,,4582.0
+2025,Lille Bane,2025-08-20,R12,John AMBY,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Lotte MARKERT,True,,3482.0
+2025,Lille Bane,2025-08-20,R12,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Ole RASMUSSEN,True,,3400.0
+2025,Lille Bane,2025-08-20,R12,Oluf GRØNKJÆR,True,,3677.0
+2025,Lille Bane,2025-08-20,R12,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-08-20,R12,Peder FLARUP,True,,5453.0
+2025,Lille Bane,2025-08-20,R12,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Christian Løvgren Persson,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Esben HARDER,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Henrik AXELSEN,True,,6295.0
+2025,Lille Bane,2025-08-27,R13,Horacio Bulacio,True,,7070.0
+2025,Lille Bane,2025-08-27,R13,Ilan HURVITZ,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Inger STOKKINK,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Jens Due OLSEN,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-08-27,R13,John AMBY,False,DNF,
+2025,Lille Bane,2025-08-27,R13,Lotte MARKERT,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Ole RASMUSSEN,True,,6360.0
+2025,Lille Bane,2025-08-27,R13,Oluf GRØNKJÆR,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-08-27,R13,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Esben HARDER,True,,7272.0
+2025,Lille Bane,2025-09-03,R14,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Horacio Bulacio,True,,7349.0
+2025,Lille Bane,2025-09-03,R14,Ilan HURVITZ,True,,7882.0
+2025,Lille Bane,2025-09-03,R14,Inger STOKKINK,False,DNS,
+2025,Lille Bane,2025-09-03,R14,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-09-03,R14,John AMBY,True,,7549.0
+2025,Lille Bane,2025-09-03,R14,Lotte MARKERT,False,DNF,
+2025,Lille Bane,2025-09-03,R14,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Ole RASMUSSEN,True,,7189.0
+2025,Lille Bane,2025-09-03,R14,Oluf GRØNKJÆR,True,,7561.0
+2025,Lille Bane,2025-09-03,R14,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-09-03,R14,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Esben HARDER,True,,3983.0
+2025,Lille Bane,2025-09-10,R15,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Horacio Bulacio,True,,4091.0
+2025,Lille Bane,2025-09-10,R15,Ilan HURVITZ,True,,4134.0
+2025,Lille Bane,2025-09-10,R15,Inger STOKKINK,True,,4412.0
+2025,Lille Bane,2025-09-10,R15,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Jesper THYGESEN,False,DNC,
+2025,Lille Bane,2025-09-10,R15,John AMBY,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Lotte MARKERT,True,,4034.0
+2025,Lille Bane,2025-09-10,R15,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Ole RASMUSSEN,True,,4062.0
+2025,Lille Bane,2025-09-10,R15,Oluf GRØNKJÆR,True,,4126.0
+2025,Lille Bane,2025-09-10,R15,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-09-10,R15,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Esben HARDER,True,,6716.0
+2025,Lille Bane,2025-09-17,R16,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Henrik AXELSEN,True,,6953.0
+2025,Lille Bane,2025-09-17,R16,Horacio Bulacio,True,,6996.0
+2025,Lille Bane,2025-09-17,R16,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Inger STOKKINK,True,,7171.0
+2025,Lille Bane,2025-09-17,R16,Jens Due OLSEN,True,,7484.0
+2025,Lille Bane,2025-09-17,R16,Jesper THYGESEN,True,,7653.0
+2025,Lille Bane,2025-09-17,R16,John AMBY,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Lotte MARKERT,True,,6765.0
+2025,Lille Bane,2025-09-17,R16,Martin Rasmussen,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Ole RASMUSSEN,True,,7059.0
+2025,Lille Bane,2025-09-17,R16,Oluf GRØNKJÆR,True,,7020.0
+2025,Lille Bane,2025-09-17,R16,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Peder FLARUP,False,DNC,
+2025,Lille Bane,2025-09-17,R16,Tonni GADGAARD,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Christian Løvgren Persson,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Esben HARDER,True,,6873.0
+2025,Lille Bane,2025-09-24,R17,Frederik Futtrup,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Harpelunde Senior,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Henrik AXELSEN,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Horacio Bulacio,True,,7590.0
+2025,Lille Bane,2025-09-24,R17,Ilan HURVITZ,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Inger STOKKINK,True,,7086.0
+2025,Lille Bane,2025-09-24,R17,Jens Due OLSEN,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Jesper THYGESEN,True,,8071.0
+2025,Lille Bane,2025-09-24,R17,John AMBY,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Lotte MARKERT,True,,6793.0
+2025,Lille Bane,2025-09-24,R17,Martin Rasmussen,True,,8819.0
+2025,Lille Bane,2025-09-24,R17,Ole RASMUSSEN,True,,7159.0
+2025,Lille Bane,2025-09-24,R17,Oluf GRØNKJÆR,True,,6890.0
+2025,Lille Bane,2025-09-24,R17,Oskar Hansen,False,DNC,
+2025,Lille Bane,2025-09-24,R17,Peder FLARUP,True,,8274.0
+2025,Lille Bane,2025-09-24,R17,Tonni GADGAARD,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Axel THOMSEN,True,,6967.0
+2025,Stor Bane,2025-04-30,R1,Blue X,True,,7679.0
+2025,Stor Bane,2025-04-30,R1,Bo Bach Boddum,True,,7150.0
+2025,Stor Bane,2025-04-30,R1,Casper Lyhne,True,,6982.0
+2025,Stor Bane,2025-04-30,R1,Christian GREJS,True,,6737.0
+2025,Stor Bane,2025-04-30,R1,Christian LINDHOLST,True,,7300.0
+2025,Stor Bane,2025-04-30,R1,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Erik VANGSGAARD,True,,7603.0
+2025,Stor Bane,2025-04-30,R1,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Jan Ilsø Sørensen,True,,7500.0
+2025,Stor Bane,2025-04-30,R1,Morten Juul CHRISTENSEN,True,,7327.0
+2025,Stor Bane,2025-04-30,R1,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-04-30,R1,Pia Olesen,True,,7150.0
+2025,Stor Bane,2025-04-30,R1,Rikke M. Schnuchel,True,,7450.0
+2025,Stor Bane,2025-04-30,R1,Thomas PEDERSEN,True,,7282.0
+2025,Stor Bane,2025-04-30,R1,Thomas Yde,True,,8179.0
+2025,Stor Bane,2025-05-07,R2,Axel THOMSEN,True,,5933.0
+2025,Stor Bane,2025-05-07,R2,Blue X,True,,6743.0
+2025,Stor Bane,2025-05-07,R2,Bo Bach Boddum,True,,6288.0
+2025,Stor Bane,2025-05-07,R2,Casper Lyhne,True,,5846.0
+2025,Stor Bane,2025-05-07,R2,Christian GREJS,True,,5642.0
+2025,Stor Bane,2025-05-07,R2,Christian LINDHOLST,True,,7631.0
+2025,Stor Bane,2025-05-07,R2,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-05-07,R2,Erik VANGSGAARD,True,,7442.0
+2025,Stor Bane,2025-05-07,R2,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-05-07,R2,Henrik ZÜRICHO,True,,7423.0
+2025,Stor Bane,2025-05-07,R2,Jan Ilsø Sørensen,False,DNC,
+2025,Stor Bane,2025-05-07,R2,Morten Juul CHRISTENSEN,True,,6317.0
+2025,Stor Bane,2025-05-07,R2,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-05-07,R2,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-05-07,R2,Pia Olesen,True,,5913.0
+2025,Stor Bane,2025-05-07,R2,Rikke M. Schnuchel,True,,6757.0
+2025,Stor Bane,2025-05-07,R2,Thomas PEDERSEN,True,,6759.0
+2025,Stor Bane,2025-05-07,R2,Thomas Yde,False,DNF,
+2025,Stor Bane,2025-05-14,R3,Axel THOMSEN,True,,5063.0
+2025,Stor Bane,2025-05-14,R3,Blue X,True,,5494.0
+2025,Stor Bane,2025-05-14,R3,Bo Bach Boddum,True,,5335.0
+2025,Stor Bane,2025-05-14,R3,Casper Lyhne,True,,5298.0
+2025,Stor Bane,2025-05-14,R3,Christian GREJS,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Christian LINDHOLST,True,,5637.0
+2025,Stor Bane,2025-05-14,R3,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Erik VANGSGAARD,True,,5376.0
+2025,Stor Bane,2025-05-14,R3,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Henrik ZÜRICHO,True,,5829.0
+2025,Stor Bane,2025-05-14,R3,Jan Ilsø Sørensen,True,,5834.0
+2025,Stor Bane,2025-05-14,R3,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-05-14,R3,Pia Olesen,True,,5403.0
+2025,Stor Bane,2025-05-14,R3,Rikke M. Schnuchel,True,,5422.0
+2025,Stor Bane,2025-05-14,R3,Thomas PEDERSEN,True,,5239.0
+2025,Stor Bane,2025-05-14,R3,Thomas Yde,True,,6125.0
+2025,Stor Bane,2025-05-21,R4,Axel THOMSEN,True,,7594.0
+2025,Stor Bane,2025-05-21,R4,Blue X,True,,7779.0
+2025,Stor Bane,2025-05-21,R4,Bo Bach Boddum,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Christian GREJS,True,,7406.0
+2025,Stor Bane,2025-05-21,R4,Christian LINDHOLST,True,,7992.0
+2025,Stor Bane,2025-05-21,R4,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Henrik ZÜRICHO,True,,7898.0
+2025,Stor Bane,2025-05-21,R4,Jan Ilsø Sørensen,True,,7912.0
+2025,Stor Bane,2025-05-21,R4,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Pia Olesen,True,,7610.0
+2025,Stor Bane,2025-05-21,R4,Rikke M. Schnuchel,False,DNC,
+2025,Stor Bane,2025-05-21,R4,Thomas PEDERSEN,True,,7648.0
+2025,Stor Bane,2025-05-21,R4,Thomas Yde,True,,8105.0
+2025,Stor Bane,2025-05-28,R5,Axel THOMSEN,True,,8517.0
+2025,Stor Bane,2025-05-28,R5,Blue X,True,,8955.0
+2025,Stor Bane,2025-05-28,R5,Bo Bach Boddum,True,,8547.0
+2025,Stor Bane,2025-05-28,R5,Casper Lyhne,True,,8573.0
+2025,Stor Bane,2025-05-28,R5,Christian GREJS,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Christian LINDHOLST,True,,9590.0
+2025,Stor Bane,2025-05-28,R5,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Henrik ZÜRICHO,True,,9317.0
+2025,Stor Bane,2025-05-28,R5,Jan Ilsø Sørensen,True,,9308.0
+2025,Stor Bane,2025-05-28,R5,Morten Juul CHRISTENSEN,True,,8832.0
+2025,Stor Bane,2025-05-28,R5,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Pia Olesen,True,,8650.0
+2025,Stor Bane,2025-05-28,R5,Rikke M. Schnuchel,True,,8859.0
+2025,Stor Bane,2025-05-28,R5,Thomas PEDERSEN,False,DNC,
+2025,Stor Bane,2025-05-28,R5,Thomas Yde,True,,9700.0
+2025,Stor Bane,2025-06-04,R6,Axel THOMSEN,False,DSQ,
+2025,Stor Bane,2025-06-04,R6,Blue X,True,,7175.0
+2025,Stor Bane,2025-06-04,R6,Bo Bach Boddum,True,,6405.0
+2025,Stor Bane,2025-06-04,R6,Casper Lyhne,True,,7167.0
+2025,Stor Bane,2025-06-04,R6,Christian GREJS,True,,6108.0
+2025,Stor Bane,2025-06-04,R6,Christian LINDHOLST,True,,6870.0
+2025,Stor Bane,2025-06-04,R6,Claus BÜLOW,True,,7293.0
+2025,Stor Bane,2025-06-04,R6,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-06-04,R6,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-06-04,R6,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-06-04,R6,Jan Ilsø Sørensen,True,,7056.0
+2025,Stor Bane,2025-06-04,R6,Morten Juul CHRISTENSEN,True,,6876.0
+2025,Stor Bane,2025-06-04,R6,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-06-04,R6,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-06-04,R6,Pia Olesen,True,,6661.0
+2025,Stor Bane,2025-06-04,R6,Rikke M. Schnuchel,True,,6759.0
+2025,Stor Bane,2025-06-04,R6,Thomas PEDERSEN,True,,6452.0
+2025,Stor Bane,2025-06-04,R6,Thomas Yde,True,,6893.0
+2025,Stor Bane,2025-06-11,R7,Axel THOMSEN,True,,9692.0
+2025,Stor Bane,2025-06-11,R7,Blue X,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Bo Bach Boddum,True,,10125.0
+2025,Stor Bane,2025-06-11,R7,Casper Lyhne,True,,9985.0
+2025,Stor Bane,2025-06-11,R7,Christian GREJS,True,,9465.0
+2025,Stor Bane,2025-06-11,R7,Christian LINDHOLST,True,,10396.0
+2025,Stor Bane,2025-06-11,R7,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Henrik ZÜRICHO,True,,10286.0
+2025,Stor Bane,2025-06-11,R7,Jan Ilsø Sørensen,True,,10097.0
+2025,Stor Bane,2025-06-11,R7,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-06-11,R7,Pia Olesen,True,,9835.0
+2025,Stor Bane,2025-06-11,R7,Rikke M. Schnuchel,True,,10185.0
+2025,Stor Bane,2025-06-11,R7,Thomas PEDERSEN,True,,9891.0
+2025,Stor Bane,2025-06-11,R7,Thomas Yde,True,,10187.0
+2025,Stor Bane,2025-06-18,R8,Axel THOMSEN,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Blue X,True,,10034.0
+2025,Stor Bane,2025-06-18,R8,Bo Bach Boddum,True,,9626.0
+2025,Stor Bane,2025-06-18,R8,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Christian GREJS,True,,9180.0
+2025,Stor Bane,2025-06-18,R8,Christian LINDHOLST,True,,9977.0
+2025,Stor Bane,2025-06-18,R8,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Henrik ZÜRICHO,False,DNF,
+2025,Stor Bane,2025-06-18,R8,Jan Ilsø Sørensen,True,,9866.0
+2025,Stor Bane,2025-06-18,R8,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-06-18,R8,Rikke M. Schnuchel,True,,10018.0
+2025,Stor Bane,2025-06-18,R8,Thomas PEDERSEN,True,,9463.0
+2025,Stor Bane,2025-06-18,R8,Thomas Yde,True,,9995.0
+2025,Stor Bane,2025-06-25,R9,Axel THOMSEN,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Blue X,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Bo Bach Boddum,True,,6601.0
+2025,Stor Bane,2025-06-25,R9,Casper Lyhne,True,,6590.0
+2025,Stor Bane,2025-06-25,R9,Christian GREJS,True,,6358.0
+2025,Stor Bane,2025-06-25,R9,Christian LINDHOLST,True,,7097.0
+2025,Stor Bane,2025-06-25,R9,Claus BÜLOW,False,DNF,
+2025,Stor Bane,2025-06-25,R9,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Henrik ZÜRICHO,True,,6964.0
+2025,Stor Bane,2025-06-25,R9,Jan Ilsø Sørensen,True,,6874.0
+2025,Stor Bane,2025-06-25,R9,Morten Juul CHRISTENSEN,True,,6848.0
+2025,Stor Bane,2025-06-25,R9,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-06-25,R9,Rikke M. Schnuchel,True,,7028.0
+2025,Stor Bane,2025-06-25,R9,Thomas PEDERSEN,True,,6538.0
+2025,Stor Bane,2025-06-25,R9,Thomas Yde,True,,7127.0
+2025,Stor Bane,2025-08-06,R10,Axel THOMSEN,True,,6436.0
+2025,Stor Bane,2025-08-06,R10,Blue X,True,,6466.0
+2025,Stor Bane,2025-08-06,R10,Bo Bach Boddum,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Christian GREJS,True,,6158.0
+2025,Stor Bane,2025-08-06,R10,Christian LINDHOLST,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Jan Ilsø Sørensen,True,,7115.0
+2025,Stor Bane,2025-08-06,R10,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-08-06,R10,Rikke M. Schnuchel,True,,7092.0
+2025,Stor Bane,2025-08-06,R10,Thomas PEDERSEN,True,,6692.0
+2025,Stor Bane,2025-08-06,R10,Thomas Yde,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Axel THOMSEN,True,,5112.0
+2025,Stor Bane,2025-08-13,R11,Blue X,True,,6128.0
+2025,Stor Bane,2025-08-13,R11,Bo Bach Boddum,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Casper Lyhne,True,,6554.0
+2025,Stor Bane,2025-08-13,R11,Christian GREJS,True,,5373.0
+2025,Stor Bane,2025-08-13,R11,Christian LINDHOLST,True,,7454.0
+2025,Stor Bane,2025-08-13,R11,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Jan Ilsø Sørensen,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Morten Juul CHRISTENSEN,True,,6710.0
+2025,Stor Bane,2025-08-13,R11,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-08-13,R11,Pia Olesen,True,,5548.0
+2025,Stor Bane,2025-08-13,R11,Rikke M. Schnuchel,True,,6129.0
+2025,Stor Bane,2025-08-13,R11,Thomas PEDERSEN,True,,6050.0
+2025,Stor Bane,2025-08-13,R11,Thomas Yde,True,,7643.0
+2025,Stor Bane,2025-08-20,R12,Axel THOMSEN,True,,5166.0
+2025,Stor Bane,2025-08-20,R12,Blue X,True,,5438.0
+2025,Stor Bane,2025-08-20,R12,Bo Bach Boddum,True,,5227.0
+2025,Stor Bane,2025-08-20,R12,Casper Lyhne,False,DSQ,
+2025,Stor Bane,2025-08-20,R12,Christian GREJS,True,,4727.0
+2025,Stor Bane,2025-08-20,R12,Christian LINDHOLST,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Henrik ZÜRICHO,True,,5509.0
+2025,Stor Bane,2025-08-20,R12,Jan Ilsø Sørensen,True,,5476.0
+2025,Stor Bane,2025-08-20,R12,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-08-20,R12,Rikke M. Schnuchel,True,,5229.0
+2025,Stor Bane,2025-08-20,R12,Thomas PEDERSEN,True,,5185.0
+2025,Stor Bane,2025-08-20,R12,Thomas Yde,True,,6012.0
+2025,Stor Bane,2025-08-27,R13,Axel THOMSEN,True,,4699.0
+2025,Stor Bane,2025-08-27,R13,Blue X,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Bo Bach Boddum,True,,4753.0
+2025,Stor Bane,2025-08-27,R13,Casper Lyhne,True,,6458.0
+2025,Stor Bane,2025-08-27,R13,Christian GREJS,True,,5445.0
+2025,Stor Bane,2025-08-27,R13,Christian LINDHOLST,False,DNF,
+2025,Stor Bane,2025-08-27,R13,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Jan Ilsø Sørensen,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Morten Juul CHRISTENSEN,True,,6224.0
+2025,Stor Bane,2025-08-27,R13,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-08-27,R13,Pia Olesen,True,,5240.0
+2025,Stor Bane,2025-08-27,R13,Rikke M. Schnuchel,True,,6578.0
+2025,Stor Bane,2025-08-27,R13,Thomas PEDERSEN,True,,6723.0
+2025,Stor Bane,2025-08-27,R13,Thomas Yde,False,DNF,
+2025,Stor Bane,2025-09-03,R14,Axel THOMSEN,True,,8161.0
+2025,Stor Bane,2025-09-03,R14,Blue X,True,,8901.0
+2025,Stor Bane,2025-09-03,R14,Bo Bach Boddum,True,,8239.0
+2025,Stor Bane,2025-09-03,R14,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Christian GREJS,True,,8097.0
+2025,Stor Bane,2025-09-03,R14,Christian LINDHOLST,True,,9318.0
+2025,Stor Bane,2025-09-03,R14,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Henrik ZÜRICHO,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Jan Ilsø Sørensen,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-09-03,R14,Rikke M. Schnuchel,True,,8530.0
+2025,Stor Bane,2025-09-03,R14,Thomas PEDERSEN,True,,8192.0
+2025,Stor Bane,2025-09-03,R14,Thomas Yde,True,,8576.0
+2025,Stor Bane,2025-09-10,R15,Axel THOMSEN,True,,6785.0
+2025,Stor Bane,2025-09-10,R15,Blue X,True,,7443.0
+2025,Stor Bane,2025-09-10,R15,Bo Bach Boddum,True,,6666.0
+2025,Stor Bane,2025-09-10,R15,Casper Lyhne,True,,6999.0
+2025,Stor Bane,2025-09-10,R15,Christian GREJS,True,,6581.0
+2025,Stor Bane,2025-09-10,R15,Christian LINDHOLST,True,,8011.0
+2025,Stor Bane,2025-09-10,R15,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Henrik ZÜRICHO,True,,7298.0
+2025,Stor Bane,2025-09-10,R15,Jan Ilsø Sørensen,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-09-10,R15,Rikke M. Schnuchel,True,,7157.0
+2025,Stor Bane,2025-09-10,R15,Thomas PEDERSEN,True,,6998.0
+2025,Stor Bane,2025-09-10,R15,Thomas Yde,True,,7232.0
+2025,Stor Bane,2025-09-17,R16,Axel THOMSEN,True,,7842.0
+2025,Stor Bane,2025-09-17,R16,Blue X,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Bo Bach Boddum,True,,7984.0
+2025,Stor Bane,2025-09-17,R16,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Christian GREJS,True,,7893.0
+2025,Stor Bane,2025-09-17,R16,Christian LINDHOLST,True,,8648.0
+2025,Stor Bane,2025-09-17,R16,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Henrik Gersling,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Henrik ZÜRICHO,True,,8369.0
+2025,Stor Bane,2025-09-17,R16,Jan Ilsø Sørensen,True,,8174.0
+2025,Stor Bane,2025-09-17,R16,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-09-17,R16,Rikke M. Schnuchel,True,,8133.0
+2025,Stor Bane,2025-09-17,R16,Thomas PEDERSEN,True,,7995.0
+2025,Stor Bane,2025-09-17,R16,Thomas Yde,True,,8251.0
+2025,Stor Bane,2025-09-24,R17,Axel THOMSEN,True,,7431.0
+2025,Stor Bane,2025-09-24,R17,Blue X,True,,8031.0
+2025,Stor Bane,2025-09-24,R17,Bo Bach Boddum,True,,7410.0
+2025,Stor Bane,2025-09-24,R17,Casper Lyhne,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Christian GREJS,True,,7251.0
+2025,Stor Bane,2025-09-24,R17,Christian LINDHOLST,True,,8036.0
+2025,Stor Bane,2025-09-24,R17,Claus BÜLOW,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Erik VANGSGAARD,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Henrik Gersling,True,,7873.0
+2025,Stor Bane,2025-09-24,R17,Henrik ZÜRICHO,True,,7685.0
+2025,Stor Bane,2025-09-24,R17,Jan Ilsø Sørensen,True,,8072.0
+2025,Stor Bane,2025-09-24,R17,Morten Juul CHRISTENSEN,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Niklas Bomholt,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Peter Kok Jensen,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Pia Olesen,False,DNC,
+2025,Stor Bane,2025-09-24,R17,Rikke M. Schnuchel,True,,7462.0
+2025,Stor Bane,2025-09-24,R17,Thomas PEDERSEN,True,,7460.0
+2025,Stor Bane,2025-09-24,R17,Thomas Yde,True,,7840.0
+2026,Lille Bane,2026-04-29,R1,Anne Kiel GRUD,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Christian Løvgren Persson,True,,6350.0
+2026,Lille Bane,2026-04-29,R1,Esben HARDER,True,,6269.0
+2026,Lille Bane,2026-04-29,R1,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Henrik AXELSEN,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Horacio Bulacio,True,,5353.0
+2026,Lille Bane,2026-04-29,R1,Ilan HURVITZ,True,,6289.0
+2026,Lille Bane,2026-04-29,R1,Inger STOKKINK,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Jens Due OLSEN,True,,6341.0
+2026,Lille Bane,2026-04-29,R1,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-04-29,R1,John AMBY,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Lotte MARKERT,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Martin Rasmussen,True,,6330.0
+2026,Lille Bane,2026-04-29,R1,Oluf GRØNKJÆR,True,,3921.0
+2026,Lille Bane,2026-04-29,R1,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-04-29,R1,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-05-06,R2,Anne Kiel GRUD,True,,5020.0
+2026,Lille Bane,2026-05-06,R2,Christian Løvgren Persson,True,,5250.0
+2026,Lille Bane,2026-05-06,R2,Esben HARDER,True,,5156.0
+2026,Lille Bane,2026-05-06,R2,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-05-06,R2,Henrik AXELSEN,True,,4766.0
+2026,Lille Bane,2026-05-06,R2,Horacio Bulacio,True,,4701.0
+2026,Lille Bane,2026-05-06,R2,Ilan HURVITZ,True,,5827.0
+2026,Lille Bane,2026-05-06,R2,Inger STOKKINK,True,,5518.0
+2026,Lille Bane,2026-05-06,R2,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-05-06,R2,Jesper THYGESEN,True,,6271.0
+2026,Lille Bane,2026-05-06,R2,John AMBY,True,,5063.0
+2026,Lille Bane,2026-05-06,R2,Lotte MARKERT,True,,4508.0
+2026,Lille Bane,2026-05-06,R2,Martin Rasmussen,False,DNC,
+2026,Lille Bane,2026-05-06,R2,Oluf GRØNKJÆR,True,,5808.0
+2026,Lille Bane,2026-05-06,R2,Per Brøker KRISTENSEN,True,,5514.0
+2026,Lille Bane,2026-05-06,R2,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-05-13,R3,Anne Kiel GRUD,True,,7819.0
+2026,Lille Bane,2026-05-13,R3,Christian Løvgren Persson,True,,7758.0
+2026,Lille Bane,2026-05-13,R3,Esben HARDER,True,,7549.0
+2026,Lille Bane,2026-05-13,R3,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-05-13,R3,Henrik AXELSEN,True,,6142.0
+2026,Lille Bane,2026-05-13,R3,Horacio Bulacio,True,,6927.0
+2026,Lille Bane,2026-05-13,R3,Ilan HURVITZ,True,,7111.0
+2026,Lille Bane,2026-05-13,R3,Inger STOKKINK,True,,6235.0
+2026,Lille Bane,2026-05-13,R3,Jens Due OLSEN,False,DNF,
+2026,Lille Bane,2026-05-13,R3,Jesper THYGESEN,False,DNF,
+2026,Lille Bane,2026-05-13,R3,John AMBY,False,DNC,
+2026,Lille Bane,2026-05-13,R3,Lotte MARKERT,True,,6118.0
+2026,Lille Bane,2026-05-13,R3,Martin Rasmussen,False,DNC,
+2026,Lille Bane,2026-05-13,R3,Oluf GRØNKJÆR,False,DNC,
+2026,Lille Bane,2026-05-13,R3,Per Brøker KRISTENSEN,True,,7591.0
+2026,Lille Bane,2026-05-13,R3,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-05-20,R4,Anne Kiel GRUD,True,,5737.0
+2026,Lille Bane,2026-05-20,R4,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-05-20,R4,Esben HARDER,True,,5549.0
+2026,Lille Bane,2026-05-20,R4,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-05-20,R4,Henrik AXELSEN,True,,5377.0
+2026,Lille Bane,2026-05-20,R4,Horacio Bulacio,True,,5608.0
+2026,Lille Bane,2026-05-20,R4,Ilan HURVITZ,False,DNC,
+2026,Lille Bane,2026-05-20,R4,Inger STOKKINK,True,,5589.0
+2026,Lille Bane,2026-05-20,R4,Jens Due OLSEN,True,,6096.0
+2026,Lille Bane,2026-05-20,R4,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-05-20,R4,John AMBY,True,,5679.0
+2026,Lille Bane,2026-05-20,R4,Lotte MARKERT,True,,5245.0
+2026,Lille Bane,2026-05-20,R4,Martin Rasmussen,True,,6298.0
+2026,Lille Bane,2026-05-20,R4,Oluf GRØNKJÆR,False,DNC,
+2026,Lille Bane,2026-05-20,R4,Per Brøker KRISTENSEN,True,,6151.0
+2026,Lille Bane,2026-05-20,R4,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Anne Kiel GRUD,True,,6122.0
+2026,Lille Bane,2026-05-27,R5,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Esben HARDER,True,,5819.0
+2026,Lille Bane,2026-05-27,R5,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Henrik AXELSEN,True,,5792.0
+2026,Lille Bane,2026-05-27,R5,Horacio Bulacio,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Ilan HURVITZ,True,,6355.0
+2026,Lille Bane,2026-05-27,R5,Inger STOKKINK,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Jens Due OLSEN,True,,6556.0
+2026,Lille Bane,2026-05-27,R5,Jesper THYGESEN,True,,6934.0
+2026,Lille Bane,2026-05-27,R5,John AMBY,False,DNC,
+2026,Lille Bane,2026-05-27,R5,Lotte MARKERT,True,,5569.0
+2026,Lille Bane,2026-05-27,R5,Martin Rasmussen,True,,6488.0
+2026,Lille Bane,2026-05-27,R5,Oluf GRØNKJÆR,True,,5627.0
+2026,Lille Bane,2026-05-27,R5,Per Brøker KRISTENSEN,True,,6099.0
+2026,Lille Bane,2026-05-27,R5,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-06-03,R6,Anne Kiel GRUD,True,,5158.0
+2026,Lille Bane,2026-06-03,R6,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-06-03,R6,Esben HARDER,True,,5078.0
+2026,Lille Bane,2026-06-03,R6,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-06-03,R6,Henrik AXELSEN,True,,5278.0
+2026,Lille Bane,2026-06-03,R6,Horacio Bulacio,True,,5148.0
+2026,Lille Bane,2026-06-03,R6,Ilan HURVITZ,True,,5548.0
+2026,Lille Bane,2026-06-03,R6,Inger STOKKINK,True,,5100.0
+2026,Lille Bane,2026-06-03,R6,Jens Due OLSEN,True,,5603.0
+2026,Lille Bane,2026-06-03,R6,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-06-03,R6,John AMBY,True,,5269.0
+2026,Lille Bane,2026-06-03,R6,Lotte MARKERT,True,,5082.0
+2026,Lille Bane,2026-06-03,R6,Martin Rasmussen,True,,6595.0
+2026,Lille Bane,2026-06-03,R6,Oluf GRØNKJÆR,True,,5017.0
+2026,Lille Bane,2026-06-03,R6,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-06-03,R6,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Anne Kiel GRUD,True,,7773.0
+2026,Lille Bane,2026-06-10,R7,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Esben HARDER,True,,7185.0
+2026,Lille Bane,2026-06-10,R7,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Henrik AXELSEN,True,,7177.0
+2026,Lille Bane,2026-06-10,R7,Horacio Bulacio,True,,7212.0
+2026,Lille Bane,2026-06-10,R7,Ilan HURVITZ,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Inger STOKKINK,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Jens Due OLSEN,True,,8476.0
+2026,Lille Bane,2026-06-10,R7,Jesper THYGESEN,True,,8391.0
+2026,Lille Bane,2026-06-10,R7,John AMBY,True,,7260.0
+2026,Lille Bane,2026-06-10,R7,Lotte MARKERT,True,,6970.0
+2026,Lille Bane,2026-06-10,R7,Martin Rasmussen,False,DNF,
+2026,Lille Bane,2026-06-10,R7,Oluf GRØNKJÆR,True,,6786.0
+2026,Lille Bane,2026-06-10,R7,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-06-10,R7,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-06-17,R8,Anne Kiel GRUD,True,,5571.0
+2026,Lille Bane,2026-06-17,R8,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-06-17,R8,Esben HARDER,True,,5654.0
+2026,Lille Bane,2026-06-17,R8,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-06-17,R8,Henrik AXELSEN,True,,5415.0
+2026,Lille Bane,2026-06-17,R8,Horacio Bulacio,True,,5498.0
+2026,Lille Bane,2026-06-17,R8,Ilan HURVITZ,True,,6038.0
+2026,Lille Bane,2026-06-17,R8,Inger STOKKINK,True,,5482.0
+2026,Lille Bane,2026-06-17,R8,Jens Due OLSEN,True,,5835.0
+2026,Lille Bane,2026-06-17,R8,Jesper THYGESEN,True,,6266.0
+2026,Lille Bane,2026-06-17,R8,John AMBY,True,,5460.0
+2026,Lille Bane,2026-06-17,R8,Lotte MARKERT,True,,5248.0
+2026,Lille Bane,2026-06-17,R8,Martin Rasmussen,True,,6042.0
+2026,Lille Bane,2026-06-17,R8,Oluf GRØNKJÆR,True,,5115.0
+2026,Lille Bane,2026-06-17,R8,Per Brøker KRISTENSEN,True,,5993.0
+2026,Lille Bane,2026-06-17,R8,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-06-24,R9,Anne Kiel GRUD,True,,7144.0
+2026,Lille Bane,2026-06-24,R9,Christian Løvgren Persson,False,DNF,
+2026,Lille Bane,2026-06-24,R9,Esben HARDER,True,,7593.0
+2026,Lille Bane,2026-06-24,R9,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-06-24,R9,Henrik AXELSEN,True,,6682.0
+2026,Lille Bane,2026-06-24,R9,Horacio Bulacio,True,,6898.0
+2026,Lille Bane,2026-06-24,R9,Ilan HURVITZ,True,,8098.0
+2026,Lille Bane,2026-06-24,R9,Inger STOKKINK,True,,6455.0
+2026,Lille Bane,2026-06-24,R9,Jens Due OLSEN,False,DNF,
+2026,Lille Bane,2026-06-24,R9,Jesper THYGESEN,True,,8483.0
+2026,Lille Bane,2026-06-24,R9,John AMBY,True,,7146.0
+2026,Lille Bane,2026-06-24,R9,Lotte MARKERT,True,,7122.0
+2026,Lille Bane,2026-06-24,R9,Martin Rasmussen,False,DNF,
+2026,Lille Bane,2026-06-24,R9,Oluf GRØNKJÆR,True,,7413.0
+2026,Lille Bane,2026-06-24,R9,Per Brøker KRISTENSEN,False,DNF,
+2026,Lille Bane,2026-06-24,R9,Peter Paris JACOBSEN,False,DNF,
+2026,Lille Bane,2026-08-05,R10,Anne Kiel GRUD,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Esben HARDER,True,,5413.0
+2026,Lille Bane,2026-08-05,R10,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Henrik AXELSEN,True,,5484.0
+2026,Lille Bane,2026-08-05,R10,Horacio Bulacio,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Ilan HURVITZ,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Inger STOKKINK,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-08-05,R10,John AMBY,True,,5877.0
+2026,Lille Bane,2026-08-05,R10,Lotte MARKERT,True,,5131.0
+2026,Lille Bane,2026-08-05,R10,Martin Rasmussen,True,,7432.0
+2026,Lille Bane,2026-08-05,R10,Oluf GRØNKJÆR,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-08-05,R10,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-08-12,R11,Anne Kiel GRUD,True,,6534.0
+2026,Lille Bane,2026-08-12,R11,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-08-12,R11,Esben HARDER,True,,6245.0
+2026,Lille Bane,2026-08-12,R11,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-08-12,R11,Henrik AXELSEN,True,,5837.0
+2026,Lille Bane,2026-08-12,R11,Horacio Bulacio,True,,6157.0
+2026,Lille Bane,2026-08-12,R11,Ilan HURVITZ,True,,6685.0
+2026,Lille Bane,2026-08-12,R11,Inger STOKKINK,True,,6562.0
+2026,Lille Bane,2026-08-12,R11,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-08-12,R11,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-08-12,R11,John AMBY,True,,5966.0
+2026,Lille Bane,2026-08-12,R11,Lotte MARKERT,True,,5702.0
+2026,Lille Bane,2026-08-12,R11,Martin Rasmussen,True,,7735.0
+2026,Lille Bane,2026-08-12,R11,Oluf GRØNKJÆR,True,,5689.0
+2026,Lille Bane,2026-08-12,R11,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-08-12,R11,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Anne Kiel GRUD,True,,7086.0
+2026,Lille Bane,2026-08-19,R12,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Esben HARDER,True,,6850.0
+2026,Lille Bane,2026-08-19,R12,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Henrik AXELSEN,True,,7037.0
+2026,Lille Bane,2026-08-19,R12,Horacio Bulacio,True,,7196.0
+2026,Lille Bane,2026-08-19,R12,Ilan HURVITZ,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Inger STOKKINK,True,,7132.0
+2026,Lille Bane,2026-08-19,R12,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Jesper THYGESEN,True,,7453.0
+2026,Lille Bane,2026-08-19,R12,John AMBY,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Lotte MARKERT,True,,6956.0
+2026,Lille Bane,2026-08-19,R12,Martin Rasmussen,False,DNC,
+2026,Lille Bane,2026-08-19,R12,Oluf GRØNKJÆR,True,,6811.0
+2026,Lille Bane,2026-08-19,R12,Per Brøker KRISTENSEN,False,DNF,
+2026,Lille Bane,2026-08-19,R12,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-08-26,R13,Anne Kiel GRUD,True,,5152.0
+2026,Lille Bane,2026-08-26,R13,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-08-26,R13,Esben HARDER,True,,5213.0
+2026,Lille Bane,2026-08-26,R13,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-08-26,R13,Henrik AXELSEN,True,,4970.0
+2026,Lille Bane,2026-08-26,R13,Horacio Bulacio,True,,5078.0
+2026,Lille Bane,2026-08-26,R13,Ilan HURVITZ,True,,5775.0
+2026,Lille Bane,2026-08-26,R13,Inger STOKKINK,True,,5538.0
+2026,Lille Bane,2026-08-26,R13,Jens Due OLSEN,True,,5729.0
+2026,Lille Bane,2026-08-26,R13,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-08-26,R13,John AMBY,False,DNC,
+2026,Lille Bane,2026-08-26,R13,Lotte MARKERT,True,,4917.0
+2026,Lille Bane,2026-08-26,R13,Martin Rasmussen,False,DNC,
+2026,Lille Bane,2026-08-26,R13,Oluf GRØNKJÆR,True,,4823.0
+2026,Lille Bane,2026-08-26,R13,Per Brøker KRISTENSEN,True,,6067.0
+2026,Lille Bane,2026-08-26,R13,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-09-02,R14,Anne Kiel GRUD,True,,5544.0
+2026,Lille Bane,2026-09-02,R14,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-09-02,R14,Esben HARDER,True,,5283.0
+2026,Lille Bane,2026-09-02,R14,Harpelunde Senior,False,DNC,
+2026,Lille Bane,2026-09-02,R14,Henrik AXELSEN,True,,5238.0
+2026,Lille Bane,2026-09-02,R14,Horacio Bulacio,True,,5210.0
+2026,Lille Bane,2026-09-02,R14,Ilan HURVITZ,True,,6012.0
+2026,Lille Bane,2026-09-02,R14,Inger STOKKINK,True,,5448.0
+2026,Lille Bane,2026-09-02,R14,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-09-02,R14,Jesper THYGESEN,True,,5939.0
+2026,Lille Bane,2026-09-02,R14,John AMBY,True,,5485.0
+2026,Lille Bane,2026-09-02,R14,Lotte MARKERT,True,,5137.0
+2026,Lille Bane,2026-09-02,R14,Martin Rasmussen,True,,6786.0
+2026,Lille Bane,2026-09-02,R14,Oluf GRØNKJÆR,True,,5030.0
+2026,Lille Bane,2026-09-02,R14,Per Brøker KRISTENSEN,True,,5889.0
+2026,Lille Bane,2026-09-02,R14,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-09-09,R15,Anne Kiel GRUD,True,,4490.0
+2026,Lille Bane,2026-09-09,R15,Christian Løvgren Persson,True,,5712.0
+2026,Lille Bane,2026-09-09,R15,Esben HARDER,True,,4455.0
+2026,Lille Bane,2026-09-09,R15,Harpelunde Senior,True,,4882.0
+2026,Lille Bane,2026-09-09,R15,Henrik AXELSEN,True,,4465.0
+2026,Lille Bane,2026-09-09,R15,Horacio Bulacio,True,,4683.0
+2026,Lille Bane,2026-09-09,R15,Ilan HURVITZ,True,,5024.0
+2026,Lille Bane,2026-09-09,R15,Inger STOKKINK,True,,4713.0
+2026,Lille Bane,2026-09-09,R15,Jens Due OLSEN,True,,5145.0
+2026,Lille Bane,2026-09-09,R15,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-09-09,R15,John AMBY,True,,4550.0
+2026,Lille Bane,2026-09-09,R15,Lotte MARKERT,True,,4604.0
+2026,Lille Bane,2026-09-09,R15,Martin Rasmussen,True,,5954.0
+2026,Lille Bane,2026-09-09,R15,Oluf GRØNKJÆR,False,DNC,
+2026,Lille Bane,2026-09-09,R15,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-09-09,R15,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Anne Kiel GRUD,True,,5888.0
+2026,Lille Bane,2026-09-16,R16,Christian Løvgren Persson,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Esben HARDER,True,,5669.0
+2026,Lille Bane,2026-09-16,R16,Harpelunde Senior,True,,6415.0
+2026,Lille Bane,2026-09-16,R16,Henrik AXELSEN,True,,5645.0
+2026,Lille Bane,2026-09-16,R16,Horacio Bulacio,True,,5620.0
+2026,Lille Bane,2026-09-16,R16,Ilan HURVITZ,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Inger STOKKINK,True,,5810.0
+2026,Lille Bane,2026-09-16,R16,Jens Due OLSEN,True,,6310.0
+2026,Lille Bane,2026-09-16,R16,Jesper THYGESEN,False,DNC,
+2026,Lille Bane,2026-09-16,R16,John AMBY,True,,6167.0
+2026,Lille Bane,2026-09-16,R16,Lotte MARKERT,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Martin Rasmussen,False,DNF,
+2026,Lille Bane,2026-09-16,R16,Oluf GRØNKJÆR,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Per Brøker KRISTENSEN,False,DNC,
+2026,Lille Bane,2026-09-16,R16,Peter Paris JACOBSEN,False,DNC,
+2026,Lille Bane,2026-09-23,R17,Anne Kiel GRUD,False,DNC,
+2026,Lille Bane,2026-09-23,R17,Christian Løvgren Persson,True,,6281.0
+2026,Lille Bane,2026-09-23,R17,Esben HARDER,True,,4879.0
+2026,Lille Bane,2026-09-23,R17,Harpelunde Senior,True,,5492.0
+2026,Lille Bane,2026-09-23,R17,Henrik AXELSEN,True,,4938.0
+2026,Lille Bane,2026-09-23,R17,Horacio Bulacio,True,,4944.0
+2026,Lille Bane,2026-09-23,R17,Ilan HURVITZ,True,,5524.0
+2026,Lille Bane,2026-09-23,R17,Inger STOKKINK,True,,5146.0
+2026,Lille Bane,2026-09-23,R17,Jens Due OLSEN,False,DNC,
+2026,Lille Bane,2026-09-23,R17,Jesper THYGESEN,True,,5639.0
+2026,Lille Bane,2026-09-23,R17,John AMBY,True,,5551.0
+2026,Lille Bane,2026-09-23,R17,Lotte MARKERT,True,,4872.0
+2026,Lille Bane,2026-09-23,R17,Martin Rasmussen,False,DNC,
+2026,Lille Bane,2026-09-23,R17,Oluf GRØNKJÆR,True,,4757.0
+2026,Lille Bane,2026-09-23,R17,Per Brøker KRISTENSEN,True,,5530.0
+2026,Lille Bane,2026-09-23,R17,Peter Paris JACOBSEN,False,DNC,
+2026,Stor Bane,2026-04-29,R1,Axel THOMSEN,True,,8755.0
+2026,Stor Bane,2026-04-29,R1,Blue X,True,,8187.0
+2026,Stor Bane,2026-04-29,R1,Bo Bach Boddum,True,,7400.0
+2026,Stor Bane,2026-04-29,R1,Casper Lyhne,True,,7482.0
+2026,Stor Bane,2026-04-29,R1,Christian GREJS,True,,6561.0
+2026,Stor Bane,2026-04-29,R1,Christian LINDHOLST,True,,9221.0
+2026,Stor Bane,2026-04-29,R1,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-04-29,R1,Henrik ZÜRICHO,True,,9132.0
+2026,Stor Bane,2026-04-29,R1,Jan Ilsø Sørensen,True,,8603.0
+2026,Stor Bane,2026-04-29,R1,Jens ESKILDSEN,False,DNC,
+2026,Stor Bane,2026-04-29,R1,Morten Juul CHRISTENSEN,True,,7507.0
+2026,Stor Bane,2026-04-29,R1,Pia Olesen,True,,6957.0
+2026,Stor Bane,2026-04-29,R1,Rikke M. Schnuchel,True,,6728.0
+2026,Stor Bane,2026-04-29,R1,Thomas PEDERSEN,True,,7698.0
+2026,Stor Bane,2026-04-29,R1,Thomas Yde,True,,9087.0
+2026,Stor Bane,2026-05-06,R2,Axel THOMSEN,True,,5232.0
+2026,Stor Bane,2026-05-06,R2,Blue X,True,,5875.0
+2026,Stor Bane,2026-05-06,R2,Bo Bach Boddum,True,,5557.0
+2026,Stor Bane,2026-05-06,R2,Casper Lyhne,True,,5444.0
+2026,Stor Bane,2026-05-06,R2,Christian GREJS,True,,5042.0
+2026,Stor Bane,2026-05-06,R2,Christian LINDHOLST,True,,6122.0
+2026,Stor Bane,2026-05-06,R2,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-05-06,R2,Henrik ZÜRICHO,True,,5695.0
+2026,Stor Bane,2026-05-06,R2,Jan Ilsø Sørensen,True,,6025.0
+2026,Stor Bane,2026-05-06,R2,Jens ESKILDSEN,True,,5586.0
+2026,Stor Bane,2026-05-06,R2,Morten Juul CHRISTENSEN,True,,6141.0
+2026,Stor Bane,2026-05-06,R2,Pia Olesen,True,,6073.0
+2026,Stor Bane,2026-05-06,R2,Rikke M. Schnuchel,True,,5192.0
+2026,Stor Bane,2026-05-06,R2,Thomas PEDERSEN,True,,6002.0
+2026,Stor Bane,2026-05-06,R2,Thomas Yde,True,,6213.0
+2026,Stor Bane,2026-05-13,R3,Axel THOMSEN,True,,7512.0
+2026,Stor Bane,2026-05-13,R3,Blue X,True,,8601.0
+2026,Stor Bane,2026-05-13,R3,Bo Bach Boddum,True,,7914.0
+2026,Stor Bane,2026-05-13,R3,Casper Lyhne,True,,7382.0
+2026,Stor Bane,2026-05-13,R3,Christian GREJS,True,,6882.0
+2026,Stor Bane,2026-05-13,R3,Christian LINDHOLST,False,DNF,
+2026,Stor Bane,2026-05-13,R3,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-05-13,R3,Henrik ZÜRICHO,False,DNF,
+2026,Stor Bane,2026-05-13,R3,Jan Ilsø Sørensen,False,DNC,
+2026,Stor Bane,2026-05-13,R3,Jens ESKILDSEN,True,,7103.0
+2026,Stor Bane,2026-05-13,R3,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-05-13,R3,Pia Olesen,True,,8571.0
+2026,Stor Bane,2026-05-13,R3,Rikke M. Schnuchel,True,,7721.0
+2026,Stor Bane,2026-05-13,R3,Thomas PEDERSEN,False,DNC,
+2026,Stor Bane,2026-05-13,R3,Thomas Yde,False,DNF,
+2026,Stor Bane,2026-05-20,R4,Axel THOMSEN,True,,7595.0
+2026,Stor Bane,2026-05-20,R4,Blue X,False,DNC,
+2026,Stor Bane,2026-05-20,R4,Bo Bach Boddum,False,DNF,
+2026,Stor Bane,2026-05-20,R4,Casper Lyhne,True,,7688.0
+2026,Stor Bane,2026-05-20,R4,Christian GREJS,True,,7390.0
+2026,Stor Bane,2026-05-20,R4,Christian LINDHOLST,False,DNC,
+2026,Stor Bane,2026-05-20,R4,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-05-20,R4,Henrik ZÜRICHO,False,DNC,
+2026,Stor Bane,2026-05-20,R4,Jan Ilsø Sørensen,True,,7772.0
+2026,Stor Bane,2026-05-20,R4,Jens ESKILDSEN,True,,7581.0
+2026,Stor Bane,2026-05-20,R4,Morten Juul CHRISTENSEN,True,,7904.0
+2026,Stor Bane,2026-05-20,R4,Pia Olesen,True,,7913.0
+2026,Stor Bane,2026-05-20,R4,Rikke M. Schnuchel,True,,7689.0
+2026,Stor Bane,2026-05-20,R4,Thomas PEDERSEN,True,,7563.0
+2026,Stor Bane,2026-05-20,R4,Thomas Yde,True,,8012.0
+2026,Stor Bane,2026-05-27,R5,Axel THOMSEN,True,,7855.0
+2026,Stor Bane,2026-05-27,R5,Blue X,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Bo Bach Boddum,True,,8095.0
+2026,Stor Bane,2026-05-27,R5,Casper Lyhne,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Christian GREJS,True,,7568.0
+2026,Stor Bane,2026-05-27,R5,Christian LINDHOLST,True,,8132.0
+2026,Stor Bane,2026-05-27,R5,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Henrik ZÜRICHO,True,,8367.0
+2026,Stor Bane,2026-05-27,R5,Jan Ilsø Sørensen,True,,8186.0
+2026,Stor Bane,2026-05-27,R5,Jens ESKILDSEN,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Morten Juul CHRISTENSEN,True,,8316.0
+2026,Stor Bane,2026-05-27,R5,Pia Olesen,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Rikke M. Schnuchel,False,DNC,
+2026,Stor Bane,2026-05-27,R5,Thomas PEDERSEN,True,,7860.0
+2026,Stor Bane,2026-05-27,R5,Thomas Yde,False,DNC,
+2026,Stor Bane,2026-06-03,R6,Axel THOMSEN,True,,6968.0
+2026,Stor Bane,2026-06-03,R6,Blue X,False,DNF,
+2026,Stor Bane,2026-06-03,R6,Bo Bach Boddum,True,,7102.0
+2026,Stor Bane,2026-06-03,R6,Casper Lyhne,True,,7073.0
+2026,Stor Bane,2026-06-03,R6,Christian GREJS,True,,6807.0
+2026,Stor Bane,2026-06-03,R6,Christian LINDHOLST,True,,7447.0
+2026,Stor Bane,2026-06-03,R6,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-06-03,R6,Henrik ZÜRICHO,True,,7488.0
+2026,Stor Bane,2026-06-03,R6,Jan Ilsø Sørensen,True,,7476.0
+2026,Stor Bane,2026-06-03,R6,Jens ESKILDSEN,True,,7134.0
+2026,Stor Bane,2026-06-03,R6,Morten Juul CHRISTENSEN,True,,7526.0
+2026,Stor Bane,2026-06-03,R6,Pia Olesen,True,,7072.0
+2026,Stor Bane,2026-06-03,R6,Rikke M. Schnuchel,True,,7152.0
+2026,Stor Bane,2026-06-03,R6,Thomas PEDERSEN,True,,6975.0
+2026,Stor Bane,2026-06-03,R6,Thomas Yde,True,,7417.0
+2026,Stor Bane,2026-06-10,R7,Axel THOMSEN,True,,7795.0
+2026,Stor Bane,2026-06-10,R7,Blue X,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Bo Bach Boddum,True,,8763.0
+2026,Stor Bane,2026-06-10,R7,Casper Lyhne,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Christian GREJS,True,,7626.0
+2026,Stor Bane,2026-06-10,R7,Christian LINDHOLST,True,,8391.0
+2026,Stor Bane,2026-06-10,R7,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Henrik ZÜRICHO,True,,8393.0
+2026,Stor Bane,2026-06-10,R7,Jan Ilsø Sørensen,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Jens ESKILDSEN,True,,7871.0
+2026,Stor Bane,2026-06-10,R7,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Pia Olesen,False,DNC,
+2026,Stor Bane,2026-06-10,R7,Rikke M. Schnuchel,True,,7996.0
+2026,Stor Bane,2026-06-10,R7,Thomas PEDERSEN,True,,7822.0
+2026,Stor Bane,2026-06-10,R7,Thomas Yde,True,,8711.0
+2026,Stor Bane,2026-06-17,R8,Axel THOMSEN,True,,7383.0
+2026,Stor Bane,2026-06-17,R8,Blue X,True,,7815.0
+2026,Stor Bane,2026-06-17,R8,Bo Bach Boddum,True,,7468.0
+2026,Stor Bane,2026-06-17,R8,Casper Lyhne,True,,7863.0
+2026,Stor Bane,2026-06-17,R8,Christian GREJS,True,,7272.0
+2026,Stor Bane,2026-06-17,R8,Christian LINDHOLST,True,,8055.0
+2026,Stor Bane,2026-06-17,R8,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-06-17,R8,Henrik ZÜRICHO,True,,8083.0
+2026,Stor Bane,2026-06-17,R8,Jan Ilsø Sørensen,True,,7787.0
+2026,Stor Bane,2026-06-17,R8,Jens ESKILDSEN,True,,7628.0
+2026,Stor Bane,2026-06-17,R8,Morten Juul CHRISTENSEN,True,,8026.0
+2026,Stor Bane,2026-06-17,R8,Pia Olesen,True,,7797.0
+2026,Stor Bane,2026-06-17,R8,Rikke M. Schnuchel,True,,7846.0
+2026,Stor Bane,2026-06-17,R8,Thomas PEDERSEN,True,,7448.0
+2026,Stor Bane,2026-06-17,R8,Thomas Yde,True,,8025.0
+2026,Stor Bane,2026-06-24,R9,Axel THOMSEN,True,,8372.0
+2026,Stor Bane,2026-06-24,R9,Blue X,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Bo Bach Boddum,True,,8855.0
+2026,Stor Bane,2026-06-24,R9,Casper Lyhne,True,,8968.0
+2026,Stor Bane,2026-06-24,R9,Christian GREJS,True,,8168.0
+2026,Stor Bane,2026-06-24,R9,Christian LINDHOLST,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Henrik Gersling,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Henrik ZÜRICHO,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Jan Ilsø Sørensen,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Jens ESKILDSEN,True,,8330.0
+2026,Stor Bane,2026-06-24,R9,Morten Juul CHRISTENSEN,True,,9753.0
+2026,Stor Bane,2026-06-24,R9,Pia Olesen,True,,8533.0
+2026,Stor Bane,2026-06-24,R9,Rikke M. Schnuchel,False,DNF,
+2026,Stor Bane,2026-06-24,R9,Thomas PEDERSEN,True,,9284.0
+2026,Stor Bane,2026-06-24,R9,Thomas Yde,False,DNF,
+2026,Stor Bane,2026-08-05,R10,Axel THOMSEN,False,DNF,
+2026,Stor Bane,2026-08-05,R10,Blue X,False,DNC,
+2026,Stor Bane,2026-08-05,R10,Bo Bach Boddum,True,,7831.0
+2026,Stor Bane,2026-08-05,R10,Casper Lyhne,True,,7452.0
+2026,Stor Bane,2026-08-05,R10,Christian GREJS,True,,7317.0
+2026,Stor Bane,2026-08-05,R10,Christian LINDHOLST,True,,8216.0
+2026,Stor Bane,2026-08-05,R10,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-08-05,R10,Henrik ZÜRICHO,False,DNC,
+2026,Stor Bane,2026-08-05,R10,Jan Ilsø Sørensen,True,,7970.0
+2026,Stor Bane,2026-08-05,R10,Jens ESKILDSEN,True,,7589.0
+2026,Stor Bane,2026-08-05,R10,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-08-05,R10,Pia Olesen,False,DNC,
+2026,Stor Bane,2026-08-05,R10,Rikke M. Schnuchel,True,,8098.0
+2026,Stor Bane,2026-08-05,R10,Thomas PEDERSEN,True,,7320.0
+2026,Stor Bane,2026-08-05,R10,Thomas Yde,True,,7800.0
+2026,Stor Bane,2026-08-12,R11,Axel THOMSEN,True,,5986.0
+2026,Stor Bane,2026-08-12,R11,Blue X,True,,7827.0
+2026,Stor Bane,2026-08-12,R11,Bo Bach Boddum,True,,6129.0
+2026,Stor Bane,2026-08-12,R11,Casper Lyhne,True,,6236.0
+2026,Stor Bane,2026-08-12,R11,Christian GREJS,True,,6047.0
+2026,Stor Bane,2026-08-12,R11,Christian LINDHOLST,True,,6576.0
+2026,Stor Bane,2026-08-12,R11,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-08-12,R11,Henrik ZÜRICHO,True,,6846.0
+2026,Stor Bane,2026-08-12,R11,Jan Ilsø Sørensen,False,DNC,
+2026,Stor Bane,2026-08-12,R11,Jens ESKILDSEN,False,DNC,
+2026,Stor Bane,2026-08-12,R11,Morten Juul CHRISTENSEN,True,,7048.0
+2026,Stor Bane,2026-08-12,R11,Pia Olesen,True,,6330.0
+2026,Stor Bane,2026-08-12,R11,Rikke M. Schnuchel,True,,6542.0
+2026,Stor Bane,2026-08-12,R11,Thomas PEDERSEN,True,,6260.0
+2026,Stor Bane,2026-08-12,R11,Thomas Yde,True,,7044.0
+2026,Stor Bane,2026-08-19,R12,Axel THOMSEN,True,,8971.0
+2026,Stor Bane,2026-08-19,R12,Blue X,False,DNC,
+2026,Stor Bane,2026-08-19,R12,Bo Bach Boddum,True,,9284.0
+2026,Stor Bane,2026-08-19,R12,Casper Lyhne,True,,9107.0
+2026,Stor Bane,2026-08-19,R12,Christian GREJS,True,,8726.0
+2026,Stor Bane,2026-08-19,R12,Christian LINDHOLST,True,,9709.0
+2026,Stor Bane,2026-08-19,R12,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-08-19,R12,Henrik ZÜRICHO,True,,10038.0
+2026,Stor Bane,2026-08-19,R12,Jan Ilsø Sørensen,True,,9947.0
+2026,Stor Bane,2026-08-19,R12,Jens ESKILDSEN,False,DNC,
+2026,Stor Bane,2026-08-19,R12,Morten Juul CHRISTENSEN,True,,10411.0
+2026,Stor Bane,2026-08-19,R12,Pia Olesen,True,,9328.0
+2026,Stor Bane,2026-08-19,R12,Rikke M. Schnuchel,True,,9744.0
+2026,Stor Bane,2026-08-19,R12,Thomas PEDERSEN,True,,9000.0
+2026,Stor Bane,2026-08-19,R12,Thomas Yde,True,,10228.0
+2026,Stor Bane,2026-08-26,R13,Axel THOMSEN,True,,7077.0
+2026,Stor Bane,2026-08-26,R13,Blue X,True,,7689.0
+2026,Stor Bane,2026-08-26,R13,Bo Bach Boddum,True,,7227.0
+2026,Stor Bane,2026-08-26,R13,Casper Lyhne,True,,7379.0
+2026,Stor Bane,2026-08-26,R13,Christian GREJS,True,,6915.0
+2026,Stor Bane,2026-08-26,R13,Christian LINDHOLST,True,,7728.0
+2026,Stor Bane,2026-08-26,R13,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-08-26,R13,Henrik ZÜRICHO,True,,7776.0
+2026,Stor Bane,2026-08-26,R13,Jan Ilsø Sørensen,True,,7636.0
+2026,Stor Bane,2026-08-26,R13,Jens ESKILDSEN,False,DNC,
+2026,Stor Bane,2026-08-26,R13,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-08-26,R13,Pia Olesen,False,DNC,
+2026,Stor Bane,2026-08-26,R13,Rikke M. Schnuchel,True,,7319.0
+2026,Stor Bane,2026-08-26,R13,Thomas PEDERSEN,True,,7209.0
+2026,Stor Bane,2026-08-26,R13,Thomas Yde,True,,7733.0
+2026,Stor Bane,2026-09-02,R14,Axel THOMSEN,True,,6464.0
+2026,Stor Bane,2026-09-02,R14,Blue X,False,DNC,
+2026,Stor Bane,2026-09-02,R14,Bo Bach Boddum,True,,6668.0
+2026,Stor Bane,2026-09-02,R14,Casper Lyhne,False,DNC,
+2026,Stor Bane,2026-09-02,R14,Christian GREJS,True,,6329.0
+2026,Stor Bane,2026-09-02,R14,Christian LINDHOLST,True,,7015.0
+2026,Stor Bane,2026-09-02,R14,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-09-02,R14,Henrik ZÜRICHO,True,,7249.0
+2026,Stor Bane,2026-09-02,R14,Jan Ilsø Sørensen,False,DNC,
+2026,Stor Bane,2026-09-02,R14,Jens ESKILDSEN,True,,6642.0
+2026,Stor Bane,2026-09-02,R14,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-09-02,R14,Pia Olesen,True,,6918.0
+2026,Stor Bane,2026-09-02,R14,Rikke M. Schnuchel,True,,6936.0
+2026,Stor Bane,2026-09-02,R14,Thomas PEDERSEN,True,,6469.0
+2026,Stor Bane,2026-09-02,R14,Thomas Yde,True,,7230.0
+2026,Stor Bane,2026-09-09,R15,Axel THOMSEN,True,,5998.0
+2026,Stor Bane,2026-09-09,R15,Blue X,True,,6429.0
+2026,Stor Bane,2026-09-09,R15,Bo Bach Boddum,True,,6025.0
+2026,Stor Bane,2026-09-09,R15,Casper Lyhne,True,,5988.0
+2026,Stor Bane,2026-09-09,R15,Christian GREJS,True,,5766.0
+2026,Stor Bane,2026-09-09,R15,Christian LINDHOLST,True,,6291.0
+2026,Stor Bane,2026-09-09,R15,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-09-09,R15,Henrik ZÜRICHO,True,,6317.0
+2026,Stor Bane,2026-09-09,R15,Jan Ilsø Sørensen,True,,6394.0
+2026,Stor Bane,2026-09-09,R15,Jens ESKILDSEN,True,,6119.0
+2026,Stor Bane,2026-09-09,R15,Morten Juul CHRISTENSEN,True,,6656.0
+2026,Stor Bane,2026-09-09,R15,Pia Olesen,False,DNF,
+2026,Stor Bane,2026-09-09,R15,Rikke M. Schnuchel,True,,6116.0
+2026,Stor Bane,2026-09-09,R15,Thomas PEDERSEN,True,,5975.0
+2026,Stor Bane,2026-09-09,R15,Thomas Yde,True,,6242.0
+2026,Stor Bane,2026-09-16,R16,Axel THOMSEN,True,,6777.0
+2026,Stor Bane,2026-09-16,R16,Blue X,False,DNC,
+2026,Stor Bane,2026-09-16,R16,Bo Bach Boddum,True,,6997.0
+2026,Stor Bane,2026-09-16,R16,Casper Lyhne,False,DNC,
+2026,Stor Bane,2026-09-16,R16,Christian GREJS,True,,6750.0
+2026,Stor Bane,2026-09-16,R16,Christian LINDHOLST,True,,7818.0
+2026,Stor Bane,2026-09-16,R16,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-09-16,R16,Henrik ZÜRICHO,True,,7478.0
+2026,Stor Bane,2026-09-16,R16,Jan Ilsø Sørensen,True,,7460.0
+2026,Stor Bane,2026-09-16,R16,Jens ESKILDSEN,True,,7130.0
+2026,Stor Bane,2026-09-16,R16,Morten Juul CHRISTENSEN,True,,7730.0
+2026,Stor Bane,2026-09-16,R16,Pia Olesen,False,DNC,
+2026,Stor Bane,2026-09-16,R16,Rikke M. Schnuchel,True,,7066.0
+2026,Stor Bane,2026-09-16,R16,Thomas PEDERSEN,True,,7208.0
+2026,Stor Bane,2026-09-16,R16,Thomas Yde,True,,7347.0
+2026,Stor Bane,2026-09-23,R17,Axel THOMSEN,True,,7146.0
+2026,Stor Bane,2026-09-23,R17,Blue X,True,,7471.0
+2026,Stor Bane,2026-09-23,R17,Bo Bach Boddum,True,,6951.0
+2026,Stor Bane,2026-09-23,R17,Casper Lyhne,True,,6987.0
+2026,Stor Bane,2026-09-23,R17,Christian GREJS,True,,6796.0
+2026,Stor Bane,2026-09-23,R17,Christian LINDHOLST,True,,7441.0
+2026,Stor Bane,2026-09-23,R17,Henrik Gersling,False,DNC,
+2026,Stor Bane,2026-09-23,R17,Henrik ZÜRICHO,True,,7346.0
+2026,Stor Bane,2026-09-23,R17,Jan Ilsø Sørensen,False,DNC,
+2026,Stor Bane,2026-09-23,R17,Jens ESKILDSEN,True,,7140.0
+2026,Stor Bane,2026-09-23,R17,Morten Juul CHRISTENSEN,False,DNC,
+2026,Stor Bane,2026-09-23,R17,Pia Olesen,True,,7180.0
+2026,Stor Bane,2026-09-23,R17,Rikke M. Schnuchel,True,,7232.0
+2026,Stor Bane,2026-09-23,R17,Thomas PEDERSEN,False,DNF,
+2026,Stor Bane,2026-09-23,R17,Thomas Yde,True,,7243.0
