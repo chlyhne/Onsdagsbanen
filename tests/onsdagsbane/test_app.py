@@ -92,8 +92,8 @@ class WebTests(unittest.TestCase):
             db.execute('UPDATE races SET published=1 WHERE id=?',(first,))
             old=self.planned_heat(db,'R2','stor','Stor bane 1')
             new=self.planned_heat(db,'R2','stor','Stor bane 2')
-            hierarchy.members(db,old['id'],{'boat_ids':[self.boats[2]]},self.user)
-            hierarchy.members(db,new['id'],{'boat_ids':[self.boats[0],self.boats[1]]},self.user)
+            hierarchy.members(db,old['id'],{'boat_ids':[self.boats[2]],'scope':'round'},self.user)
+            hierarchy.members(db,new['id'],{'boat_ids':[self.boats[0],self.boats[1]],'scope':'round'},self.user)
             planned=db.execute('SELECT id FROM rounds WHERE series_id=? AND label=?',(self.series,'R2')).fetchone()[0]
             second=service.create_race(db,{'series_id':self.series,'round_id':planned,'course':'stor','mode':'normal','rating_key':'TACIM','start':'2026-05-13T18:30:00+02:00','route':['A','D']},self.user)
         for boat in self.boats:self.finish(second,boat,stamp='2026-05-13T19:30:00+02:00')
@@ -117,10 +117,8 @@ class WebTests(unittest.TestCase):
             db.execute('UPDATE races SET published=1 WHERE id=?',(first,))
             old=self.planned_heat(db,'R2','stor','Stor bane 1')
             new=self.planned_heat(db,'R2','lille','Lille bane 1')
-            with self.assertRaisesRegex(ValueError,'allerede'):
-                hierarchy.members(db,new['id'],{'boat_ids':[self.boats[0]]},self.user)
-            hierarchy.members(db,old['id'],{'boat_ids':[self.boats[2]]},self.user)
-            hierarchy.members(db,new['id'],{'boat_ids':[self.boats[0]]},self.user)
+            hierarchy.members(db,old['id'],{'boat_ids':[self.boats[2]],'scope':'round'},self.user)
+            hierarchy.members(db,new['id'],{'boat_ids':[self.boats[0]],'scope':'round'},self.user)
             planned=db.execute('SELECT id FROM rounds WHERE series_id=? AND label=?',(self.series,'R2')).fetchone()[0]
             second=service.create_race(db,{'series_id':self.series,'round_id':planned,'course':'lille','mode':'normal','rating_key':'TACIM','start':'2026-05-13T18:30:00+02:00','route':['A']},self.user)
         self.finish(second,self.boats[0],stamp='2026-05-13T19:00:00+02:00')
@@ -145,7 +143,7 @@ class WebTests(unittest.TestCase):
             boat=next(b for b in service.boats(db,self.series) if b['id']==self.boats[0])
             service.save_boat(db,{**boat,'ratings':{**boat['ratings'],'TACIM':900},'extra_handicap':99},self.user,boat['id'])
             heat=self.planned_heat(db,'R1','stor','Stor bane 1')
-            hierarchy.members(db,heat['id'],{'boat_ids':[self.boats[0]]},self.user)
+            hierarchy.members(db,heat['id'],{'boat_ids':[self.boats[0]],'scope':'round'},self.user)
             after=next(r for r in service.rows(db,race) if r['boat_id']==self.boats[0])
             self.assertEqual(after['rating'],before['rating'])
             self.assertEqual(after['extra_handicap'],before['extra_handicap'])
@@ -926,6 +924,36 @@ class RuleTests(unittest.TestCase):
 
 
 class ImportTests(unittest.TestCase):
+    def test_utf8_import_and_repair_preserve_edits_and_results(self):
+        from onsdagsbane.importer import seed
+        read_text = Path.read_text
+        # Simulate the Windows default even when running on a UTF-8 system.
+        def windows_read(path, *args, **kwargs):
+            if not args and 'encoding' not in kwargs:
+                kwargs['encoding'] = 'cp1252'
+            return read_text(path, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'read_text', windows_read):
+            app = Application(db_path=Path(tmp)/'db')
+            with app.store.connect(write=True) as db:
+                profile = db.execute('SELECT * FROM boat_profiles WHERE skipper=?', ('Oluf GRØNKJÆR',)).fetchone()
+                self.assertIsNotNone(profile)
+                self.assertEqual(profile['club'], 'Kaløvig Bådelaug')
+                finishes = [tuple(row) for row in db.execute('SELECT * FROM finishes ORDER BY race_id,boat_id')]
+                # Reproduce the old import, alongside a later manual edit.
+                db.execute('UPDATE boat_profiles SET skipper=?,club=?,name=? WHERE id=?',
+                           ('Oluf GRØNKJÆR'.encode('utf-8').decode('cp1252'),
+                            'Kaløvig Bådelaug'.encode('utf-8').decode('cp1252'), 'Ægir – ændret', profile['id']))
+                db.execute("DELETE FROM metadata WHERE key='seed_utf8'")
+            seed(app.store)
+            seed(app.store)
+            with app.store.connect() as db:
+                fixed = db.execute('SELECT * FROM boat_profiles WHERE id=?', (profile['id'],)).fetchone()
+                self.assertEqual(fixed['skipper'], 'Oluf GRØNKJÆR')
+                self.assertEqual(fixed['club'], 'Kaløvig Bådelaug')
+                self.assertEqual(fixed['name'], 'Ægir – ændret')
+                self.assertEqual([tuple(row) for row in db.execute('SELECT * FROM finishes ORDER BY race_id,boat_id')], finishes)
+
     def test_real_source_results_preserved_and_repeat_safe(self):
         with tempfile.TemporaryDirectory() as tmp:
             app=Application(db_path=Path(tmp)/'db')
@@ -937,7 +965,7 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual(view['overall'][0]['total'],12)
                 from onsdagsbane.importer import SEED
                 for path in SEED.glob('*.json'):
-                    source=json.loads(path.read_text())
+                    source=json.loads(path.read_text(encoding='utf-8'))
                     cls=source['RegattaName']
                     course='lille' if cls.lower().startswith('lille') else 'stor'
                     computed={r['skipper']:r for r in service.result_view(db,1,course,cls)['overall']}

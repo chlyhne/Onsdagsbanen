@@ -29,16 +29,42 @@ def optional_float(value):
         return None
 
 
+def repair_imported_text(db):
+    """Repair exact Windows-decoded source values, preserving subsequent edits."""
+    if db.execute("SELECT 1 FROM metadata WHERE key='seed_utf8'").fetchone():
+        return
+    for filename in sorted(SEED.glob('*.json')):
+        payload = json.loads(filename.read_text(encoding='utf-8'))
+        for entry in payload['EntryResults']:
+            values = {'name': entry.get('BoatName') or entry['TeamName'],
+                      'skipper': entry['TeamName'], 'sail_number': entry.get('SailNumber',''),
+                      'boat_type': entry.get('BoatType',''), 'club': entry.get('ClubName','')}
+            for field, correct in values.items():
+                if not isinstance(correct, str):
+                    continue
+                try:
+                    garbled = correct.encode('utf-8').decode('cp1252')
+                except UnicodeDecodeError:
+                    # Such a value could not have been imported by the old decoder.
+                    continue
+                if garbled != correct:
+                    db.execute(f'UPDATE boat_profiles SET {field}=? WHERE {field}=? AND id IN '
+                               '(SELECT profile_id FROM boats WHERE series_id=1 AND source_id=?)',
+                               (correct, garbled, entry['Id']))
+    db.execute("INSERT INTO metadata VALUES('seed_utf8','1')")
+
+
 def seed(store):
     with store.connect(write=True) as db:
         if db.execute("SELECT 1 FROM metadata WHERE key='seed'").fetchone():
+            repair_imported_text(db)
             return
         db.execute("INSERT INTO series(id,name,year,discards) VALUES(1,'Onsdagsbanen 2026',2026,'[]')")
         with (ROOT / 'omvendt_respit/resources/participants.csv').open(encoding='utf-8-sig') as f:
             local = {normalize(r['competitor']): r for r in csv.DictReader(f)}
         imported = 0
         for filename in sorted(SEED.glob('*.json')):
-            payload = json.loads(filename.read_text())
+            payload = json.loads(filename.read_text(encoding='utf-8'))
             class_name = payload['RegattaName']
             course = 'lille' if class_name.lower().startswith('lille') else 'stor'
             labels = parse_completed_race_labels_from_result_payload(payload)
@@ -87,3 +113,4 @@ def seed(store):
         from .timing import migrate
         migrate(db)
         db.execute("INSERT INTO metadata VALUES('seed',?)", (json.dumps({'source':SOURCE, 'imported_at':datetime.now(TZ).isoformat(),'results':imported}),))
+        db.execute("INSERT INTO metadata VALUES('seed_utf8','1')")

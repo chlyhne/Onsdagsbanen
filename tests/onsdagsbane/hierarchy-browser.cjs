@@ -14,9 +14,14 @@ const local=date=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Copenhagen',
  async function heat(roundLabel,course,name){const state=await getState();return state.rounds.find(r=>r.label===roundLabel).courses.find(c=>c.course===course).heats.find(h=>h.name===name);}
  async function changeMembership(roundLabel,course,name,boatId,checked){
   const item=await heat(roundLabel,course,name);await page.locator(`[data-heat="${item.id}"]`).click();
-  assert.equal(await page.locator('[name="whole_series"]').isChecked(),false);
-  await page.locator(`dialog [name="boat_ids"][value="${boatId}"]`).setChecked(checked);
-  await page.getByRole('button',{name:'Gem deltagere',exact:true}).click();await closeSaved();
+  assert.equal(await page.locator('#fleet-scope').inputValue(),'series');
+  await page.locator('#fleet-scope').selectOption('round');
+  if(checked)await page.locator('#fleet-include-assigned').check();
+  const boat=(await getState()).boats.find(b=>b.id===boatId);
+  await page.locator(`#fleet-${checked?'right':'left'}-list [data-fleet-profile="${boat.profile_id}"]`).check();
+  await page.locator(`[data-fleet-action="${checked?'add':'remove'}"]`).click();
+  await page.waitForFunction(()=>!fleetWork.loading&&fleetWork.status.startsWith('Gemt'));
+  await page.locator('.dialog-head [data-action="close-dialog"]').click();await closeSaved();
  }
  async function configure(roundLabel,course,start,system='circle'){
   const s=await getState(),round=s.rounds.find(r=>r.label===roundLabel);
@@ -63,7 +68,7 @@ const local=date=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Copenhagen',
   await page.locator('#rounds-form [name="round_labels"]').fill('R4');
   await page.locator('#rounds-form').getByRole('button',{name:'Tilføj ræs',exact:true}).click();await closeSaved();
   s=await getState();assert.equal(s.series_id,createdId);assert.equal(s.series.length,seriesCount);assert.deepEqual(s.rounds.map(round=>round.label),['R1','R2','R3','R4']);
-  await page.getByRole('button',{name:'Både & DH',exact:true}).click();await page.getByRole('button',{name:'+ Opret båd',exact:true}).click();
+  await page.getByRole('button',{name:'Både og løbsinddeling',exact:true}).click();await page.getByRole('button',{name:'+ Opret båd',exact:true}).click();
   for(const [name,value] of Object.entries({name:'Vandrefuglen',skipper:'Test skipper',sail_number:'DEN 4242',boat_type:'X-332',TACIL:'711,6',TACIM:'570,2',TACIH:'507,6',TAUDM:'750'}))await page.locator(`dialog [name="${name}"]`).fill(value);
   await page.locator('#boat-class').selectOption('Stor A');assert.equal(await page.locator('#boat-gph').inputValue(),'575,8');
   await page.getByRole('button',{name:'Gem båd',exact:true}).click();await closeSaved();
@@ -83,7 +88,7 @@ const local=date=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Copenhagen',
   const before=[await getRace(first),await getRace(second),await getRace(third)];
   assert.equal(before[1].race.rating_key,'GPH');assert.equal(before[1].entries[0].rating,575.8);assert.equal(before[1].entries[0].wind_category,'');assert.equal(before[2].race.rating_key,'TAUDM');
   await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'Indstil dagens distance og vind',exact:true}).click();await page.locator('dialog [name="date"]').selectOption(days[1]);assert.equal(await page.locator('dialog [name="wind_category"]').isDisabled(),true);await page.getByRole('button',{name:'Annuller',exact:true}).click();
-  await page.getByRole('button',{name:'Både & DH',exact:true}).click();await page.locator(`[data-edit-boat="${boat.id}"]`).click();
+  await page.getByRole('button',{name:'Både og løbsinddeling',exact:true}).click();await page.locator(`[data-edit-boat="${boat.id}"]`).click();
   await page.locator('#boat-course').selectOption('lille');await page.locator('#boat-class').selectOption('Lille A');await page.locator('dialog [name="TACIM"]').fill('900');await page.locator('dialog [name="extra_handicap"]').fill('60');
   await page.getByRole('button',{name:'Gem båd',exact:true}).click();await closeSaved();
   await series();await page.locator(`[data-open-timing="${first}"]`).click();await page.getByRole('button',{name:'Beregningsgrundlag',exact:true}).click();

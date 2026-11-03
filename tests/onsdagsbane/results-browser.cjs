@@ -29,7 +29,7 @@ const base = process.env.ONSDAGSBANE_BASE_URL || 'http://127.0.0.1:8093';
     await selected(page, 'Stor bane 1', 'overall');
     assert.equal(await page.locator('tbody tr').count(), initial.boats.filter(b => b.class_name === 'Stor bane 1').length);
     assert.equal(await page.locator('nav,.stats,.side,.course-map,.intro-aside').count(), 0);
-    assert.equal(await page.getByRole('button', { name: /Startlister|Både & DH|Administration|Måltagning/ }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: /Startlister|Både og løbsinddeling|Administration|Måltagning/ }).count(), 0);
     await page.screenshot({ path: 'build/onsdagsbane-public-simple-desktop.png', fullPage: true });
 
     await page.locator('#class-select').selectOption('Lille bane 2');

@@ -69,7 +69,7 @@ class Application:
             with self.store.connect() as db:
                 db.execute('SELECT 1')
             return self.json({'ok':True})
-        if method=='GET' and (path=='/' or path in ('/app.js','/style.css')):
+        if method=='GET' and (path=='/' or path in ('/app.js','/fleet-commander.js','/boat-management.js','/style.css')):
             filename = STATIC / ('index.html' if path=='/' else path[1:])
             return 200,[('Content-Type',mimetypes.guess_type(filename)[0]+'; charset=utf-8')],filename.read_bytes()
         if not path.startswith(('/api/','/auth/')):
@@ -183,10 +183,35 @@ class Application:
             if path=='/api/rounds' and method=='POST':
                 auth.authorize(user,admin=True)
                 return self.json({'ids':hierarchy.create_rounds(db,int(data['series_id']),data['round_labels'],user,start_times=data.get('start_times'))})
+            if path=='/api/heats/boats/move' and method=='POST':
+                auth.authorize(user,admin=True)
+                result=hierarchy.move_profiles(db,int(data['heat_id']),data,user)
+                series_id=result['series_id']
+                return self.json({**result,'data':{'boats':service.boats(db,series_id),'rounds':hierarchy.structure(db,series_id),
+                    'races':[dict(r) for r in db.execute('SELECT * FROM races WHERE series_id=? ORDER BY start DESC,id DESC',(series_id,))]},
+                    'catalog':fleet.catalog(db,series_id)})
+            if path in ('/api/heats/boats/preview','/api/heats/boats') and method=='POST':
+                auth.authorize(user,admin=True)
+                operation=hierarchy.preview_profile_members if path.endswith('/preview') else hierarchy.profile_members
+                return self.json(operation(db,int(data['heat_id']),data,user))
+            if path=='/api/heats/members/preview' and method=='POST':
+                auth.authorize(user,admin=True)
+                plan=hierarchy.member_plan(db,int(data['heat_id']),data)
+                return self.json({'changes':plan['changes'],'token':plan['token']})
             if path=='/api/heats/members' and method=='POST':
                 auth.authorize(user,admin=True)
-                hierarchy.members(db,int(data['heat_id']),data,user)
-                return self.json({'saved':True})
+                return self.json({'saved':True,**hierarchy.members(db,int(data['heat_id']),data,user)})
+            if path in ('/api/boat-profiles','/api/boat-profiles/delete-preview','/api/boat-profiles/delete'):
+                auth.authorize(user,admin=True)
+                if method=='GET' and path=='/api/boat-profiles':
+                    return self.json(fleet.profile(db,int(params['id'])))
+                if method=='GET' and path.endswith('/delete-preview'):
+                    return self.json(fleet.deletion_preview(db,int(params['id'])))
+                if method=='POST' and path in ('/api/boat-profiles','/api/boat-profiles/delete'):
+                    operation=fleet.delete_profile if path.endswith('/delete') else fleet.update_profile
+                    operation(db,int(data['id']),data,user)
+                    return self.json({'saved':True})
+                return self.json({'error':'Metoden er ikke tilladt.'},405)
             if path=='/api/boats' and method=='POST':
                 auth.authorize(user,admin=True)
                 return self.json({'id':service.save_boat(db,data,user,data.get('id'))})

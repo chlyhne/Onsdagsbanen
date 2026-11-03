@@ -3,10 +3,11 @@ from pathlib import Path
 import json
 import sqlite3
 import time
+from uuid import uuid4
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS series(id INTEGER PRIMARY KEY, name TEXT NOT NULL, year INTEGER NOT NULL, discards TEXT NOT NULL DEFAULT '[]', reference REAL NOT NULL DEFAULT 1000);
-CREATE TABLE IF NOT EXISTS rounds(id INTEGER PRIMARY KEY, series_id INTEGER NOT NULL REFERENCES series(id), label TEXT NOT NULL, position INTEGER NOT NULL, UNIQUE(series_id,label));
+CREATE TABLE IF NOT EXISTS rounds(id INTEGER PRIMARY KEY, uid TEXT NOT NULL UNIQUE, series_id INTEGER NOT NULL REFERENCES series(id), label TEXT NOT NULL, position INTEGER NOT NULL, UNIQUE(series_id,label));
 CREATE TABLE IF NOT EXISTS round_courses(id INTEGER PRIMARY KEY, round_id INTEGER NOT NULL REFERENCES rounds(id), course TEXT NOT NULL CHECK(course IN ('lille','stor')), UNIQUE(round_id,course));
 CREATE TABLE IF NOT EXISTS heats(id INTEGER PRIMARY KEY, round_course_id INTEGER NOT NULL REFERENCES round_courses(id), name TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, UNIQUE(round_course_id,name));
 CREATE TABLE IF NOT EXISTS heat_boats(heat_id INTEGER NOT NULL REFERENCES heats(id), boat_id INTEGER NOT NULL REFERENCES boats(id), PRIMARY KEY(heat_id,boat_id));
@@ -41,6 +42,11 @@ class Store:
             for table,column,definition in [('series','reference','REAL NOT NULL DEFAULT 1000'),('entries','wind_category',"TEXT NOT NULL DEFAULT 'M'"),('finishes','source_points','REAL'),('finishes','source_discarded','INTEGER'),('races','round_course_id','INTEGER REFERENCES round_courses(id)'),('rounds','handicap_system',"TEXT NOT NULL DEFAULT 'circle'"),('rounds','completed','INTEGER NOT NULL DEFAULT 0'),('rounds','completed_at','TEXT'),('finishes','auto_dnc','INTEGER NOT NULL DEFAULT 0'),('series','default_start_stor',"TEXT NOT NULL DEFAULT '18:30:00'"),('series','default_start_lille',"TEXT NOT NULL DEFAULT '18:35:00'"),('round_courses','start_time','TEXT'),('rounds','race_date','TEXT'),('boats','profile_id','INTEGER REFERENCES boat_profiles(id)'),('entries','handicap_set_id','INTEGER REFERENCES handicap_sets(id)'),('boat_profiles','current_handicap_set_id','INTEGER REFERENCES handicap_sets(id)')]:
                 if column not in {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}:
                     db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
+            if 'uid' not in {r['name'] for r in db.execute('PRAGMA table_info(rounds)')}:
+                db.execute('ALTER TABLE rounds ADD COLUMN uid TEXT')
+            for row in list(db.execute("SELECT id FROM rounds WHERE uid IS NULL OR uid=''")):
+                db.execute('UPDATE rounds SET uid=? WHERE id=?',(str(uuid4()),row['id']))
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS round_uid ON rounds(uid)')
             entry_columns={r['name'] for r in db.execute('PRAGMA table_info(entries)')}
             if 'rating' in entry_columns:
                 if 'ratings_snapshot' not in entry_columns:db.execute('ALTER TABLE entries ADD COLUMN ratings_snapshot TEXT')
@@ -69,6 +75,10 @@ CREATE TRIGGER IF NOT EXISTS entry_handicap_required_update BEFORE UPDATE OF han
             db.execute('CREATE UNIQUE INDEX IF NOT EXISTS boat_series_profile ON boats(series_id,profile_id)')
             from .timing import migrate
             migrate(db)
+            db.executescript('''CREATE TRIGGER IF NOT EXISTS round_uid_required BEFORE INSERT ON rounds WHEN NEW.uid IS NULL OR NEW.uid='' BEGIN SELECT RAISE(ABORT, "Ræset skal have et UID."); END;
+CREATE TRIGGER IF NOT EXISTS round_uid_immutable BEFORE UPDATE OF uid ON rounds WHEN NEW.uid IS NOT OLD.uid BEGIN SELECT RAISE(ABORT, "Ræsets UID kan ikke ændres."); END;
+CREATE TRIGGER IF NOT EXISTS heat_boat_one_round_insert BEFORE INSERT ON heat_boats WHEN EXISTS(SELECT 1 FROM heat_boats m JOIN heats h ON h.id=m.heat_id JOIN round_courses c ON c.id=h.round_course_id WHERE m.boat_id=NEW.boat_id AND m.heat_id<>NEW.heat_id AND c.round_id=(SELECT c2.round_id FROM heats h2 JOIN round_courses c2 ON c2.id=h2.round_course_id WHERE h2.id=NEW.heat_id)) BEGIN SELECT RAISE(ABORT, "En båd kan kun være i ét løb i samme ræs i serien."); END;
+CREATE TRIGGER IF NOT EXISTS heat_boat_one_round_update BEFORE UPDATE OF heat_id,boat_id ON heat_boats WHEN EXISTS(SELECT 1 FROM heat_boats m JOIN heats h ON h.id=m.heat_id JOIN round_courses c ON c.id=h.round_course_id WHERE m.boat_id=NEW.boat_id AND NOT(m.boat_id=OLD.boat_id AND m.heat_id=OLD.heat_id) AND c.round_id=(SELECT c2.round_id FROM heats h2 JOIN round_courses c2 ON c2.id=h2.round_course_id WHERE h2.id=NEW.heat_id)) BEGIN SELECT RAISE(ABORT, "En båd kan kun være i ét løb i samme ræs i serien."); END;''')
             db.commit()
             db.execute('PRAGMA journal_mode=WAL')
 
