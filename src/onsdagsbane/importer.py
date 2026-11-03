@@ -92,6 +92,11 @@ def seed(store):
                     wind = {0:'L',1:'M',2:'H'}.get(info.get('WindSpeedType'),'M')
                     db.execute("INSERT OR IGNORE INTO races(series_id,label,course,mode,start,route,distance,rating_key,published,source) VALUES(1,?,?,'normal',?,'[]',?,?,1,?)", (label,course,start.isoformat(),distance,'TACI'+wind,SOURCE))
                     race = db.execute('SELECT * FROM races WHERE series_id=1 AND course=? AND label=?', (course,label)).fetchone()
+                    if race['round_course_id'] is None:
+                        from .hierarchy import ensure_round
+                        round_id=ensure_round(db,1,label)
+                        course_id=db.execute('SELECT id FROM round_courses WHERE round_id=? AND course=?',(round_id,course)).fetchone()[0]
+                        db.execute('UPDATE races SET round_course_id=? WHERE id=?',(course_id,race['id']))
                     if race['start'] != start.isoformat() or race['distance'] != distance:
                         db.execute("UPDATE races SET warning='Løbene har forskellige starttider eller distancer; samlet visning er vejledende.' WHERE id=?", (race['id'],))
                     set_id=handicaps.for_values(db,profile_id,{race['rating_key']:optional_float(row['hdcp'])},0)

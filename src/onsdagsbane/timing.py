@@ -16,11 +16,26 @@ def round_id_for_race(db,race_id):
 
 def detail(db,round_id):
     planned=get(db,'rounds',round_id)
+    from .reference_clock import offset
+    planned['clock_offset']=offset(db,round_id)
     courses=course_races(db,round_id)
     entries,captures=[],[]
     for race in courses:
         entries.extend({**row,'race_id':race['id'],'race_mode':race['mode'],'race_revision':race['revision'],'published':race['published']} for row in service.rows(db,race['id']))
         captures.extend(dict(r) for r in db.execute('SELECT * FROM captures WHERE race_id=? AND used=0 ORDER BY id',(race['id'],)))
+    masters={b['id']:b for b in service.boats(db,planned['series_id'])}
+    for row in db.execute('''SELECT p.boat_id,h.name class_name,c.course,f.status,f.instant,f.penalty,f.sequence,f.revision
+        FROM participations p JOIN heats h ON h.id=p.heat_id JOIN round_courses c ON c.id=h.round_course_id
+        LEFT JOIN pending_finishes f ON f.round_id=p.round_id AND f.boat_id=p.boat_id
+        WHERE p.round_id=? AND p.race_id IS NULL''',(round_id,)):
+        entries.append({**masters[row['boat_id']],**dict(row),'race_id':None,'race_mode':None,
+            'race_revision':row['revision'] or 0,'status':row['status'] or 'DNC','penalty':row['penalty'] or 0,
+            'published':False,'start':None,'distance':None,'elapsed':None,'corrected':None,'rating':None,'start_ready':False})
+    captures.extend({**dict(c),'id':-c['id'],'race_id':None} for c in db.execute('SELECT * FROM round_captures WHERE round_id=? AND used=0',(round_id,)))
+    automatic_boats={r[0] for r in db.execute('SELECT boat_id FROM clock_sources WHERE round_id=?',(round_id,))}
+    automatic_captures={r[0] for r in db.execute('SELECT capture_id FROM clock_capture_sources WHERE round_id=?',(round_id,))}
+    for row in entries:row['clock_automatic']=row['boat_id'] in automatic_boats
+    for cap in captures:cap['automatic']=cap['id'] in automatic_captures
     if len({row['boat_id'] for row in entries})!=len(entries):raise ValueError('Samme båd er tilmeldt begge baner i ræset. Ret tilmeldingerne før måltagning.')
     configured={r['course'] for r in courses}
     missing=[r[0] for r in db.execute('SELECT DISTINCT c.course FROM round_courses c JOIN heats h ON h.round_course_id=c.id JOIN heat_boats m ON m.heat_id=h.id WHERE c.round_id=?',(round_id,)) if r[0] not in configured]

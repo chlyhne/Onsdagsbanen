@@ -70,6 +70,9 @@ def create_rounds(db,series_id,value,user,fleets=None,start_times=None):
         raise ValueError('Et eller flere af disse ræs findes allerede i serien.')
     layout={c:fleet_names((fleets or templates(db,series_id))[c]) for c in COURSES}
     identities=[ensure_round(db,series_id,name,layout,start_times) for name in names]
+    from .compatibility import validate_round
+    for identity in identities:
+        validate_round(db,identity,get(db,'rounds',identity)['handicap_system'])
     audit(db,user,'rounds.create',{'series_id':series_id,'labels':names})
     return identities
 
@@ -111,6 +114,8 @@ def attach_boat(db,boat_id):
     for course in db.execute('SELECT c.id,c.round_id FROM round_courses c JOIN rounds r ON r.id=c.round_id WHERE r.series_id=? AND c.course=?',(boat['series_id'],boat['course'])):
         if db.execute('SELECT 1 FROM races r JOIN round_courses c ON c.id=r.round_course_id WHERE c.round_id=? AND (r.published=1 OR EXISTS(SELECT 1 FROM finishes f WHERE f.race_id=r.id AND f.status<>\'DUTY\'))',(course['round_id'],)).fetchone():
             continue
+        from .compatibility import validate_destination
+        validate_destination(db,course['round_id'],boat['course'],[boat_id])
         db.execute('DELETE FROM heat_boats WHERE boat_id=? AND heat_id IN (SELECT h.id FROM heats h JOIN round_courses c ON c.id=h.round_course_id WHERE c.round_id=?)',(boat_id,course['round_id']))
         db.execute('INSERT OR IGNORE INTO heats(round_course_id,name,position) VALUES(?,?,0)',(course['id'],boat['class_name']))
         heat_id=db.execute('SELECT id FROM heats WHERE round_course_id=? AND name=?',(course['id'],boat['class_name'])).fetchone()[0]
@@ -145,6 +150,11 @@ def member_plan(db,heat_id,data):
         moves=[r for r in assignments if r['boat_id'] in selected and r['heat_id']!=target['id']]
         added=set(selected)-current; removed=current-set(selected)
         if not added and not removed:continue
+        from .compatibility import validate_destination
+        validate_destination(db,parent['id'],heat['course'],selected)
+        pending={r[0] for r in db.execute('SELECT boat_id FROM pending_finishes WHERE round_id=?',(parent['id'],))}
+        if removed & pending:
+            raise ValueError(f"{parent['label']}: Flyt først båden tilbage til ikke måltaget, før den afmeldes fra ræset.")
         races=[dict(r) for r in db.execute('SELECT r.* FROM races r JOIN round_courses c ON c.id=r.round_course_id WHERE c.round_id=?',(parent['id'],))]
         affected={target['round_course_id']}|{r['course_id'] for r in moves}
         historical=[]
@@ -170,6 +180,8 @@ def member_plan(db,heat_id,data):
         'entries':'SELECT e.* FROM entries e JOIN races r ON r.id=e.race_id WHERE r.series_id=? ORDER BY e.race_id,e.boat_id',
         'finishes':'SELECT f.* FROM finishes f JOIN races r ON r.id=f.race_id WHERE r.series_id=? ORDER BY f.race_id,f.boat_id',
         'captures':'SELECT c.* FROM captures c JOIN races r ON r.id=c.race_id WHERE r.series_id=? ORDER BY c.id',
+        'pending':'SELECT f.* FROM pending_finishes f JOIN rounds p ON p.id=f.round_id WHERE p.series_id=? ORDER BY f.round_id,f.boat_id',
+        'round_captures':'SELECT c.* FROM round_captures c JOIN rounds p ON p.id=c.round_id WHERE p.series_id=? ORDER BY c.id',
     }.items()}
     token=hashlib.sha256(json.dumps([heat_id,scope,sorted(selected),snapshot],sort_keys=True).encode()).hexdigest()
     return {'changes':changes,'token':token,'operations':operations,'series_id':heat['series_id'],'course':heat['course'],'name':heat['name'],'scope':scope,'selected':selected}
@@ -182,10 +194,13 @@ def members(db,heat_id,data,user):
         if data.get('token')!=plan['token']:raise ValueError('Forhåndsvis løbsinddelingen igen. Grundlaget kan være ændret.')
     for op in plan['operations']:
         # A selection moves boats out of their former heat in the same round.
+        # Change the canonical membership in place so saved observations never
+        # lose their participation while a boat moves between heats.
         for boat_id in plan['selected']:
-            db.execute('DELETE FROM heat_boats WHERE boat_id=? AND heat_id IN (SELECT h.id FROM heats h JOIN round_courses c ON c.id=h.round_course_id WHERE c.round_id=?)',(boat_id,op['round_id']))
-        db.execute('DELETE FROM heat_boats WHERE heat_id=?',(op['heat_id'],))
-        db.executemany('INSERT INTO heat_boats(heat_id,boat_id) VALUES(?,?)',[(op['heat_id'],bid) for bid in plan['selected']])
+            updated=db.execute('UPDATE participations SET heat_id=? WHERE round_id=? AND boat_id=?',(op['heat_id'],op['round_id'],boat_id)).rowcount
+            if not updated:db.execute('INSERT INTO heat_boats(heat_id,boat_id) VALUES(?,?)',(op['heat_id'],boat_id))
+        import json
+        db.execute('DELETE FROM heat_boats WHERE heat_id=? AND boat_id NOT IN (SELECT value FROM json_each(?))',(op['heat_id'],json.dumps(plan['selected'])))
         for course_id in op['affected']:
             race=db.execute('SELECT id FROM races WHERE round_course_id=?',(course_id,)).fetchone()
             if not race:continue
@@ -197,6 +212,8 @@ def members(db,heat_id,data,user):
                 db.execute('UPDATE races SET published=0 WHERE id=?',(race['id'],))
             else:
                 replace_roster(db,race['id'])
+                from .unconfigured import apply
+                apply(db,op['round_id'],race['id'],user)
             changed(db,race['id'])
     # The last planned round supplies the default for new rounds and registrations.
     last=db.execute('SELECT id FROM rounds WHERE series_id=? ORDER BY position DESC,id DESC LIMIT 1',(plan['series_id'],)).fetchone()
@@ -278,6 +295,8 @@ def move_profiles(db,heat_id,data,user):
 def set_system(db,round_id,system,user):
     get(db,'rounds',round_id)
     if system not in ('circle','gph','updown'):raise ValueError('Vælg cirkelmål, GPH eller op/ned-mål.')
+    from .compatibility import validate_round
+    validate_round(db,round_id,system)
     from .domain import rating_value
     from .service import replace_roster, changed
     import json

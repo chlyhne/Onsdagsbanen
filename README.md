@@ -8,7 +8,9 @@ Den selvstændige webapp kan afprøves lokalt med:
 .venv/bin/python -m onsdagsbane --demo
 ```
 
-Åbn `http://127.0.0.1:8090`. Se [kravlisten](docs/ONSDAGSBANE_KRAV.md) og [brug og drift](docs/ONSDAGSBANE_DRIFT.md). Demoen har sin egen database. Google/Facebook-login på driftssiden kræver udbydernes appnøgler.
+Åbn `http://127.0.0.1:8090`. Se [kravlisten](docs/ONSDAGSBANE_KRAV.md), [brug og drift](docs/ONSDAGSBANE_DRIFT.md) og [v2-strukturen](docs/ONSDAGSBANE_V2.md). Demoen har sin egen database. Google/Facebook-login på driftssiden kræver udbydernes appnøgler.
+
+Arbejdet er organiseret omkring serier og ræs med egne adresser. Bådregisteret er fælles på tværs af serier, og **Både og løbsinddeling** er et stort arbejdsområde med automatisk gemning. Hvert ræs samler opsætning, startlister, måltagning, resultater og historik.
 
 
 Projektets mapper og de nye filstier er beskrevet i [docs/STRUCTURE.md](docs/STRUCTURE.md).

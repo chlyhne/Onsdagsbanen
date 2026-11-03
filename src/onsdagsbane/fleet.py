@@ -24,23 +24,44 @@ def profile(db,identity):
     return item
 
 
-def update_profile(db,identity,data,user):
+def save_profile(db,data,user,identity=None):
     from .domain import RATINGS, number
     from .service import extra_handicap_value
-    before=profile(db,identity)
-    if data.get('token')!=before['token']:raise ValueError('Båden er ændret. Åbn redigeringen igen.')
+    before=profile(db,identity) if identity else None
+    if before and data.get('token')!=before['token']:raise ValueError('Båden er ændret. Åbn redigeringen igen.')
     fields={key:str(data.get(key,'')).strip() for key in FIELDS}
     if not all(fields[k] for k in FIELDS if k!='club') or any(len(v)>160 for v in fields.values()):
         raise ValueError('Udfyld bådnavn, skipper, sejlnummer og bådtype, højst 160 tegn pr. felt.')
-    if db.execute('SELECT 1 FROM boat_profiles WHERE id<>? AND trim(name)=? COLLATE NOCASE AND trim(sail_number)=? COLLATE NOCASE',(identity,fields['name'],fields['sail_number'])).fetchone():
+    if db.execute('SELECT 1 FROM boat_profiles WHERE id<>? AND trim(name)=? COLLATE NOCASE AND trim(sail_number)=? COLLATE NOCASE',(identity or -1,fields['name'],fields['sail_number'])).fetchone():
         raise ValueError('En anden båd har allerede dette navn og sejlnummer.')
     ratings=data.get('ratings',{})
     if not isinstance(ratings,dict):raise ValueError('Udfyld gyldige handicaptal.')
     ratings={key:number(ratings.get(key),optional=True) for key in RATINGS}
     extra=extra_handicap_value(data.get('extra_handicap',0))
-    set_id=handicaps.for_values(db,identity,ratings,extra)
-    db.execute('UPDATE boat_profiles SET name=?,skipper=?,sail_number=?,boat_type=?,club=?,current_handicap_set_id=? WHERE id=?',(*(fields[k] for k in FIELDS),set_id,identity))
-    audit(db,user,'boat.profile.update',{'profile_id':identity,'before':before,'fields':fields,'handicap_set_id':set_id})
+    if identity:
+        from .compatibility import validate_profile, supplement
+        validate_profile(db,identity,ratings)
+        if data.get('repair'):
+            supplement(db,identity,ratings,data['repair'],user)
+        set_id=handicaps.for_values(db,identity,ratings,extra)
+        db.execute('UPDATE boat_profiles SET name=?,skipper=?,sail_number=?,boat_type=?,club=?,current_handicap_set_id=? WHERE id=?',(*(fields[k] for k in FIELDS),set_id,identity))
+    else:
+        identity=create_profile(db,fields,ratings,extra)
+        set_id=profile(db,identity)['current_handicap_set_id']
+    audit(db,user,'boat.profile.update' if before else 'boat.profile.create',{'profile_id':identity,'before':before,'fields':fields,'handicap_set_id':set_id})
+    return identity
+
+
+def update_profile(db,identity,data,user):
+    return save_profile(db,data,user,identity)
+
+
+def unregister(db,registration_id,user):
+    registration=get(db,'boats',registration_id)
+    if db.execute('SELECT 1 FROM participations WHERE boat_id=?',(registration_id,)).fetchone():
+        raise ValueError('Fjern først båden fra seriens ræs enkeltvis. Båden er stadig tilmeldt et ræs.')
+    db.execute('DELETE FROM boats WHERE id=?',(registration_id,))
+    audit(db,user,'boat.unregister',registration)
 
 
 def deletion_preview(db,identity):

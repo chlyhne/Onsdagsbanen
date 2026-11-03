@@ -149,19 +149,21 @@ class WebTests(unittest.TestCase):
             self.assertEqual(after['extra_handicap'],before['extra_handicap'])
             self.assertNotIn(self.boats[2],[r['boat_id'] for r in service.rows(db,race)])
 
-    def test_structure_migration_keeps_existing_results_and_is_repeat_safe(self):
+    def test_canonical_participations_keep_results_on_reopening(self):
         race=self.race()
         self.finish(race,self.boats[0])
         with self.app.store.connect(write=True) as db:
             before=[tuple(r) for r in db.execute('SELECT * FROM finishes ORDER BY race_id,boat_id')]
             entries=[tuple(r) for r in db.execute('SELECT * FROM entries ORDER BY race_id,boat_id')]
-            db.execute('UPDATE races SET round_course_id=NULL')
-            for table in ('heat_boats','heats','round_courses','rounds'):db.execute(f'DELETE FROM {table}')
-            hierarchy.migrate_legacy(db);hierarchy.migrate_legacy(db)
+            plan=hierarchy.structure(db,self.series)
+            self.assertEqual(db.execute("SELECT type FROM sqlite_master WHERE name='entries'").fetchone()[0],'view')
+            self.assertEqual(db.execute("SELECT type FROM sqlite_master WHERE name='heat_boats'").fetchone()[0],'view')
+            self.assertEqual(db.execute('SELECT count(*) FROM participations WHERE race_id=?',(race,)).fetchone()[0],3)
+        Application(db_path=self.app.store.path,initialize=False)
+        with self.app.store.connect() as db:
             self.assertEqual(before,[tuple(r) for r in db.execute('SELECT * FROM finishes ORDER BY race_id,boat_id')])
             self.assertEqual(entries,[tuple(r) for r in db.execute('SELECT * FROM entries ORDER BY race_id,boat_id')])
-            plan=hierarchy.structure(db,self.series)
-            self.assertEqual(len(plan),1)
+            self.assertEqual(plan,hierarchy.structure(db,self.series))
             self.assertEqual({c['course'] for c in plan[0]['courses']},{'stor','lille'})
             self.assertEqual(get(db,'races',race)['round_course_id'],next(c['id'] for c in plan[0]['courses'] if c['course']=='stor'))
 
@@ -299,12 +301,11 @@ class WebTests(unittest.TestCase):
                 hierarchy.set_system(db,round_id,'circle',self.user)
 
     def test_gph_cannot_use_incomplete_circle_ratings(self):
-        with self.app.store.connect(write=True) as db:
-            race=service.create_race(db,{'series_id':self.series,'label':'R1','course':'stor','mode':'normal','handicap_system':'gph','start':'2026-05-06T18:30:00+02:00','route':['A']},self.user)
-            self.assertIn('Mangler GPH',get(db,'races',race)['warning'])
-            self.assertTrue(all(r['rating'] is None for r in service.rows(db,race)))
+        status,result=self.request('/api/races',{'series_id':self.series,'label':'R1','course':'stor','mode':'normal','handicap_system':'gph','start':'2026-05-06T18:30:00+02:00','route':['A']})
+        self.assertEqual(status,400,result)
+        self.assertEqual(result['handicap_issues'][0]['required_key'],'GPH')
         with self.assertRaisesRegex(ValueError,'GPH'):
-            self.finish(race,self.boats[0])
+            self.race(key='GPH')
 
     def test_historical_gph_is_recalculated_from_historical_triplet(self):
         self.complete_ratings()
@@ -439,12 +440,10 @@ class WebTests(unittest.TestCase):
                 timing.complete(db,round_id,{'revisions':{str(large):0}},self.user)
             self.assertFalse(get(db,'rounds',round_id)['completed'])
 
-    def test_missing_rating_allows_setup_but_blocks_timed_result(self):
+    def test_missing_relevant_rating_blocks_setup(self):
         self.race()
-        race=self.race(label='R2',key='TAUDH')
-        with self.app.store.connect() as db:self.assertIn('Mangler TAUDH',get(db,'races',race)['warning'])
         with self.assertRaisesRegex(ValueError,'TAUDH'):
-            self.finish(race,self.boats[0])
+            self.race(label='R2',key='TAUDH')
 
     def test_results_expose_course_letters_and_rounding_directions(self):
         with self.app.store.connect(write=True) as db:
